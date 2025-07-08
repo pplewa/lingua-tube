@@ -6,6 +6,20 @@ yarn-debug.log*
 yarn-error.log*
 dev-debug.log
 
+# testing
+/coverage
+
+# production
+/build
+/package
+
+# misc
+.history
+*.log
+
+# secrets
+secrets.*.js
+
 # Dependency directories
 node_modules/
 
