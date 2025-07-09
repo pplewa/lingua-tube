@@ -21,15 +21,16 @@ export default defineManifest({
   },
   content_scripts: [
     {
-      matches: ['http://*/*', 'https://*/*'],
+      matches: ['*://*.youtube.com/watch*'],
       js: ['src/contentScript/index.ts'],
+      run_at: 'document_end',
     },
   ],
   web_accessible_resources: [
     {
       resources: ['img/logo-16.png', 'img/logo-32.png', 'img/logo-48.png', 'img/logo-128.png'],
-      matches: [],
+      matches: ['*://*.youtube.com/*'],
     },
   ],
-  permissions: ['storage']
+  permissions: ['storage', 'activeTab', 'scripting']
 })
