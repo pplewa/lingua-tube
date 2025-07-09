@@ -4,14 +4,18 @@
  */
 
 import { storageService } from '../storage';
+import { ConfigService } from '../translation/ConfigService';
 
 console.log('[LinguaTube] Background service worker starting...');
 
-// Initialize storage service on startup
+// Initialize storage service and translation API on startup
 (async () => {
   try {
     await storageService.initialize();
     console.log('[LinguaTube] Storage service initialized successfully');
+    
+    // Initialize Microsoft Translator API
+    await initializeTranslationService();
     
     // Log current settings and storage usage
     const [settingsResult, usageResult] = await Promise.all([
@@ -65,8 +69,12 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     
     if (details.reason === 'install') {
       console.log('[LinguaTube] First time installation - setting up defaults');
+      // Initialize translation service on first install
+      await initializeTranslationService();
     } else if (details.reason === 'update') {
       console.log('[LinguaTube] Extension updated from version:', details.previousVersion);
+      // Re-initialize translation service on update to ensure API key is still valid
+      await initializeTranslationService();
     }
   } catch (error) {
     console.error('[LinguaTube] Installation setup failed:', error);
@@ -78,6 +86,7 @@ chrome.runtime.onStartup.addListener(async () => {
   console.log('[LinguaTube] Extension starting up');
   try {
     await storageService.initialize();
+    await initializeTranslationService();
   } catch (error) {
     console.error('[LinguaTube] Startup initialization failed:', error);
   }
@@ -132,5 +141,62 @@ async function handleGetVocabulary(sendResponse: (response: any) => void) {
       success: false, 
       error: { message: 'Failed to get vocabulary', details: error } 
     });
+  }
+}
+
+// ========================================
+// Translation Service Initialization
+// ========================================
+
+async function initializeTranslationService(): Promise<void> {
+  try {
+    console.log('[LinguaTube] Initializing Microsoft Translator API...');
+    
+    const configService = new ConfigService();
+    
+    // Get API key from environment variable
+    const apiKey = import.meta.env.VITE_TRANSLATION_API_KEY;
+    
+    if (!apiKey) {
+      console.error('[LinguaTube] ❌ VITE_TRANSLATION_API_KEY not found in environment variables');
+      console.error('[LinguaTube] Please add VITE_TRANSLATION_API_KEY=your_api_key to your .env file');
+      throw new Error('Translation API key not configured in environment variables');
+    }
+    
+    // Check if API key is already configured
+    try {
+      const currentKey = await configService.getApiKey();
+      if (currentKey === apiKey) {
+        console.log('[LinguaTube] Microsoft Translator API key already configured');
+        const config = await configService.getConfig();
+        console.log('[LinguaTube] Translation service ready with endpoint:', config.endpoint);
+        return;
+      }
+    } catch (error) {
+      // API key not found, will set it below
+      console.log('[LinguaTube] No existing API key found, setting up new one...');
+    }
+    
+    // Set the API key
+    await configService.setApiKey(apiKey);
+    console.log('[LinguaTube] ✅ Microsoft Translator API key configured successfully');
+    
+    // Verify configuration
+    const config = await configService.getConfig();
+    const isConfigured = await configService.isConfigured();
+    
+    console.log('[LinguaTube] ✅ Translation service configured:', {
+      endpoint: config.endpoint,
+      region: config.region || 'global',
+      version: config.apiVersion,
+      cacheEnabled: config.cacheConfig.enabled,
+      rateLimitTracking: config.rateLimitConfig.trackingEnabled,
+      batchEnabled: config.batchConfig.enabled,
+      isReady: isConfigured
+    });
+    
+  } catch (error) {
+    console.error('[LinguaTube] ❌ Failed to initialize translation service:', error);
+    throw error;
   }
 }
