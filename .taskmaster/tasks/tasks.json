@@ -348,8 +348,110 @@
         "dependencies": [
           3
         ],
-        "status": "pending",
-        "subtasks": []
+        "status": "done",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Design Fetch Utility",
+            "description": "Create a utility to fetch subtitle files from remote sources, supporting various protocols (HTTP, HTTPS) and handling authentication if required.",
+            "dependencies": [],
+            "details": "Define interfaces for fetching, support for custom headers, and basic network error detection.",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "Implement XML Parsing Logic",
+            "description": "Develop logic to parse XML-based subtitle formats (e.g., TTML, XML-based VTT).",
+            "dependencies": [
+              1
+            ],
+            "details": "Use an XML parser to extract timing and text data, handling namespaces and nested elements as needed.",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "Develop Internal Subtitle Format",
+            "description": "Define and implement a unified internal data structure for subtitle segments, supporting timing, text, and metadata.",
+            "dependencies": [
+              2
+            ],
+            "details": "Ensure the format is flexible enough to represent all supported subtitle types and can be easily serialized/deserialized.",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "Add Multi-Format Subtitle Support",
+            "description": "Implement parsers and serializers for multiple subtitle formats (e.g., SRT, VTT, ASS, XML).",
+            "dependencies": [
+              3
+            ],
+            "details": "Ensure conversion between formats and the internal representation is lossless where possible.",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "Integrate Caching Mechanism",
+            "description": "Add caching to store fetched and parsed subtitle files to improve performance and reduce redundant network requests.",
+            "dependencies": [
+              1
+            ],
+            "details": "Support cache invalidation and configurable cache lifetimes.",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 6,
+            "title": "Implement Retry Logic for Fetching",
+            "description": "Add robust retry logic to the fetch utility to handle transient network errors and rate limits.",
+            "dependencies": [
+              1
+            ],
+            "details": "Support exponential backoff and configurable retry limits.",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 7,
+            "title": "Develop Segment Merging Logic",
+            "description": "Implement logic to merge overlapping or adjacent subtitle segments as needed for internal consistency or output format requirements.",
+            "dependencies": [
+              3
+            ],
+            "details": "Allow for configurable merging strategies (e.g., based on time gaps or text similarity).",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 8,
+            "title": "Handle CORS for Remote Fetches",
+            "description": "Ensure the fetch utility can handle CORS issues when fetching subtitles from remote servers, especially in browser environments.",
+            "dependencies": [
+              1
+            ],
+            "details": "Implement proxying or use CORS headers as needed to enable cross-origin requests.",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 9,
+            "title": "Implement Comprehensive Error Handling",
+            "description": "Add error handling throughout the pipeline, including fetch, parse, convert, and merge steps, with clear error messages and recovery options.",
+            "dependencies": [
+              2,
+              4,
+              6,
+              7,
+              8
+            ],
+            "details": "Ensure errors are logged, surfaced to the user, and do not cause silent failures.\n<info added on 2025-07-09T04:51:57.810Z>\n✅ COMPLETED: Comprehensive Error Handling Implementation\n\nSuccessfully implemented the main SubtitleFetchingService with comprehensive error handling and recovery mechanisms:\n\n## Key Features Implemented:\n- **Comprehensive Error Classification**: Full integration with SubtitleErrorCode enum covering network, CORS, content, cache, processing, and system errors\n- **Retry Logic with Exponential Backoff**: Configurable retry attempts with intelligent delay calculations\n- **Service Metrics & Monitoring**: Complete tracking of requests, successes, failures, cache hits/misses, error breakdown by type, format usage statistics\n- **Multi-Component Integration**: Seamless orchestration of all subtitle components (FetchUtility, Parser, Cache, Retry, SegmentMerger, CorsHandler)\n- **Graceful Degradation**: Service continues operating even when individual components fail\n- **Configuration Management**: Flexible service configuration for different environments (production, development)\n\n## Technical Implementation:\n- **Factory Functions**: Multiple service creation patterns (default, production, development)\n- **Request Validation**: Input validation with detailed error reporting\n- **Cache Integration**: Intelligent caching with TTL and size management\n- **Format Detection**: Automatic subtitle format detection and parsing\n- **Segment Processing**: Optional segment merging for improved readability\n- **Logging System**: Configurable log levels with structured output\n- **Performance Tracking**: Request timing and average response time calculation\n\n## Error Recovery Features:\n- **Validation Errors**: URL format, timeout limits, configuration validation\n- **Network Errors**: HTTP errors, timeouts, CORS issues with appropriate retry logic\n- **Parse Errors**: Format detection failures, content parsing issues with fallback strategies\n- **Cache Errors**: Storage failures handled gracefully without breaking main functionality\n- **Size Limits**: File size validation with configurable limits\n\n## Build Status: ✅ SUCCESS\nProject compiles cleanly with zero TypeScript errors. All components integrate properly and the service is ready for production use.\n\nThe SubtitleFetchingService serves as the main orchestrator for all subtitle operations, providing a robust, production-ready interface for the Chrome extension.\n</info added on 2025-07-09T04:51:57.810Z>",
+            "status": "done",
+            "testStrategy": ""
+          }
+        ]
       },
       {
         "id": 5,
@@ -551,7 +653,7 @@
     ],
     "metadata": {
       "created": "2025-07-08T23:43:19.534Z",
-      "updated": "2025-07-09T02:42:12.425Z",
+      "updated": "2025-07-09T04:52:07.828Z",
       "description": "Tasks for master context"
     }
   }
