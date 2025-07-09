@@ -365,7 +365,12 @@ export class DualSubtitleManager {
 
       // Cache the translation
       if (this.config.cacheTranslations) {
-        await translationCacheService.set(request.text, translation, request.sourceLanguage, request.targetLanguage);
+        await translationCacheService.set(
+          request.text,
+          translation,
+          request.sourceLanguage,
+          request.targetLanguage
+        );
       }
 
       // Deliver translation

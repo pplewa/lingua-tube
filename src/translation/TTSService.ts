@@ -517,8 +517,9 @@ export class TTSService implements ITTSService {
     try {
       const audioUrl = await dictionaryApiService.getPronunciationUrl(text, language);
       await this.playAudioUrl(audioUrl);
-    } catch (error) {
-      throw new Error(`Audio fallback failed: ${error.message}`);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new Error(`Audio fallback failed: ${errorMessage}`);
     }
   }
 

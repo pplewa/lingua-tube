@@ -1,10 +1,43 @@
 /**
  * LinguaTube Background Service Worker
- * Handles extension lifecycle events and cross-context messaging
+ * Handles extension lifecycle events, cross-context messaging, and state management
  */
 
 import { storageService } from '../storage';
 import { ConfigService } from '../translation/ConfigService';
+
+// Types for messaging and state management
+interface ExtensionState {
+  isActive: boolean;
+  currentVideoId: string | null;
+  translationCount: number;
+  lastActivity: number;
+  errors: ErrorReport[];
+}
+
+interface ErrorReport {
+  timestamp: number;
+  message: string;
+  stack?: string;
+  context: string;
+  videoId?: string;
+}
+
+interface AnalyticsEvent {
+  event: string;
+  timestamp: number;
+  data?: any;
+  videoId?: string;
+}
+
+// Global state management
+let extensionState: ExtensionState = {
+  isActive: false,
+  currentVideoId: null,
+  translationCount: 0,
+  lastActivity: Date.now(),
+  errors: []
+};
 
 console.log('[LinguaTube] Background service worker starting...');
 
@@ -39,6 +72,9 @@ console.log('[LinguaTube] Background service worker starting...');
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   console.log('[LinguaTube] Received message:', request);
   
+  // Update last activity timestamp
+  extensionState.lastActivity = Date.now();
+  
   switch (request.type) {
     case 'GET_SETTINGS':
       handleGetSettings(sendResponse);
@@ -51,6 +87,24 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       break;
     case 'GET_VOCABULARY':
       handleGetVocabulary(sendResponse);
+      break;
+    case 'CHECK_ACTIVATION':
+      handleCheckActivation(sender, sendResponse);
+      break;
+    case 'UPDATE_STATE':
+      handleUpdateState(request.state, sendResponse);
+      break;
+    case 'REPORT_ERROR':
+      handleReportError(request.error, sender, sendResponse);
+      break;
+    case 'TRACK_EVENT':
+      handleTrackEvent(request.event, sendResponse);
+      break;
+    case 'GET_EXTENSION_STATE':
+      handleGetExtensionState(sendResponse);
+      break;
+    case 'TRANSLATION_COMPLETED':
+      handleTranslationCompleted(request.data, sendResponse);
       break;
     default:
       sendResponse({ error: 'Unknown message type' });
@@ -71,11 +125,27 @@ chrome.runtime.onInstalled.addListener(async (details) => {
       console.log('[LinguaTube] First time installation - setting up defaults');
       // Initialize translation service on first install
       await initializeTranslationService();
+      
+      // Show welcome notification
+      showNotification(
+        'LinguaTube Installed!', 
+        'Start watching YouTube videos to translate subtitles and build your vocabulary.'
+      );
     } else if (details.reason === 'update') {
       console.log('[LinguaTube] Extension updated from version:', details.previousVersion);
       // Re-initialize translation service on update to ensure API key is still valid
       await initializeTranslationService();
+      
+      // Show update notification
+      showNotification(
+        'LinguaTube Updated!', 
+        'New features and improvements are now available.'
+      );
     }
+    
+    // Create context menu items
+    createContextMenus();
+    
   } catch (error) {
     console.error('[LinguaTube] Installation setup failed:', error);
   }
@@ -143,6 +213,292 @@ async function handleGetVocabulary(sendResponse: (response: any) => void) {
     });
   }
 }
+
+async function handleCheckActivation(sender: chrome.runtime.MessageSender, sendResponse: (response: any) => void) {
+  try {
+    // Check if the extension should be active on the current tab
+    const shouldActivate = sender.tab?.url?.includes('youtube.com/watch') || false;
+    
+    if (shouldActivate) {
+      extensionState.isActive = true;
+      updateBadge(sender.tab?.id);
+    }
+    
+    sendResponse({ 
+      success: true, 
+      shouldActivate,
+      extensionState: extensionState
+    });
+  } catch (error) {
+    sendResponse({ 
+      success: false, 
+      error: { message: 'Failed to check activation', details: error } 
+    });
+  }
+}
+
+async function handleUpdateState(state: Partial<ExtensionState>, sendResponse: (response: any) => void) {
+  try {
+    // Update extension state
+    extensionState = { ...extensionState, ...state };
+    
+    // Update badge if video ID changed
+    if (state.currentVideoId) {
+      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tabs[0]) {
+        updateBadge(tabs[0].id);
+      }
+    }
+    
+    sendResponse({ 
+      success: true, 
+      extensionState: extensionState
+    });
+  } catch (error) {
+    sendResponse({ 
+      success: false, 
+      error: { message: 'Failed to update state', details: error } 
+    });
+  }
+}
+
+async function handleReportError(error: Partial<ErrorReport>, sender: chrome.runtime.MessageSender, sendResponse: (response: any) => void) {
+  try {
+    const errorReport: ErrorReport = {
+      timestamp: Date.now(),
+      message: error.message || 'Unknown error',
+      stack: error.stack,
+      context: error.context || 'unknown',
+      videoId: error.videoId || extensionState.currentVideoId || undefined
+    };
+    
+    // Add to error list (keep only last 50 errors)
+    extensionState.errors.push(errorReport);
+    if (extensionState.errors.length > 50) {
+      extensionState.errors = extensionState.errors.slice(-50);
+    }
+    
+    // Log error for debugging
+    console.error('[LinguaTube] Error reported:', errorReport);
+    
+    // Show notification for critical errors
+    if (error.context === 'critical') {
+      showNotification('LinguaTube Error', error.message || 'A critical error occurred');
+    }
+    
+    sendResponse({ success: true });
+  } catch (err) {
+    sendResponse({ 
+      success: false, 
+      error: { message: 'Failed to report error', details: err } 
+    });
+  }
+}
+
+async function handleTrackEvent(event: Partial<AnalyticsEvent>, sendResponse: (response: any) => void) {
+  try {
+    // Check if analytics are enabled
+    const settingsResult = await storageService.getSettings();
+    const analyticsEnabled = settingsResult.success && 
+      settingsResult.data?.privacy?.collectAnalytics !== false;
+    
+    if (!analyticsEnabled) {
+      sendResponse({ success: true, tracked: false });
+      return;
+    }
+    
+    const analyticsEvent: AnalyticsEvent = {
+      event: event.event || 'unknown',
+      timestamp: Date.now(),
+      data: event.data,
+      videoId: event.videoId || extensionState.currentVideoId || undefined
+    };
+    
+    // Store analytics event (privacy-focused, local only)
+    await storeAnalyticsEvent(analyticsEvent);
+    
+    sendResponse({ success: true, tracked: true });
+  } catch (error) {
+    sendResponse({ 
+      success: false, 
+      error: { message: 'Failed to track event', details: error } 
+    });
+  }
+}
+
+async function handleGetExtensionState(sendResponse: (response: any) => void) {
+  try {
+    sendResponse({ 
+      success: true, 
+      extensionState: extensionState
+    });
+  } catch (error) {
+    sendResponse({ 
+      success: false, 
+      error: { message: 'Failed to get extension state', details: error } 
+    });
+  }
+}
+
+async function handleTranslationCompleted(data: any, sendResponse: (response: any) => void) {
+  try {
+    extensionState.translationCount++;
+    
+    // Update badge with translation count
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tabs[0]) {
+      updateBadge(tabs[0].id);
+    }
+    
+    // Track translation event
+    await handleTrackEvent({
+      event: 'translation_completed',
+      data: {
+        fromLanguage: data.fromLanguage,
+        toLanguage: data.toLanguage,
+        textLength: data.text?.length || 0
+      }
+    }, () => {});
+    
+    sendResponse({ success: true });
+  } catch (error) {
+    sendResponse({ 
+      success: false, 
+      error: { message: 'Failed to handle translation completion', details: error } 
+    });
+  }
+}
+
+// ========================================
+// Utility Functions
+// ========================================
+
+function updateBadge(tabId?: number) {
+  if (!tabId) return;
+  
+  try {
+    const badgeText = extensionState.isActive ? 
+      (extensionState.translationCount > 0 ? extensionState.translationCount.toString() : '') : 
+      '';
+    
+    chrome.action.setBadgeText({ text: badgeText, tabId });
+    chrome.action.setBadgeBackgroundColor({ color: extensionState.isActive ? '#4CAF50' : '#9E9E9E', tabId });
+  } catch (error) {
+    console.error('[LinguaTube] Failed to update badge:', error);
+  }
+}
+
+function showNotification(title: string, message: string) {
+  try {
+    chrome.notifications.create({
+      type: 'basic',
+      iconUrl: 'img/logo-48.png',
+      title,
+      message
+    });
+  } catch (error) {
+    console.error('[LinguaTube] Failed to show notification:', error);
+  }
+}
+
+async function storeAnalyticsEvent(event: AnalyticsEvent) {
+  try {
+    // Get existing analytics data
+    const result = await chrome.storage.local.get(['analytics']);
+    const analytics = result.analytics || [];
+    
+    // Add new event
+    analytics.push(event);
+    
+    // Keep only last 1000 events for privacy
+    if (analytics.length > 1000) {
+      analytics.splice(0, analytics.length - 1000);
+    }
+    
+    // Store back
+    await chrome.storage.local.set({ analytics });
+  } catch (error) {
+    console.error('[LinguaTube] Failed to store analytics event:', error);
+  }
+}
+
+// ========================================
+// Tab Management
+// ========================================
+
+// Handle tab updates to track YouTube video changes
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  if (changeInfo.status === 'complete' && tab.url?.includes('youtube.com/watch')) {
+    const videoId = extractVideoId(tab.url);
+    
+    if (videoId && videoId !== extensionState.currentVideoId) {
+      extensionState.currentVideoId = videoId;
+      extensionState.translationCount = 0; // Reset count for new video
+      extensionState.isActive = true;
+      
+      updateBadge(tabId);
+      
+      // Track video change event
+      await handleTrackEvent({
+        event: 'video_changed',
+        data: { videoId, url: tab.url }
+      }, () => {});
+    }
+  }
+});
+
+function extractVideoId(url: string): string | null {
+  const match = url.match(/[?&]v=([^&]+)/);
+  return match ? match[1] : null;
+}
+
+// ========================================
+// Context Menu Integration
+// ========================================
+
+function createContextMenus() {
+  try {
+    chrome.contextMenus.create({
+      id: 'linguatube-translate',
+      title: 'Translate with LinguaTube',
+      contexts: ['selection'],
+      documentUrlPatterns: ['*://*.youtube.com/watch*']
+    });
+    
+    chrome.contextMenus.create({
+      id: 'linguatube-vocabulary',
+      title: 'Add to Vocabulary',
+      contexts: ['selection'],
+      documentUrlPatterns: ['*://*.youtube.com/watch*']
+    });
+  } catch (error) {
+    console.error('[LinguaTube] Failed to create context menus:', error);
+  }
+}
+
+// Handle context menu clicks
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (!tab?.id) return;
+  
+  try {
+    switch (info.menuItemId) {
+      case 'linguatube-translate':
+        await chrome.tabs.sendMessage(tab.id, {
+          type: 'TRANSLATE_SELECTION',
+          text: info.selectionText
+        });
+        break;
+      case 'linguatube-vocabulary':
+        await chrome.tabs.sendMessage(tab.id, {
+          type: 'ADD_TO_VOCABULARY',
+          text: info.selectionText
+        });
+        break;
+    }
+  } catch (error) {
+    console.error('[LinguaTube] Context menu action failed:', error);
+  }
+});
 
 // ========================================
 // Translation Service Initialization
