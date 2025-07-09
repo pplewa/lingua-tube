@@ -332,6 +332,180 @@ export type LanguageCode =
   | 'sr' | 'st' | 'sn' | 'sd' | 'si' | 'so' | 'su' | 'tg' | 'ta' | 'tt'
   | 'te' | 'uk' | 'ur' | 'ug' | 'uz' | 'xh' | 'yi' | 'auto';
 
+// ============================================================================
+// Dictionary API Types
+// ============================================================================
+
+export interface Phonetic {
+  text?: string;
+  audio?: string;
+}
+
+export interface Definition {
+  definition: string;
+  example?: string;
+  synonyms: string[];
+  antonyms: string[];
+}
+
+export interface Meaning {
+  partOfSpeech: string;
+  definitions: Definition[];
+  synonyms?: string[];
+  antonyms?: string[];
+}
+
+export interface WordDefinition {
+  word: string;
+  phonetic?: string;
+  phonetics: Phonetic[];
+  origin?: string;
+  meanings: Meaning[];
+  license?: {
+    name: string;
+    url: string;
+  };
+  sourceUrls: string[];
+}
+
+export interface DictionaryApiResponse extends WordDefinition {}
+
+export interface DictionaryErrorResponse {
+  title: string;
+  message: string;
+  resolution: string;
+}
+
+export interface DictionaryRequest {
+  word: string;
+  language: LanguageCode;
+}
+
+export interface DictionaryConfig {
+  baseUrl: string;
+  timeout: number;
+  retryAttempts: number;
+  cacheTtlHours: number;
+  supportedLanguages: LanguageCode[];
+}
+
+export interface IDictionaryService {
+  getDefinition(word: string, language: LanguageCode): Promise<WordDefinition>;
+  getPhonetics(word: string, language: LanguageCode): Promise<Phonetic[]>;
+  getPronunciationUrl(word: string, language: LanguageCode): Promise<string>;
+  isLanguageSupported(language: LanguageCode): boolean;
+  clearCache(): Promise<void>;
+}
+
+// Dictionary-specific error codes
+export enum DictionaryErrorCode {
+  WORD_NOT_FOUND = 'WORD_NOT_FOUND',
+  UNSUPPORTED_LANGUAGE = 'UNSUPPORTED_LANGUAGE',
+  INVALID_WORD = 'INVALID_WORD',
+  API_UNAVAILABLE = 'API_UNAVAILABLE',
+  PARSING_ERROR = 'PARSING_ERROR',
+  NETWORK_ERROR = 'NETWORK_ERROR',
+  TIMEOUT = 'TIMEOUT',
+  CACHE_ERROR = 'CACHE_ERROR',
+  UNKNOWN_ERROR = 'UNKNOWN_ERROR'
+}
+
+export interface DictionaryError extends Error {
+  code: DictionaryErrorCode;
+  details?: any;
+  retryable: boolean;
+  timestamp: number;
+}
+
+// ============================================================================
+// Text-to-Speech (TTS) Types
+// ============================================================================
+
+export interface TTSConfig {
+  defaultRate: number;
+  defaultPitch: number;
+  defaultVolume: number;
+  queueTimeout: number;
+  fallbackToAudio: boolean;
+  preferredVoiceNames: Record<string, string[]>; // language -> preferred voice names
+}
+
+export interface TTSRequest {
+  text: string;
+  language: LanguageCode;
+  voice?: SpeechSynthesisVoice;
+  rate?: number;
+  pitch?: number;
+  volume?: number;
+  priority?: number;
+}
+
+export interface TTSQueueItem extends TTSRequest {
+  id: string;
+  timestamp: number;
+  resolve: () => void;
+  reject: (error: TTSError) => void;
+  utterance?: SpeechSynthesisUtterance;
+}
+
+export interface TTSVoiceInfo {
+  voice: SpeechSynthesisVoice;
+  name: string;
+  language: string;
+  localService: boolean;
+  isDefault: boolean;
+  quality: 'high' | 'medium' | 'low';
+}
+
+export interface TTSStats {
+  totalRequests: number;
+  successfulRequests: number;
+  failedRequests: number;
+  fallbacksUsed: number;
+  averageDuration: number;
+  queueLength: number;
+  voicesAvailable: number;
+  lastRequestTime: number;
+}
+
+export interface ITTSService {
+  speak(text: string, language: LanguageCode): Promise<void>;
+  speakWithOptions(request: TTSRequest): Promise<void>;
+  getAvailableVoices(): SpeechSynthesisVoice[];
+  getVoicesForLanguage(language: LanguageCode): SpeechSynthesisVoice[];
+  setPreferredVoice(language: LanguageCode, voice: SpeechSynthesisVoice): void;
+  setRate(rate: number): void;
+  setPitch(pitch: number): void;
+  setVolume(volume: number): void;
+  pause(): void;
+  resume(): void;
+  cancel(): void;
+  isSupported(): boolean;
+  isSpeaking(): boolean;
+  getStats(): TTSStats;
+}
+
+// TTS-specific error codes
+export enum TTSErrorCode {
+  NOT_SUPPORTED = 'NOT_SUPPORTED',
+  NO_VOICES_AVAILABLE = 'NO_VOICES_AVAILABLE',
+  UNSUPPORTED_LANGUAGE = 'UNSUPPORTED_LANGUAGE',
+  INVALID_TEXT = 'INVALID_TEXT',
+  SYNTHESIS_FAILED = 'SYNTHESIS_FAILED',
+  VOICE_NOT_FOUND = 'VOICE_NOT_FOUND',
+  AUDIO_INTERRUPTED = 'AUDIO_INTERRUPTED',
+  QUEUE_TIMEOUT = 'QUEUE_TIMEOUT',
+  BROWSER_LIMITATION = 'BROWSER_LIMITATION',
+  UNKNOWN_ERROR = 'UNKNOWN_ERROR'
+}
+
+export interface TTSError extends Error {
+  code: TTSErrorCode;
+  details?: any;
+  retryable: boolean;
+  timestamp: number;
+}
+
 export const SUPPORTED_LANGUAGES: Record<LanguageCode, string> = {
   'en': 'English',
   'es': 'Spanish',

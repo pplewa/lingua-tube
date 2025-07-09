@@ -565,27 +565,137 @@
         "id": 6,
         "title": "Implement Free Dictionary API Integration",
         "description": "Create a service to fetch word definitions, phonetics, and pronunciation URLs from the Free Dictionary API.",
-        "details": "Develop a dictionary service module:\n1. Create a typed interface for dictionary responses\n2. Implement functions for:\n   - getDefinition(word: string, language: string): Promise<WordDefinition>\n   - getPhonetics(word: string, language: string): Promise<Phonetics>\n   - getPronunciationUrl(word: string, language: string): Promise<string>\n3. Handle API limitations (currently only supports English)\n4. Implement caching for dictionary results\n5. Add error handling for words not found, API unavailability\n6. Create fallback mechanisms for unsupported languages\n7. Implement request throttling to avoid overloading the free API\n8. Add response validation to handle inconsistent API responses\n9. Use fetch API with appropriate timeouts and retry logic",
-        "testStrategy": "1. Unit test with mock API responses\n2. Integration test with actual API calls\n3. Test with common words, rare words, and non-existent words\n4. Verify caching mechanism works correctly\n5. Test error handling paths\n6. Verify fallback mechanisms work as expected\n7. Test with various languages to ensure proper handling of supported/unsupported languages",
-        "priority": "medium",
+        "status": "done",
         "dependencies": [
           2
         ],
-        "status": "pending",
-        "subtasks": []
+        "priority": "medium",
+        "details": "Develop a dictionary service module:\n1. Create a typed interface for dictionary responses\n2. Implement functions for:\n   - getDefinition(word: string, language: string): Promise<WordDefinition>\n   - getPhonetics(word: string, language: string): Promise<Phonetics>\n   - getPronunciationUrl(word: string, language: string): Promise<string>\n3. Handle API limitations (currently only supports English)\n4. Implement caching for dictionary results\n5. Add error handling for words not found, API unavailability\n6. Create fallback mechanisms for unsupported languages\n7. Implement request throttling to avoid overloading the free API\n8. Add response validation to handle inconsistent API responses\n9. Use fetch API with appropriate timeouts and retry logic\n<info added on 2025-07-09T10:11:58.217Z>\n## API Research Findings\n\n**Base URL:** https://api.dictionaryapi.dev/api/v2/entries/en/<word>\n\n**Response Structure:**\n- Returns JSON array with word entries\n- Each entry contains: word, phonetic, phonetics[], meanings[], origin, license, sourceUrls\n- phonetics[] array contains objects with text (transcription) and audio (pronunciation URL)\n- meanings[] contains partOfSpeech and definitions[] with definition, example, synonyms, antonyms\n\n**Key Implementation Notes:**\n- API is case-insensitive but normalize input to lowercase\n- Multiple phonetic variants may exist - select first non-empty audio URL\n- Not all words have pronunciation audio - handle empty strings gracefully\n- Error responses return object with title, message, resolution fields instead of array\n\n**Confirmed Limitations:**\n- English language only (other language codes return \"not found\" errors)\n- No official rate limiting documentation - implement conservative throttling\n- No authentication required (public API)\n- Data completeness varies - some words lack audio or have incomplete definitions\n- No official SLA for uptime or data freshness\n\n**Recommended Error Handling:**\n- Check response structure (array vs error object)\n- Handle missing phonetic data and audio URLs\n- Implement fallback messages for unsupported languages\n- Add network error retry logic with exponential backoff\n\n**Testing Considerations:**\n- Test with common words, rare words, and non-existent words\n- Verify handling of words without audio pronunciation\n- Mock API responses for unit tests to avoid API dependency\n</info added on 2025-07-09T10:11:58.217Z>\n\n<implementation completed on 2025-07-09>\n## Implementation Status: COMPLETED ✅\n\n**Core Implementation:**\n- ✅ TypeScript interfaces for dictionary responses (WordDefinition, Phonetic, Definition, Meaning, etc.)\n- ✅ DictionaryApiService class with all required functions\n- ✅ English-only language support with graceful handling of unsupported languages\n- ✅ Comprehensive caching system with 24-hour TTL and size management (1000 entries max)\n- ✅ Robust error handling with custom DictionaryError types and specific error codes\n- ✅ Request validation (word length, character validation, language support)\n- ✅ Network timeout handling (10 second timeout) with AbortController\n- ✅ Exponential backoff retry logic (3 attempts max, up to 5 second delays)\n- ✅ Response validation and parsing with proper error handling\n- ✅ Singleton pattern implementation for service instance\n- ✅ Cache statistics and monitoring capabilities\n\n**API Integration Features:**\n- Uses Free Dictionary API (https://api.dictionaryapi.dev/api/v2/entries/en/{word})\n- Handles 404 errors for words not found\n- Parses complex nested response structure\n- Extracts pronunciation URLs from phonetics array\n- Proper User-Agent headers and content-type handling\n\n**Error Handling:**\n- Custom DictionaryErrorCode enum with specific error types\n- Retryable vs non-retryable error classification\n- Detailed error context with word, language, and API response info\n- Graceful degradation for missing audio/phonetic data\n</implementation completed on 2025-07-09>",
+        "testStrategy": "1. Unit test with mock API responses\n2. Integration test with actual API calls\n3. Test with common words, rare words, and non-existent words\n4. Verify caching mechanism works correctly\n5. Test error handling paths\n6. Verify fallback mechanisms work as expected\n7. Test with various languages to ensure proper handling of supported/unsupported languages\n8. Test cache statistics and monitoring capabilities\n9. Verify exponential backoff retry logic\n10. Test request validation and timeout handling",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Create unit tests for DictionaryApiService",
+            "description": "Develop comprehensive unit tests using mock API responses to verify all service functions work correctly without external API dependency",
+            "status": "done",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "Test with various English word types",
+            "description": "Integration testing with actual API calls using common words (hello, world), rare words (sesquipedalian), and non-existent words (xyzabc) to verify response handling",
+            "status": "done",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "Verify caching mechanism functionality",
+            "description": "Test cache hit/miss scenarios, TTL expiration (24 hours), cache size limits (1000 entries), and cache statistics reporting",
+            "status": "done",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "Test error handling and retry logic",
+            "description": "Verify custom DictionaryError handling, exponential backoff retry logic, timeout handling, and graceful degradation for missing audio/phonetic data",
+            "status": "done",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "Test language support validation",
+            "description": "Verify isLanguageSupported() function and proper error handling for unsupported languages (non-English requests)",
+            "status": "done",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": ""
+          }
+        ]
       },
       {
         "id": 7,
         "title": "Implement Text-to-Speech Integration",
         "description": "Create a service to handle text-to-speech functionality using the native OS integration.",
-        "details": "Develop a TTS service module:\n1. Use the Web Speech API (SpeechSynthesis interface)\n2. Create functions for:\n   - speak(text: string, language: string): Promise<void>\n   - getAvailableVoices(): SpeechSynthesisVoice[]\n   - setVoice(voice: SpeechSynthesisVoice): void\n   - setRate(rate: number): void\n   - setPitch(pitch: number): void\n3. Implement fallback to audio URLs from the Dictionary API when available\n4. Add language detection to automatically select appropriate voice\n5. Create a queue system to handle multiple speak requests\n6. Implement event handling for speech start/end events\n7. Add error handling for unsupported languages or browser limitations\n8. Create a caching system for frequently pronounced words\n9. Ensure proper cleanup of speech synthesis resources",
-        "testStrategy": "1. Test with various languages and voice configurations\n2. Verify fallback mechanism works when primary TTS fails\n3. Test queue system with rapid consecutive requests\n4. Verify proper event handling\n5. Test with very long text to ensure proper handling\n6. Verify browser compatibility across Chrome versions\n7. Test performance impact during video playback",
-        "priority": "medium",
+        "status": "done",
         "dependencies": [
           6
         ],
-        "status": "pending",
-        "subtasks": []
+        "priority": "medium",
+        "details": "Develop a TTS service module:\n1. Use the Web Speech API (SpeechSynthesis interface)\n2. Create functions for:\n   - speak(text: string, language: string): Promise<void>\n   - getAvailableVoices(): SpeechSynthesisVoice[]\n   - setVoice(voice: SpeechSynthesisVoice): void\n   - setRate(rate: number): void\n   - setPitch(pitch: number): void\n3. Implement fallback to audio URLs from the Dictionary API when available\n4. Add language detection to automatically select appropriate voice\n5. Create a queue system to handle multiple speak requests\n6. Implement event handling for speech start/end events\n7. Add error handling for unsupported languages or browser limitations\n8. Create a caching system for frequently pronounced words\n9. Ensure proper cleanup of speech synthesis resources\n\n**IMPLEMENTATION COMPLETED:**\n✅ Comprehensive TypeScript interfaces and TTSService class implemented\n✅ Full Web Speech API integration with advanced features\n✅ Queue management system with timeout handling\n✅ Multi-language support (10 languages)\n✅ Audio fallback integration with Dictionary API\n✅ Browser compatibility detection and graceful degradation\n✅ Statistics tracking and configuration management\n✅ Comprehensive testing suite with interactive controls\n\n**Browser Compatibility Handling:**\n- Add feature detection check: `if ('speechSynthesis' in window)` before initializing\n- Implement different voice loading strategies for Chrome vs other browsers\n- Add mobile browser compatibility testing and fallback mechanisms\n\n**Voice Loading Best Practices:**\n- Implement proper `speechSynthesis.onvoiceschanged` event handling since voices load asynchronously in Chrome\n- Cache voices after initial load to avoid repeated `getVoices()` calls\n- Add voice availability validation before selection\n\n**Enhanced Language Detection:**\n- Integrate a language detection library (franc, langdetect) for automatic language inference\n- Implement voice matching logic that finds voices by language code prefix matching\n- Add fallback hierarchy: exact match → language variant → default voice\n\n**Improved Queue Management:**\n- Enhance the existing queue system with proper state management (speaking/idle states)\n- Add queue overflow protection and throttling for rapid consecutive requests\n- Implement pause/resume functionality for better user control\n- Add queue clearing capability for interrupting current speech\n\n**Comprehensive Error Handling:**\n- Add specific error handling for voice loading failures, unsupported languages, and audio device issues\n- Implement retry mechanisms with exponential backoff\n- Add detailed error logging for debugging Chrome extension context issues\n- Create graceful degradation paths when TTS features are unavailable\n\n**Performance Optimizations:**\n- Implement text chunking for long content to avoid browser limitations\n- Add debouncing for rapid speak requests\n- Optimize voice selection algorithm for better performance\n- Add memory cleanup for utterance objects\n\n**Chrome Extension Specific Considerations:**\n- Handle background script lifecycle limitations that may affect audio output\n- Prefer running TTS in visible contexts (popup, content script) for reliability\n- Add manifest permission documentation (no special permissions needed for Web Speech API)\n- Implement context-aware TTS initialization based on extension environment\n\n**SSML Support Investigation:**\n- Research SSML compatibility across target browsers\n- Add conditional SSML feature detection\n- Implement SSML fallback to plain text when unsupported\n\n**User Experience Enhancements:**\n- Add user preference persistence for voice, rate, and pitch settings\n- Implement accessibility controls (pause, resume, cancel)\n- Add visual feedback for speech status\n- Create voice preview functionality for user selection",
+        "testStrategy": "1. Test with various languages and voice configurations\n2. Verify fallback mechanism works when primary TTS fails\n3. Test queue system with rapid consecutive requests\n4. Verify proper event handling\n5. Test with very long text to ensure proper handling\n6. Verify browser compatibility across Chrome versions\n7. Test performance impact during video playbook\n\n**COMPLETED TESTING:**\n✅ Comprehensive HTML test suite with interactive controls\n✅ Basic speech synthesis tested in multiple languages\n✅ Custom parameter controls (rate, pitch, volume) verified\n✅ Pause/resume/cancel functionality tested\n✅ Queue management with sequential speech validated\n✅ Voice detection and selection confirmed\n✅ Statistics tracking and reporting verified\n✅ Browser compatibility tested (Chrome, Safari, Firefox, Edge)",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Integrate TTS service with Chrome extension architecture",
+            "description": "Integrate the completed TTS service into the Chrome extension's content script and popup components",
+            "status": "done",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "Add user preference persistence for TTS settings",
+            "description": "Implement Chrome storage API integration to persist user's preferred voice, rate, pitch, and volume settings",
+            "status": "done",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "Implement SSML support investigation and conditional features",
+            "description": "Research and implement SSML compatibility detection with fallback to plain text for enhanced speech control",
+            "status": "done",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "Add automatic language detection for TTS",
+            "description": "Integrate language detection library (franc or langdetect) to automatically infer text language and select appropriate voice",
+            "status": "done",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "Implement text chunking for long content",
+            "description": "Add text segmentation functionality to handle long content that exceeds browser TTS limitations",
+            "status": "done",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": ""
+          },
+          {
+            "id": 6,
+            "title": "Create TTS UI controls for video player",
+            "description": "Design and implement TTS control buttons (play, pause, settings) integrated with the video player interface",
+            "status": "done",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": ""
+          },
+          {
+            "id": 7,
+            "title": "Add mobile browser compatibility enhancements",
+            "description": "Implement mobile-specific TTS optimizations and fallback mechanisms for iOS Safari and Android Chrome",
+            "status": "done",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": ""
+          }
+        ]
       },
       {
         "id": 8,
@@ -711,15 +821,60 @@
         "id": 9,
         "title": "Design and Implement Dual Subtitle UI Component",
         "description": "Create a custom UI component to display dual-language subtitles over the YouTube video player.",
-        "details": "Develop a subtitle display component:\n1. Create a shadow DOM-based component to avoid CSS conflicts\n2. Implement a responsive container that overlays the video player\n3. Design a two-line subtitle display with:\n   - Target language on top\n   - Native language on bottom\n   - Distinct styling for each\n4. Make each word in the target language clickable (wrapped in spans)\n5. Implement subtitle positioning controls (vertical offset)\n6. Add font size and color customization\n7. Ensure proper text wrapping and overflow handling\n8. Implement visibility toggles for each language\n9. Add smooth transitions between subtitle segments\n10. Ensure accessibility (proper contrast, screen reader support)\n11. Use ResizeObserver to handle player size changes\n12. Implement z-index management to stay above YouTube controls\n13. Use CSS variables for theme consistency",
-        "testStrategy": "1. Test rendering with various subtitle lengths and formats\n2. Verify correct positioning across different player sizes\n3. Test customization options (font size, color, position)\n4. Verify clickable words work correctly\n5. Test with different languages and character sets\n6. Verify accessibility with screen readers\n7. Test performance with rapid subtitle changes\n8. Verify compatibility with YouTube's theater mode and fullscreen",
-        "priority": "high",
+        "status": "in-progress",
         "dependencies": [
           4,
           8
         ],
-        "status": "pending",
-        "subtasks": []
+        "priority": "high",
+        "details": "Develop a subtitle display component:\n✅ COMPLETED MAJOR COMPONENTS:\n1. DualSubtitleComponent.ts - Complete shadow DOM-based component with 20+ configurable properties, CSS styling, player detection, subtitle sync, positioning with ResizeObserver/MutationObserver, and 15+ public API methods\n2. DualSubtitleManager.ts - Coordination service with auto-translation, caching, debouncing, vocabulary integration, word click handling, translation queue with timeout management, video change detection, and event callback system\n\n🔄 REMAINING TASKS:\n3. Resolve final TypeScript compilation issue with singleton method signatures\n4. Test component functionality and player integration\n5. Verify subtitle positioning across different player modes\n6. Test vocabulary word click functionality and translation caching\n7. Ensure accessibility compliance and performance optimization\n8. Validate compatibility with YouTube's theater mode and fullscreen",
+        "testStrategy": "1. Verify TypeScript compilation passes without errors\n2. Test component rendering with various subtitle lengths and formats\n3. Verify correct positioning across different player sizes and modes\n4. Test vocabulary word click functionality and translation caching\n5. Verify player integration and subtitle sync accuracy\n6. Test customization options (font size, color, position)\n7. Test with different languages and character sets\n8. Verify accessibility with screen readers\n9. Test performance with rapid subtitle changes\n10. Verify compatibility with YouTube's theater mode and fullscreen",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Fix TypeScript linter errors in DualSubtitleManager.ts",
+            "description": "Resolve TypeScript compilation errors related to TranslationCacheService usage",
+            "status": "review",
+            "dependencies": [],
+            "details": "Update DualSubtitleManager.ts to properly use the TranslationCacheService singleton:\n1. Change import from class to singleton instance: `import { translationCacheService } from './TranslationCacheService';`\n2. Update constructor to use the singleton instance directly instead of expecting it as a parameter\n3. Remove TranslationCacheService from constructor parameters\n4. Update any instantiation code that was passing TranslationCacheService as a parameter\n5. Verify that the singleton instance supports the required methods with correct signatures\n<info added on 2025-07-09T09:03:14.409Z>\n**Progress Update:**\n\nCompleted items:\n- Updated import to use singleton: `import { translationCacheService } from './TranslationCacheService';`\n- Removed TranslationCacheService from constructor parameters\n- Replaced all `this.translationCache` references with `translationCacheService`\n\nOutstanding issues identified:\n1. Method name error on line 310: `getVisibleCues()` should be `getCurrentCues()`\n2. TypeScript argument count error on lines 362, 412: \"Expected 1 arguments, but got 3\" for `translationCacheService.set()` calls\n\nInvestigation findings:\n- Only one TranslationCacheService.ts file is loaded by TypeScript\n- BatchQueueService.ts successfully calls the same singleton with 4 arguments\n- Singleton export is correct: `export const translationCacheService = new TranslationCacheService();`\n- Method signature in class is correct: `async set(text: string, translation: string, fromLanguage: string, toLanguage: string): Promise<void>`\n\nRemaining tasks:\n- Fix method name from `getVisibleCues()` to `getCurrentCues()`\n- Investigate TypeScript module resolution issue for singleton method signatures\n</info added on 2025-07-09T09:03:14.409Z>\n\n**Latest Progress Update:**\n✅ Fixed method name from `getVisibleCues()` to `getCurrentCues()`\n❌ Still investigating TypeScript argument count error for `translationCacheService.set()` calls\n\nCurrent issue: TypeScript reports \"Expected 1 arguments, but got 3\" despite correct method signature and successful usage in other files. Need to research TypeScript module resolution issue with singleton method signatures.",
+            "testStrategy": "1. Verify TypeScript compilation passes without errors\n2. Test that singleton method calls work correctly at runtime\n3. Verify method signature consistency across all files using the singleton"
+          },
+          {
+            "id": 2,
+            "title": "Test DualSubtitleComponent functionality",
+            "description": "Comprehensive testing of the completed DualSubtitleComponent implementation",
+            "status": "pending",
+            "dependencies": [
+              1
+            ],
+            "details": "Test the completed DualSubtitleComponent.ts implementation:\n1. Verify shadow DOM creation and CSS isolation\n2. Test player container detection with multiple fallback selectors\n3. Validate subtitle sync event handling and word segmentation\n4. Test dynamic positioning with ResizeObserver and MutationObserver\n5. Verify all 15+ public API methods work correctly\n6. Test 20+ configurable properties and their effects\n7. Validate subtitle rendering with various text lengths and formats\n8. Test responsive behavior across different player sizes",
+            "testStrategy": "1. Unit tests for each public API method\n2. Integration tests with mock YouTube player\n3. Visual regression tests for subtitle positioning\n4. Performance tests with rapid subtitle changes\n5. Cross-browser compatibility testing"
+          },
+          {
+            "id": 3,
+            "title": "Test DualSubtitleManager integration",
+            "description": "Verify the coordination service works correctly with the subtitle component",
+            "status": "pending",
+            "dependencies": [
+              1,
+              2
+            ],
+            "details": "Test the completed DualSubtitleManager.ts implementation:\n1. Verify auto-translation with caching and debouncing\n2. Test vocabulary integration and word click handling\n3. Validate translation request queue with timeout management\n4. Test video change detection and context-aware translation\n5. Verify event callback system for vocabulary and translation\n6. Test integration with DualSubtitleComponent\n7. Validate translation caching performance\n8. Test error handling and recovery mechanisms",
+            "testStrategy": "1. Integration tests with TranslationCacheService\n2. End-to-end tests with vocabulary service\n3. Performance tests for translation queue\n4. Error handling and timeout scenario tests\n5. Memory leak detection for event listeners"
+          },
+          {
+            "id": 4,
+            "title": "Verify YouTube player compatibility",
+            "description": "Ensure subtitle component works across all YouTube player modes and configurations",
+            "status": "pending",
+            "dependencies": [
+              2,
+              3
+            ],
+            "details": "Test compatibility with YouTube player variations:\n1. Standard player mode\n2. Theater mode\n3. Fullscreen mode\n4. Picture-in-picture mode\n5. Different video aspect ratios\n6. Mobile responsive layouts\n7. YouTube Premium features\n8. Live stream compatibility\n9. Playlist navigation\n10. Video quality changes",
+            "testStrategy": "1. Manual testing across all player modes\n2. Automated tests for player state changes\n3. Cross-device testing (desktop, tablet, mobile)\n4. Performance monitoring during mode transitions\n5. Z-index and overlay positioning validation"
+          }
+        ]
       },
       {
         "id": 10,
@@ -855,7 +1010,7 @@
     ],
     "metadata": {
       "created": "2025-07-08T23:43:19.534Z",
-      "updated": "2025-07-09T07:53:42.640Z",
+      "updated": "2025-07-09T21:42:10.692Z",
       "description": "Tasks for master context"
     }
   }
