@@ -23,6 +23,7 @@
     "zip": "npm run build && node src/zip.js"
   },
   "dependencies": {
+    "@azure-rest/ai-translation-text": "^1.0.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
