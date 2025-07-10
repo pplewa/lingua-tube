@@ -1313,6 +1313,7 @@ export class WordLookupPopup {
       position: fixed;
       top: 0;
       left: 0;
+      width: 100%;
       z-index: ${this.config.zIndex};
       pointer-events: none;
     `;
@@ -1578,6 +1579,8 @@ export class WordLookupPopup {
     
     // Trigger event
     this.events.onHide?.();
+    this.destroySync();
+    this.initialize();
   }
 
   public updateContent(content: PopupContent): void {

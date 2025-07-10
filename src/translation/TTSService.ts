@@ -168,7 +168,7 @@ export class TTSService implements ITTSService {
   /**
    * Speak text using default settings
    */
-  async speak(text: string, language: LanguageCode = 'en'): Promise<void> {
+  async speak(text: string, language: LanguageCode = 'th'): Promise<void> {
     return this.speakWithOptions({
       text,
       language,
