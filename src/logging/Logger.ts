@@ -43,7 +43,7 @@ export class Logger {
   private sessionId: string;
   private extensionVersion: string;
   private stackTraceProcessor: StackTraceProcessor;
-  private performanceMonitor: PerformanceMonitor;
+  private performanceMonitor: PerformanceMonitor | null;
 
   private constructor(config?: Partial<LoggerConfig>) {
     this.config = { ...DEFAULT_LOGGER_CONFIG, ...config };
@@ -51,7 +51,8 @@ export class Logger {
     this.sessionId = this.generateSessionId();
     this.extensionVersion = chrome.runtime.getManifest().version;
     this.stackTraceProcessor = StackTraceProcessor.getInstance();
-    this.performanceMonitor = PerformanceMonitor.getInstance();
+    // Initialize PerformanceMonitor lazily to avoid circular dependency
+    this.performanceMonitor = null;
     
     this.initialize();
   }
@@ -64,6 +65,16 @@ export class Logger {
       Logger.instance = new Logger(config);
     }
     return Logger.instance;
+  }
+
+  /**
+   * Lazy initialization of PerformanceMonitor to avoid circular dependency
+   */
+  private ensurePerformanceMonitor(): PerformanceMonitor {
+    if (!this.performanceMonitor) {
+      this.performanceMonitor = PerformanceMonitor.getInstance();
+    }
+    return this.performanceMonitor;
   }
 
   /**
@@ -294,7 +305,8 @@ export class Logger {
   public startPerformanceOperation(name: string, metadata: OperationMetadata): void {
     if (!this.config.enablePerformance) return;
     
-    this.performanceMonitor.startOperation(name, metadata);
+    const performanceMonitor = this.ensurePerformanceMonitor();
+    performanceMonitor.startOperation(name, metadata);
     
     this.debug(`Started performance operation: ${name}`, {
       component: metadata.component,
@@ -312,7 +324,8 @@ export class Logger {
   public endPerformanceOperation(name: string, additionalMetadata?: Partial<OperationMetadata>): PerformanceMeasurement | null {
     if (!this.config.enablePerformance) return null;
     
-    const measurement = this.performanceMonitor.endOperation(name, additionalMetadata);
+    const performanceMonitor = this.ensurePerformanceMonitor();
+    const measurement = performanceMonitor.endOperation(name, additionalMetadata);
     
     if (measurement) {
       const logLevel = measurement.isSlowOperation ? LogLevel.WARN : LogLevel.DEBUG;
@@ -350,7 +363,8 @@ export class Logger {
       return operation();
     }
     
-    return this.performanceMonitor.measureAsync(name, operation, metadata);
+    const performanceMonitor = this.ensurePerformanceMonitor();
+    return performanceMonitor.measureAsync(name, operation, metadata);
   }
 
   /**
@@ -365,7 +379,8 @@ export class Logger {
       return operation();
     }
     
-    return this.performanceMonitor.measureSync(name, operation, metadata);
+    const performanceMonitor = this.ensurePerformanceMonitor();
+    return performanceMonitor.measureSync(name, operation, metadata);
   }
 
   /**
@@ -374,7 +389,8 @@ export class Logger {
   public getPerformanceAnalytics(): PerformanceAnalytics | null {
     if (!this.config.enablePerformance) return null;
     
-    return this.performanceMonitor.generateAnalytics();
+    const performanceMonitor = this.ensurePerformanceMonitor();
+    return performanceMonitor.generateAnalytics();
   }
 
   /**
@@ -383,7 +399,8 @@ export class Logger {
   public updatePerformanceThresholds(thresholds: Partial<import('./PerformanceMonitor').PerformanceThresholds>): void {
     if (!this.config.enablePerformance) return;
     
-    this.performanceMonitor.updateThresholds(thresholds);
+    const performanceMonitor = this.ensurePerformanceMonitor();
+    performanceMonitor.updateThresholds(thresholds);
     
     this.info('Performance thresholds updated', {
       component: ComponentType.ERROR_HANDLER,
@@ -402,7 +419,8 @@ export class Logger {
   } | null {
     if (!this.config.enablePerformance) return null;
     
-    const stats = this.performanceMonitor.getStats();
+    const performanceMonitor = this.ensurePerformanceMonitor();
+    const stats = performanceMonitor.getStats();
     return {
       activeOperations: stats.activeOperations,
       totalMeasurements: stats.totalMeasurements,
