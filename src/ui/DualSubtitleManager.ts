@@ -93,12 +93,44 @@ export class DualSubtitleManager {
   // Initialization and Setup
   // ========================================
 
+  private async checkTranslationStatus(): Promise<void> {
+    try {
+      const response = await chrome.runtime.sendMessage({ 
+        type: 'GET_TRANSLATION_STATUS' 
+      });
+      
+      if (response.success && response.status) {
+        const status = response.status;
+        console.log('[DualSubtitleManager] Translation status:', status);
+        
+        if (!status.configured || !status.hasApiKey) {
+          console.warn('[DualSubtitleManager] ⚠️ Translation service not properly configured');
+          console.warn('[DualSubtitleManager] API key configured:', status.hasApiKey);
+          console.warn('[DualSubtitleManager] Service configured:', status.configured);
+          
+          if (status.lastError) {
+            console.warn('[DualSubtitleManager] Last error:', status.lastError);
+          }
+        } else {
+          console.log('[DualSubtitleManager] ✅ Translation service is ready');
+        }
+      } else {
+        console.warn('[DualSubtitleManager] Failed to get translation status from background service');
+      }
+    } catch (error) {
+      console.warn('[DualSubtitleManager] Error checking translation status:', error);
+    }
+  }
+
   public async initialize(): Promise<boolean> {
     try {
       if (this.isInitialized) {
         console.warn('[DualSubtitleManager] Already initialized');
         return true;
       }
+
+      // Check translation service status from background service
+      await this.checkTranslationStatus();
 
       // Load user settings
       await this.loadUserSettings();
