@@ -1567,11 +1567,8 @@ export class WordLookupPopup {
     // Detach click-outside listeners
     this.detachClickOutsideListeners();
     
-    // Remove container after animation (using tracked timeout)
     this.createTimeout(() => {
-      if (this.container && this.container.parentNode && !this.isDestroyed) {
-        this.container.parentNode.removeChild(this.container);
-      }
+      this.popupContainer?.classList.remove('hiding');
     }, this.config.animationDuration * 0.8);
     
     // Restore focus
@@ -1579,8 +1576,8 @@ export class WordLookupPopup {
     
     // Trigger event
     this.events.onHide?.();
-    this.destroySync();
-    this.initialize();
+    // this.destroySync();
+    // this.initialize();
   }
 
   public updateContent(content: PopupContent): void {

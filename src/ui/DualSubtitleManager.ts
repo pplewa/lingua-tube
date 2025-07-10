@@ -300,6 +300,7 @@ export class DualSubtitleManager {
     // Handle visibility changes
     this.subtitleComponent.addVisibilityListener((visible, cueCount) => {
       if (visible && this.config.autoTranslate) {
+        console.log(`[DualSubtitleManager] Processing visible cues`);
         this.processVisibleCues();
       }
     });
