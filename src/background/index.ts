@@ -597,14 +597,16 @@ async function initializeTranslationService(): Promise<void> {
     
     const configService = new ConfigService();
     
-    // Get API key from environment variable
+    // Get API key and region from environment variables
     const apiKey = import.meta.env.VITE_TRANSLATION_API_KEY;
+    const region = import.meta.env.VITE_TRANSLATION_API_REGION;
     
     console.log('[LinguaTube] Environment variable check:', {
       hasApiKey: !!apiKey,
       apiKeyLength: apiKey ? apiKey.length : 0,
       // Only show first/last few chars for security
-      apiKeyPreview: apiKey ? `${apiKey.substring(0, 4)}...${apiKey.substring(apiKey.length - 4)}` : 'undefined'
+      apiKeyPreview: apiKey ? `${apiKey.substring(0, 4)}...${apiKey.substring(apiKey.length - 4)}` : 'undefined',
+      region: region || 'global'
     });
     
     if (!apiKey) {
@@ -644,9 +646,16 @@ async function initializeTranslationService(): Promise<void> {
       console.log('[LinguaTube] No existing API key found, setting up new one...');
     }
     
-    // Set the API key
+    // Set the API key and region
     await configService.setApiKey(apiKey);
-    console.log('[LinguaTube] ✅ Microsoft Translator API key configured successfully');
+    
+    // Set the region if provided
+    if (region) {
+      await configService.updateConfig({ region });
+      console.log('[LinguaTube] ✅ Microsoft Translator API key and region configured successfully');
+    } else {
+      console.log('[LinguaTube] ✅ Microsoft Translator API key configured successfully (using default region)');
+    }
     
     // Verify configuration
     const config = await configService.getConfig();
