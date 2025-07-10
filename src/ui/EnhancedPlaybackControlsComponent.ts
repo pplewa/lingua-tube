@@ -28,6 +28,24 @@ export interface EnhancedControlsConfig {
   readonly autoHideDelay: number; // milliseconds
 }
 
+/**
+ * Enhanced Playback Controls State Interface
+ * 
+ * Manages persistent state for playback controls including speed, loop, and vocabulary mode.
+ * Supports auto-resume functionality and state restoration on reload or navigation.
+ */
+export interface EnhancedControlsState {
+  readonly speed: number;
+  readonly loop: LoopSegment | null;
+  readonly vocabularyMode: boolean;
+  readonly lastVideoId: string | null;
+  readonly lastPosition: number;
+  readonly sessionStartTime: number;
+  readonly totalWatchTime: number;
+  readonly loopCount: number;
+  readonly speedChanges: number;
+}
+
 export interface LoopSegment {
   readonly startTime: number;
   readonly endTime: number;
@@ -43,12 +61,152 @@ export interface PlaybackSpeed {
 }
 
 export interface ControlsEventData {
-  readonly type: 'speed_change' | 'loop_toggle' | 'sentence_nav' | 'vocabulary_mode';
+  readonly type: 'speed_change' | 'loop_toggle' | 'sentence_nav' | 'vocabulary_mode' | 'fullscreen_change';
   readonly value: any;
   readonly timestamp: number;
 }
 
 export type ControlsEventCallback = (event: ControlsEventData) => void;
+
+/**
+ * Enhanced Playback Controls API Interface
+ * 
+ * Comprehensive API for programmatic control of enhanced YouTube playback features.
+ * Enables external systems to control speed, looping, navigation, and vocabulary modes.
+ */
+export interface EnhancedPlaybackControlsAPI {
+  // ========================================
+  // Initialization & State
+  // ========================================
+  
+  /** Check if the controls are ready for use */
+  isReady(): boolean;
+  
+  /** Get current component state including all settings and modes */
+  getState(): {
+    isReady: boolean;
+    isVisible: boolean;
+    currentSpeed: number;
+    currentLoop: LoopSegment | null;
+    vocabularyModeActive: boolean;
+    config: EnhancedControlsConfig;
+  };
+  
+  /** Get current configuration */
+  getConfig(): EnhancedControlsConfig;
+  
+  /** Update configuration with new settings */
+  updateConfig(newConfig: Partial<EnhancedControlsConfig>): void;
+  
+  // ========================================
+  // Visibility Control
+  // ========================================
+  
+  /** Check if controls are currently visible */
+  getVisibility(): boolean;
+  
+  /** Check if player is in fullscreen mode */
+  isFullscreen(): boolean;
+  
+  /** Show the controls */
+  show(): void;
+  
+  /** Hide the controls */
+  hide(): void;
+  
+  /** Toggle controls visibility */
+  toggle(): void;
+  
+  // ========================================
+  // Speed Control
+  // ========================================
+  
+  /** Get current playback speed */
+  getCurrentSpeed(): number;
+  
+  /** Set playback speed to specific value (0.25x - 2.0x) */
+  setSpeed(speed: number): void;
+  
+  /** Adjust speed by delta amount (e.g., +0.25 or -0.25) */
+  adjustSpeedBy(delta: number): void;
+  
+  /** Reset speed to normal (1.0x) */
+  resetSpeedToNormal(): void;
+  
+  /** Get all available speed presets */
+  getAvailableSpeeds(): PlaybackSpeed[];
+  
+  // ========================================
+  // Loop Control
+  // ========================================
+  
+  /** Get current loop segment if active */
+  getCurrentLoop(): LoopSegment | null;
+  
+  /** Create a custom loop with specified start/end times */
+  createCustomLoop(startTime?: number, endTime?: number): LoopSegment | null;
+  
+  /** Remove the current loop */
+  removeLoop(): boolean;
+  
+  /** Toggle loop on/off */
+  toggleCurrentLoop(): LoopSegment | null;
+  
+  // ========================================
+  // Navigation Control
+  // ========================================
+  
+  /** Navigate to previous sentence */
+  navigateToPreviousSentence(): void;
+  
+  /** Navigate to next sentence */
+  navigateToNextSentence(): void;
+  
+  /** Skip backward by specified seconds (default: 5) */
+  skipBackward(seconds?: number): void;
+  
+  /** Skip forward by specified seconds (default: 5) */
+  skipForward(seconds?: number): void;
+  
+  /** Jump to specific subtitle by ID */
+  jumpToSubtitle(subtitleId: string): void;
+  
+  /** Jump to specific percentage of video (0-100) */
+  jumpToVideoPercentage(percentage: number): void;
+  
+  /** Replay current sentence from beginning */
+  replaySentence(): void;
+  
+  // ========================================
+  // Vocabulary Mode
+  // ========================================
+  
+  /** Check if vocabulary mode is active */
+  isVocabularyModeActive(): boolean;
+  
+  /** Set vocabulary mode state */
+  setVocabularyModeState(active: boolean): void;
+  
+  /** Toggle vocabulary mode on/off */
+  toggleVocabularyModeState(): boolean;
+  
+  // ========================================
+  // Event System
+  // ========================================
+  
+  /** Add event listener for control events */
+  addEventListener(callback: ControlsEventCallback): void;
+  
+  /** Remove event listener */
+  removeEventListener(callback: ControlsEventCallback): void;
+  
+  // ========================================
+  // Cleanup
+  // ========================================
+  
+  /** Destroy the component and clean up resources */
+  destroy(): Promise<void>;
+}
 
 // ========================================
 // Constants and Default Configuration
@@ -117,6 +275,7 @@ const CONTROLS_STYLES = `
     backdrop-filter: blur(4px);
     border: 1px solid rgba(255, 255, 255, 0.1);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    position: relative;
   }
 
   .controls-container.compact {
@@ -167,6 +326,8 @@ const CONTROLS_STYLES = `
     cursor: pointer;
     transition: var(--controls-transition);
     font-size: 16px;
+    position: relative;
+    overflow: hidden;
   }
 
   .control-button:hover {
@@ -181,6 +342,7 @@ const CONTROLS_STYLES = `
   .control-button.active {
     background: var(--controls-accent-color);
     color: white;
+    box-shadow: 0 0 8px rgba(255, 68, 68, 0.4);
   }
 
   .control-button.disabled {
@@ -191,6 +353,28 @@ const CONTROLS_STYLES = `
   .control-button.disabled:hover {
     background: transparent;
     transform: none;
+  }
+
+  /* Button Click Ripple Effect */
+  .control-button::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.3);
+    transform: translate(-50%, -50%);
+    transition: width 0.3s ease, height 0.3s ease, opacity 0.3s ease;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .control-button.clicked::after {
+    width: 100%;
+    height: 100%;
+    opacity: 1;
   }
 
   /* Speed Control */
@@ -211,15 +395,28 @@ const CONTROLS_STYLES = `
     font-size: 12px;
     cursor: pointer;
     transition: var(--controls-transition);
+    position: relative;
   }
 
   .speed-button:hover {
     background: rgba(255, 255, 255, 0.2);
+    transform: translateY(-1px);
   }
 
   .speed-button.active {
     background: var(--controls-accent-color);
     border-color: var(--controls-accent-color);
+    box-shadow: 0 0 6px rgba(255, 68, 68, 0.3);
+  }
+
+  .speed-button.changed {
+    animation: speedChange 0.5s ease;
+  }
+
+  @keyframes speedChange {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); background: rgba(255, 255, 255, 0.3); }
+    100% { transform: scale(1); }
   }
 
   /* Loop Control */
@@ -238,16 +435,28 @@ const CONTROLS_STYLES = `
     border-radius: 4px;
     font-size: 11px;
     color: var(--controls-text-color);
+    transition: var(--controls-transition);
   }
 
   .loop-indicator.active {
     background: var(--controls-accent-color);
     animation: pulse 2s infinite;
+    box-shadow: 0 0 8px rgba(255, 68, 68, 0.4);
+  }
+
+  .loop-indicator.creating {
+    animation: loopCreating 0.8s ease;
   }
 
   @keyframes pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.7; }
+  }
+
+  @keyframes loopCreating {
+    0% { transform: scale(1); background: rgba(255, 255, 255, 0.1); }
+    50% { transform: scale(1.05); background: var(--controls-accent-color); }
+    100% { transform: scale(1); background: var(--controls-accent-color); }
   }
 
   /* Time Display */
@@ -268,6 +477,16 @@ const CONTROLS_STYLES = `
     gap: 2px;
   }
 
+  .nav-control .control-button.navigating {
+    animation: navigationFeedback 0.4s ease;
+  }
+
+  @keyframes navigationFeedback {
+    0% { transform: scale(1); }
+    50% { transform: scale(0.9); background: rgba(255, 255, 255, 0.2); }
+    100% { transform: scale(1); }
+  }
+
   /* Vocabulary Mode */
   .vocabulary-mode {
     display: flex;
@@ -285,11 +504,116 @@ const CONTROLS_STYLES = `
     border-radius: 4px;
     font-size: 11px;
     color: #4caf50;
+    transition: var(--controls-transition);
   }
 
   .vocabulary-indicator.active {
     background: rgba(76, 175, 80, 0.8);
     color: white;
+    box-shadow: 0 0 6px rgba(76, 175, 80, 0.4);
+  }
+
+  .vocabulary-indicator.toggling {
+    animation: vocabularyToggle 0.6s ease;
+  }
+
+  @keyframes vocabularyToggle {
+    0% { transform: scale(1); }
+    25% { transform: scale(1.1); }
+    50% { transform: scale(0.95); }
+    75% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+  }
+
+  /* Action Feedback Toast */
+  .action-toast {
+    position: absolute;
+    top: -50px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.9);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    z-index: 1000;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+
+  .action-toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(-5px);
+  }
+
+  .action-toast.success {
+    background: rgba(76, 175, 80, 0.9);
+    border-color: rgba(76, 175, 80, 0.4);
+  }
+
+  .action-toast.warning {
+    background: rgba(255, 152, 0, 0.9);
+    border-color: rgba(255, 152, 0, 0.4);
+  }
+
+  .action-toast.error {
+    background: rgba(244, 67, 54, 0.9);
+    border-color: rgba(244, 67, 54, 0.4);
+  }
+
+  /* Progress Indicator */
+  .progress-indicator {
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    height: 2px;
+    background: var(--controls-accent-color);
+    border-radius: 1px;
+    transition: width 0.3s ease;
+    opacity: 0;
+  }
+
+  .progress-indicator.show {
+    opacity: 1;
+  }
+
+  /* State Indicator Dots */
+  .state-indicators {
+    position: absolute;
+    top: -8px;
+    right: 8px;
+    display: flex;
+    gap: 4px;
+  }
+
+  .state-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.3);
+    transition: var(--controls-transition);
+  }
+
+  .state-dot.active {
+    background: var(--controls-accent-color);
+    box-shadow: 0 0 4px rgba(255, 68, 68, 0.6);
+  }
+
+  .state-dot.vocabulary {
+    background: #4caf50;
+  }
+
+  .state-dot.loop {
+    background: #ff9800;
+    animation: pulse 1.5s infinite;
+  }
+
+  .state-dot.speed {
+    background: #2196f3;
   }
 
   /* Theme Variations */
@@ -334,17 +658,118 @@ const CONTROLS_STYLES = `
       height: 24px;
       font-size: 11px;
     }
+
+    .action-toast {
+      font-size: 11px;
+      padding: 6px 10px;
+    }
+  }
+
+  /* Fullscreen Mode Support */
+  :host(.fullscreen-mode) {
+    position: fixed !important;
+    bottom: 80px !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    z-index: 2147483647 !important; /* Higher than YouTube's fullscreen controls */
+  }
+
+  :host(.fullscreen-mode) .controls-container {
+    background: rgba(0, 0, 0, 0.9);
+    backdrop-filter: blur(6px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+    padding: 14px;
+    gap: 10px;
+  }
+
+  :host(.fullscreen-mode) .control-button {
+    width: 40px;
+    height: 40px;
+    font-size: 18px;
+  }
+
+  :host(.fullscreen-mode) .speed-button {
+    min-width: 55px;
+    height: 32px;
+    font-size: 13px;
+    padding: 0 10px;
+  }
+
+  :host(.fullscreen-mode) .action-toast {
+    font-size: 14px;
+    padding: 10px 16px;
+    top: -60px;
+  }
+
+  :host(.fullscreen-mode) .state-indicators {
+    top: -10px;
+    right: 10px;
+  }
+
+  :host(.fullscreen-mode) .state-dot {
+    width: 8px;
+    height: 8px;
+  }
+
+  /* Fullscreen compact mode */
+  :host(.fullscreen-mode) .controls-container.compact {
+    padding: 10px;
+    gap: 8px;
+  }
+
+  :host(.fullscreen-mode) .controls-container.compact .control-button {
+    width: 36px;
+    height: 36px;
+    font-size: 16px;
+  }
+
+  /* Fullscreen mobile adjustments */
+  @media (max-width: 768px) {
+    :host(.fullscreen-mode) {
+      bottom: 60px !important;
+    }
+    
+    :host(.fullscreen-mode) .controls-container {
+      padding: 10px;
+      gap: 8px;
+    }
+    
+    :host(.fullscreen-mode) .control-button {
+      width: 36px;
+      height: 36px;
+      font-size: 16px;
+    }
+    
+    :host(.fullscreen-mode) .speed-button {
+      min-width: 48px;
+      height: 28px;
+      font-size: 12px;
+    }
+
+    :host(.fullscreen-mode) .action-toast {
+      font-size: 12px;
+      padding: 8px 12px;
+    }
   }
 
   /* Accessibility */
   @media (prefers-reduced-motion: reduce) {
     .controls-container,
     .control-button,
-    .speed-button {
+    .speed-button,
+    .loop-indicator,
+    .vocabulary-indicator,
+    .action-toast {
       transition: none;
+      animation: none;
     }
     
     .loop-indicator.active {
+      animation: none;
+    }
+
+    .state-dot.loop {
       animation: none;
     }
   }
@@ -358,10 +783,14 @@ const CONTROLS_STYLES = `
     .control-button:hover {
       background: rgba(255, 255, 255, 0.3);
     }
+
+    .action-toast {
+      border: 2px solid;
+    }
   }
 
   /* Tooltips */
-  .control-button[title]:hover::after {
+  .control-button[title]:hover::before {
     content: attr(title);
     position: absolute;
     bottom: 100%;
@@ -375,6 +804,13 @@ const CONTROLS_STYLES = `
     white-space: nowrap;
     z-index: 1000;
     margin-bottom: 4px;
+    opacity: 0;
+    animation: tooltipFadeIn 0.3s ease forwards;
+  }
+
+  @keyframes tooltipFadeIn {
+    from { opacity: 0; transform: translateX(-50%) translateY(5px); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0); }
   }
 `;
 
@@ -382,7 +818,7 @@ const CONTROLS_STYLES = `
 // Enhanced Playback Controls Component
 // ========================================
 
-export class EnhancedPlaybackControlsComponent {
+export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackControlsAPI {
   private container: HTMLElement | null = null;
   private shadowRoot: ShadowRoot | null = null;
   private controlsContainer: HTMLElement | null = null;
@@ -397,15 +833,27 @@ export class EnhancedPlaybackControlsComponent {
   private vocabularyManager: VocabularyManager;
   private sentenceLoopingService: SentenceLoopingService;
   
-  private currentSpeed: number = 1.0;
+    private currentSpeed: number = 1.0;
   private currentLoop: LoopSegment | null = null;
   private vocabularyModeActive: boolean = false;
-  
+
+  // State management
+  private currentState: EnhancedControlsState;
+  private stateUpdateInterval: number | null = null;
+  private autoResumeEnabled: boolean = true;
+  private currentVideoId: string | null = null;
+
+  // Event system
   private eventListeners: Set<ControlsEventCallback> = new Set();
   private resizeObserver: ResizeObserver | null = null;
   private mutationObserver: MutationObserver | null = null;
-  
-  // Player event handlers
+
+  // Fullscreen support
+  private isFullscreenMode: boolean = false;
+  private fullscreenObserver: MutationObserver | null = null;
+  private fullscreenChangeHandler: () => void;
+
+  // Player integration
   private playerEventHandlers: Map<string, (event: any) => void> = new Map();
   private keyboardShortcuts: Map<string, () => void> = new Map();
   private keyboardEventHandler: (event: KeyboardEvent) => void;
@@ -421,12 +869,31 @@ export class EnhancedPlaybackControlsComponent {
     this.sentenceLoopingService = new SentenceLoopingService(playerService, storageService);
     this.keyboardEventHandler = this.handleKeyboardEvent.bind(this);
 
+    // Initialize state
+    this.currentState = {
+      speed: 1.0,
+      loop: null,
+      vocabularyMode: false,
+      lastVideoId: null,
+      lastPosition: 0,
+      sessionStartTime: Date.now(),
+      totalWatchTime: 0,
+      loopCount: 0,
+      speedChanges: 0
+    };
+
     if (initialConfig) {
       this.config = { ...this.config, ...initialConfig };
     }
     
     this.loadConfigFromStorage();
     this.setupPlayerEventHandlers();
+
+    // Initialize keyboard event handler
+    this.keyboardEventHandler = this.handleKeyboardEvent.bind(this);
+
+    // Initialize fullscreen change handler
+    this.fullscreenChangeHandler = this.handleFullscreenChange.bind(this);
   }
 
   // ========================================
@@ -462,9 +929,10 @@ export class EnhancedPlaybackControlsComponent {
       this.createControlElements();
       this.applyConfiguration();
 
-      // Set up observers and event handlers
+      // Setup observers for dynamic content
       this.setupResizeObserver();
       this.setupMutationObserver();
+      this.setupFullscreenObserver();
       this.setupPlayerEventListeners();
       this.setupInteractionHandlers();
 
@@ -480,6 +948,13 @@ export class EnhancedPlaybackControlsComponent {
       // Set up keyboard shortcuts
       this.setupKeyboardShortcuts();
 
+      // Load saved state and start state tracking
+      await this.loadState();
+      this.startStateTracking();
+
+      // Update initial visual feedback state
+      this.updateStateIndicators();
+
       this.isInitialized = true;
       console.log('[EnhancedPlaybackControls] Initialized successfully');
       return true;
@@ -490,7 +965,7 @@ export class EnhancedPlaybackControlsComponent {
     }
   }
 
-  public destroy(): void {
+  public async destroy(): Promise<void> {
     try {
       // Remove player event listeners
       this.removePlayerEventListeners();
@@ -505,6 +980,9 @@ export class EnhancedPlaybackControlsComponent {
         this.mutationObserver.disconnect();
         this.mutationObserver = null;
       }
+
+      // Clean up fullscreen observer
+      this.removeFullscreenObserver();
 
       // Clear auto-hide timeout
       if (this.autoHideTimeout) {
@@ -528,6 +1006,10 @@ export class EnhancedPlaybackControlsComponent {
       
       // Clean up keyboard shortcuts
       this.removeKeyboardShortcuts();
+
+      // Stop state tracking and save final state
+      this.stopStateTracking();
+      await this.saveState();
       
       this.isInitialized = false;
       console.log('[EnhancedPlaybackControls] Destroyed successfully');
@@ -615,6 +1097,9 @@ export class EnhancedPlaybackControlsComponent {
       this.controlsContainer.appendChild(this.createTimeDisplay());
     }
 
+    // Create visual feedback elements
+    this.createFeedbackElements();
+
     this.shadowRoot.appendChild(this.controlsContainer);
   }
 
@@ -685,35 +1170,52 @@ export class EnhancedPlaybackControlsComponent {
     skip5BackBtn.className = 'control-button skip-button';
     skip5BackBtn.innerHTML = '⏪5s';
     skip5BackBtn.title = 'Skip Back 5 Seconds';
-    skip5BackBtn.addEventListener('click', () => this.skipTime(-5));
+    skip5BackBtn.addEventListener('click', () => {
+      this.showButtonClickFeedback(skip5BackBtn);
+      this.skipTime(-5);
+    });
 
     // Previous sentence button
     const prevBtn = document.createElement('button');
     prevBtn.className = 'control-button';
     prevBtn.innerHTML = '⏮';
     prevBtn.title = 'Previous Sentence';
-    prevBtn.addEventListener('click', () => this.navigateSentence('previous'));
+    prevBtn.addEventListener('click', () => {
+      this.showButtonClickFeedback(prevBtn);
+      this.showNavigationFeedback(prevBtn);
+      this.navigateSentence('previous');
+    });
 
     // Replay current sentence button
     const replayBtn = document.createElement('button');
     replayBtn.className = 'control-button replay-button';
     replayBtn.innerHTML = '🔄';
     replayBtn.title = 'Replay Current Sentence';
-    replayBtn.addEventListener('click', () => this.replayCurrentSentence());
+    replayBtn.addEventListener('click', () => {
+      this.showButtonClickFeedback(replayBtn);
+      this.replayCurrentSentence();
+    });
 
     // Next sentence button
     const nextBtn = document.createElement('button');
     nextBtn.className = 'control-button';
     nextBtn.innerHTML = '⏭';
     nextBtn.title = 'Next Sentence';
-    nextBtn.addEventListener('click', () => this.navigateSentence('next'));
+    nextBtn.addEventListener('click', () => {
+      this.showButtonClickFeedback(nextBtn);
+      this.showNavigationFeedback(nextBtn);
+      this.navigateSentence('next');
+    });
 
     // 5-second forward skip
     const skip5ForwardBtn = document.createElement('button');
     skip5ForwardBtn.className = 'control-button skip-button';
     skip5ForwardBtn.innerHTML = '5s⏩';
     skip5ForwardBtn.title = 'Skip Forward 5 Seconds';
-    skip5ForwardBtn.addEventListener('click', () => this.skipTime(5));
+    skip5ForwardBtn.addEventListener('click', () => {
+      this.showButtonClickFeedback(skip5ForwardBtn);
+      this.skipTime(5);
+    });
 
     group.appendChild(skip5BackBtn);
     group.appendChild(prevBtn);
@@ -747,15 +1249,201 @@ export class EnhancedPlaybackControlsComponent {
   }
 
   private createTimeDisplay(): HTMLElement {
-    const group = document.createElement('div');
-    group.className = 'control-group time-display';
+    const timeDisplay = document.createElement('div');
+    timeDisplay.className = 'control-group time-display';
+    
+    const currentTime = document.createElement('span');
+    currentTime.className = 'current-time';
+    currentTime.textContent = '0:00';
+    
+    const separator = document.createElement('span');
+    separator.textContent = ' / ';
+    
+    const totalTime = document.createElement('span');
+    totalTime.className = 'total-time';
+    totalTime.textContent = '0:00';
+    
+    timeDisplay.appendChild(currentTime);
+    timeDisplay.appendChild(separator);
+    timeDisplay.appendChild(totalTime);
+    
+    return timeDisplay;
+  }
 
-    const timeText = document.createElement('span');
-    timeText.textContent = '0:00 / 0:00';
+  private createFeedbackElements(): void {
+    if (!this.controlsContainer) return;
 
-    group.appendChild(timeText);
+    // Create action toast for notifications
+    const actionToast = document.createElement('div');
+    actionToast.className = 'action-toast';
+    this.controlsContainer.appendChild(actionToast);
 
-    return group;
+    // Create progress indicator
+    const progressIndicator = document.createElement('div');
+    progressIndicator.className = 'progress-indicator';
+    this.controlsContainer.appendChild(progressIndicator);
+
+    // Create state indicator dots
+    const stateIndicators = document.createElement('div');
+    stateIndicators.className = 'state-indicators';
+    
+    // Speed state dot
+    const speedDot = document.createElement('div');
+    speedDot.className = 'state-dot speed';
+    speedDot.title = 'Speed Control Active';
+    stateIndicators.appendChild(speedDot);
+    
+    // Loop state dot
+    const loopDot = document.createElement('div');
+    loopDot.className = 'state-dot loop';
+    loopDot.title = 'Loop Active';
+    stateIndicators.appendChild(loopDot);
+    
+    // Vocabulary state dot
+    const vocabularyDot = document.createElement('div');
+    vocabularyDot.className = 'state-dot vocabulary';
+    vocabularyDot.title = 'Vocabulary Mode Active';
+    stateIndicators.appendChild(vocabularyDot);
+
+    this.controlsContainer.appendChild(stateIndicators);
+  }
+
+  // ========================================
+  // Visual Feedback Methods
+  // ========================================
+
+  private showActionToast(message: string, type: 'success' | 'warning' | 'error' = 'success', duration: number = 2000): void {
+    if (!this.shadowRoot) return;
+
+    const toast = this.shadowRoot.querySelector('.action-toast') as HTMLElement;
+    if (!toast) return;
+
+    // Clear any existing classes and content
+    toast.className = 'action-toast';
+    toast.textContent = message;
+
+    // Add type class and show
+    toast.classList.add(type, 'show');
+
+    // Auto-hide after duration
+    setTimeout(() => {
+      toast.classList.remove('show');
+    }, duration);
+  }
+
+  private showButtonClickFeedback(button: HTMLElement): void {
+    if (!button) return;
+
+    button.classList.add('clicked');
+    
+    // Remove the class after animation completes
+    setTimeout(() => {
+      button.classList.remove('clicked');
+    }, 300);
+  }
+
+  private showNavigationFeedback(button: HTMLElement): void {
+    if (!button) return;
+
+    button.classList.add('navigating');
+    
+    setTimeout(() => {
+      button.classList.remove('navigating');
+    }, 400);
+  }
+
+  private showSpeedChangeFeedback(): void {
+    if (!this.shadowRoot) return;
+
+    const speedButton = this.shadowRoot.querySelector('.speed-button') as HTMLElement;
+    if (!speedButton) return;
+
+    speedButton.classList.add('changed');
+    
+    setTimeout(() => {
+      speedButton.classList.remove('changed');
+    }, 500);
+  }
+
+  private showLoopCreationFeedback(): void {
+    if (!this.shadowRoot) return;
+
+    const loopIndicator = this.shadowRoot.querySelector('.loop-indicator') as HTMLElement;
+    if (!loopIndicator) return;
+
+    loopIndicator.classList.add('creating');
+    
+    setTimeout(() => {
+      loopIndicator.classList.remove('creating');
+    }, 800);
+  }
+
+  private showVocabularyToggleFeedback(): void {
+    if (!this.shadowRoot) return;
+
+    const vocabularyIndicator = this.shadowRoot.querySelector('.vocabulary-indicator') as HTMLElement;
+    if (!vocabularyIndicator) return;
+
+    vocabularyIndicator.classList.add('toggling');
+    
+    setTimeout(() => {
+      vocabularyIndicator.classList.remove('toggling');
+    }, 600);
+  }
+
+  private updateStateIndicators(): void {
+    if (!this.shadowRoot) return;
+
+    // Update speed state dot
+    const speedDot = this.shadowRoot.querySelector('.state-dot.speed') as HTMLElement;
+    if (speedDot) {
+      if (this.currentSpeed !== 1.0) {
+        speedDot.classList.add('active');
+        speedDot.title = `Speed: ${this.currentSpeed}×`;
+      } else {
+        speedDot.classList.remove('active');
+        speedDot.title = 'Speed Control Active';
+      }
+    }
+
+    // Update loop state dot
+    const loopDot = this.shadowRoot.querySelector('.state-dot.loop') as HTMLElement;
+    if (loopDot) {
+      if (this.currentLoop) {
+        loopDot.classList.add('active');
+        loopDot.title = `Loop: ${this.currentLoop.title || 'Active'}`;
+      } else {
+        loopDot.classList.remove('active');
+        loopDot.title = 'Loop Active';
+      }
+    }
+
+    // Update vocabulary state dot
+    const vocabularyDot = this.shadowRoot.querySelector('.state-dot.vocabulary') as HTMLElement;
+    if (vocabularyDot) {
+      if (this.vocabularyModeActive) {
+        vocabularyDot.classList.add('active');
+        vocabularyDot.title = 'Vocabulary Mode: ON';
+      } else {
+        vocabularyDot.classList.remove('active');
+        vocabularyDot.title = 'Vocabulary Mode Active';
+      }
+    }
+  }
+
+  private showProgressIndicator(percentage: number): void {
+    if (!this.shadowRoot) return;
+
+    const progressIndicator = this.shadowRoot.querySelector('.progress-indicator') as HTMLElement;
+    if (!progressIndicator) return;
+
+    progressIndicator.style.width = `${Math.max(0, Math.min(100, percentage))}%`;
+    progressIndicator.classList.add('show');
+
+    // Hide after a short delay
+    setTimeout(() => {
+      progressIndicator.classList.remove('show');
+    }, 1000);
   }
 
   // ========================================
@@ -852,6 +1540,14 @@ export class EnhancedPlaybackControlsComponent {
       this.currentSpeed = speed;
       this.updateSpeedDisplay();
       
+      // Update state tracking
+      this.updateCurrentState();
+      
+      // Show visual feedback
+      this.showSpeedChangeFeedback();
+      this.showActionToast(`Speed: ${speed}×`, 'success', 1500);
+      this.updateStateIndicators();
+      
       this.emitEvent({
         type: 'speed_change',
         value: speed,
@@ -859,6 +1555,7 @@ export class EnhancedPlaybackControlsComponent {
       });
     } catch (error) {
       console.error('[EnhancedPlaybackControls] Failed to set playback speed:', error);
+      this.showActionToast('Failed to change speed', 'error');
     }
   }
 
@@ -899,6 +1596,14 @@ export class EnhancedPlaybackControlsComponent {
       this.playerService.createSegmentLoop(loopStart, loopEnd);
       this.updateLoopDisplay();
       
+      // Update state tracking
+      this.updateCurrentState();
+      
+      // Show visual feedback
+      this.showLoopCreationFeedback();
+      this.showActionToast(`Loop created: ${this.currentLoop.title}`, 'success', 2000);
+      this.updateStateIndicators();
+      
       this.emitEvent({
         type: 'loop_toggle',
         value: this.currentLoop,
@@ -906,6 +1611,7 @@ export class EnhancedPlaybackControlsComponent {
       });
     } catch (error) {
       console.error('[EnhancedPlaybackControls] Failed to create loop:', error);
+      this.showActionToast('Failed to create loop', 'error');
     }
   }
 
@@ -915,6 +1621,13 @@ export class EnhancedPlaybackControlsComponent {
       this.currentLoop = null;
       this.updateLoopDisplay();
       
+      // Update state tracking
+      this.updateCurrentState();
+      
+      // Show visual feedback
+      this.showActionToast('Loop removed', 'success', 1500);
+      this.updateStateIndicators();
+      
       this.emitEvent({
         type: 'loop_toggle',
         value: null,
@@ -922,6 +1635,7 @@ export class EnhancedPlaybackControlsComponent {
       });
     } catch (error) {
       console.error('[EnhancedPlaybackControls] Failed to clear loop:', error);
+      this.showActionToast('Failed to remove loop', 'error');
     }
   }
 
@@ -969,6 +1683,13 @@ export class EnhancedPlaybackControlsComponent {
             targetTime = targetSentence.segments[0].startTime;
             this.playerService.seek(targetTime);
             
+            // Show visual feedback
+            this.showActionToast(
+              `${direction === 'next' ? 'Next' : 'Previous'} sentence`,
+              'success',
+              1000
+            );
+            
             this.emitEvent({
               type: 'sentence_nav',
               value: { 
@@ -991,6 +1712,13 @@ export class EnhancedPlaybackControlsComponent {
       
       this.playerService.seek(targetTime);
       
+      // Show visual feedback for fallback navigation
+      this.showActionToast(
+        `${direction === 'next' ? 'Forward' : 'Backward'} ${Math.abs(jumpSeconds)}s`,
+        'warning',
+        1000
+      );
+      
       this.emitEvent({
         type: 'sentence_nav',
         value: { direction, fromTime: currentTime, toTime: targetTime },
@@ -999,6 +1727,7 @@ export class EnhancedPlaybackControlsComponent {
       
     } catch (error) {
       console.error('[EnhancedPlaybackControls] Failed to navigate sentence:', error);
+      this.showActionToast('Navigation failed', 'error');
     }
   }
 
@@ -1039,6 +1768,9 @@ export class EnhancedPlaybackControlsComponent {
           // Seek to the beginning of the current sentence
           this.playerService.seek(startTime);
           
+          // Show visual feedback
+          this.showActionToast('Replaying sentence', 'success', 1000);
+          
           this.emitEvent({
             type: 'sentence_nav',
             value: { 
@@ -1046,7 +1778,7 @@ export class EnhancedPlaybackControlsComponent {
               fromTime: currentTime, 
               toTime: startTime,
               sentence: currentSentence.combinedText,
-              replayAction: true
+              sentenceIndex: this.sentenceLoopingService.getAvailableSentences().findIndex(s => s.startIndex === currentSentence.startIndex)
             },
             timestamp: Date.now()
           });
@@ -1054,9 +1786,12 @@ export class EnhancedPlaybackControlsComponent {
         }
       }
       
-      // Fallback: replay last 5 seconds if no sentence data available
+      // Fallback: replay last 5 seconds
       const replayTime = Math.max(0, currentTime - 5);
       this.playerService.seek(replayTime);
+      
+      // Show visual feedback for fallback
+      this.showActionToast('Replaying 5 seconds', 'warning', 1000);
       
       this.emitEvent({
         type: 'sentence_nav',
@@ -1064,14 +1799,14 @@ export class EnhancedPlaybackControlsComponent {
           direction: 'replay',
           fromTime: currentTime, 
           toTime: replayTime,
-          fallbackReplay: true,
-          replaySeconds: 5
+          fallback: true
         },
         timestamp: Date.now()
       });
       
     } catch (error) {
-      console.error('[EnhancedPlaybackControls] Failed to replay current sentence:', error);
+      console.error('[EnhancedPlaybackControls] Failed to replay sentence:', error);
+      this.showActionToast('Replay failed', 'error');
     }
   }
 
@@ -1136,6 +1871,18 @@ export class EnhancedPlaybackControlsComponent {
   private toggleVocabularyMode(): void {
     this.vocabularyModeActive = !this.vocabularyModeActive;
     this.updateVocabularyDisplay();
+    
+    // Update state tracking
+    this.updateCurrentState();
+    
+    // Show visual feedback
+    this.showVocabularyToggleFeedback();
+    this.showActionToast(
+      `Vocabulary Mode: ${this.vocabularyModeActive ? 'ON' : 'OFF'}`,
+      'success',
+      1500
+    );
+    this.updateStateIndicators();
     
     this.emitEvent({
       type: 'vocabulary_mode',
@@ -1556,6 +2303,343 @@ export class EnhancedPlaybackControlsComponent {
   }
 
   // ========================================
+  // Public Speed Control API
+  // ========================================
+
+  public setSpeed(speed: number): void {
+    this.setPlaybackSpeed(speed);
+  }
+
+  public adjustSpeedBy(delta: number): void {
+    this.adjustSpeed(delta);
+  }
+
+  public resetSpeedToNormal(): void {
+    this.resetSpeed();
+  }
+
+  public getAvailableSpeeds(): PlaybackSpeed[] {
+    return [
+      { value: 0.25, label: '0.25×', isDefault: false },
+      { value: 0.5, label: '0.5×', isDefault: false },
+      { value: 0.75, label: '0.75×', isDefault: false },
+      { value: 1.0, label: '1×', isDefault: true },
+      { value: 1.25, label: '1.25×', isDefault: false },
+      { value: 1.5, label: '1.5×', isDefault: false },
+      { value: 1.75, label: '1.75×', isDefault: false },
+      { value: 2.0, label: '2×', isDefault: false }
+    ];
+  }
+
+  // ========================================
+  // Public Loop Control API
+  // ========================================
+
+  public createCustomLoop(startTime?: number, endTime?: number): LoopSegment | null {
+    try {
+      const currentTime = this.playerService.getCurrentTime();
+      const duration = this.playerService.getDuration();
+      
+      const loopStart = startTime !== undefined ? Math.max(0, startTime) : Math.max(0, currentTime - 5);
+      const loopEnd = endTime !== undefined ? Math.min(duration, endTime) : Math.min(duration, currentTime + 5);
+      
+      if (loopEnd <= loopStart) {
+        console.warn('[EnhancedPlaybackControls] Invalid loop times:', { loopStart, loopEnd });
+        return null;
+      }
+      
+      this.currentLoop = {
+        id: `loop_${Date.now()}`,
+        startTime: loopStart,
+        endTime: loopEnd,
+        isActive: true,
+        title: `Loop ${this.formatTime(loopStart)} - ${this.formatTime(loopEnd)}`
+      };
+      
+      this.playerService.createSegmentLoop(loopStart, loopEnd);
+      this.updateLoopDisplay();
+      
+      this.emitEvent({
+        type: 'loop_toggle',
+        value: this.currentLoop,
+        timestamp: Date.now()
+      });
+      
+      return this.currentLoop;
+    } catch (error) {
+      console.error('[EnhancedPlaybackControls] Failed to create loop:', error);
+      return null;
+    }
+  }
+
+  public removeLoop(): boolean {
+    try {
+      this.playerService.stopSegmentLoop();
+      this.currentLoop = null;
+      this.updateLoopDisplay();
+      
+      this.emitEvent({
+        type: 'loop_toggle',
+        value: null,
+        timestamp: Date.now()
+      });
+      
+      return true;
+    } catch (error) {
+      console.error('[EnhancedPlaybackControls] Failed to clear loop:', error);
+      return false;
+    }
+  }
+
+  public toggleCurrentLoop(): LoopSegment | null {
+    if (this.currentLoop) {
+      this.removeLoop();
+      return null;
+    } else {
+      return this.createCustomLoop();
+    }
+  }
+
+  // ========================================
+  // Public Vocabulary Mode API
+  // ========================================
+
+  public setVocabularyModeState(active: boolean): void {
+    if (this.vocabularyModeActive !== active) {
+      this.vocabularyModeActive = active;
+      this.updateVocabularyDisplay();
+      
+      this.emitEvent({
+        type: 'vocabulary_mode',
+        value: active,
+        timestamp: Date.now()
+      });
+    }
+  }
+
+  public toggleVocabularyModeState(): boolean {
+    this.setVocabularyModeState(!this.vocabularyModeActive);
+    return this.vocabularyModeActive;
+  }
+
+  // ========================================
+  // Public State Query API
+  // ========================================
+
+  public getVisibility(): boolean {
+    return this.isVisible;
+  }
+
+  public isFullscreen(): boolean {
+    return this.isFullscreenMode;
+  }
+
+  public getConfig(): EnhancedControlsConfig {
+    return { ...this.config };
+  }
+
+  public getState(): {
+    isReady: boolean;
+    isVisible: boolean;
+    currentSpeed: number;
+    currentLoop: LoopSegment | null;
+    vocabularyModeActive: boolean;
+    config: EnhancedControlsConfig;
+  } {
+    return {
+      isReady: this.isReady(),
+      isVisible: this.getVisibility(),
+      currentSpeed: this.currentSpeed,
+      currentLoop: this.currentLoop,
+      vocabularyModeActive: this.vocabularyModeActive,
+      config: this.getConfig()
+    };
+  }
+
+  // ========================================
+  // State Management
+  // ========================================
+
+  public async loadState(): Promise<boolean> {
+    try {
+      const stateKey = `enhanced-controls-state-${this.getCurrentVideoId()}`;
+      const result = await this.storageService.getCache<EnhancedControlsState>(stateKey);
+      
+      if (result.success && result.data) {
+        const savedState = result.data;
+        
+        // Restore state if auto-resume is enabled
+        if (this.autoResumeEnabled) {
+          await this.restoreState(savedState);
+        }
+        
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('[EnhancedPlaybackControls] Failed to load state:', error);
+      return false;
+    }
+  }
+
+  public async saveState(): Promise<boolean> {
+    try {
+      const currentVideoId = this.getCurrentVideoId();
+      if (!currentVideoId) return false;
+
+      // Update current state
+      this.updateCurrentState();
+      
+      const stateKey = `enhanced-controls-state-${currentVideoId}`;
+      // Cache state for 24 hours (86400 seconds)
+      const result = await this.storageService.setCache(stateKey, this.currentState, 86400);
+      
+      return result.success;
+    } catch (error) {
+      console.error('[EnhancedPlaybackControls] Failed to save state:', error);
+      return false;
+    }
+  }
+
+  private async restoreState(savedState: EnhancedControlsState): Promise<void> {
+    try {
+      // Restore speed
+      if (savedState.speed !== this.currentSpeed) {
+        this.setPlaybackSpeed(savedState.speed);
+      }
+
+      // Restore vocabulary mode
+      if (savedState.vocabularyMode !== this.vocabularyModeActive) {
+        this.setVocabularyModeState(savedState.vocabularyMode);
+      }
+
+      // Restore loop if it exists and is valid
+      if (savedState.loop && this.isValidLoopSegment(savedState.loop)) {
+        this.currentLoop = savedState.loop;
+        this.playerService.createSegmentLoop(savedState.loop.startTime, savedState.loop.endTime);
+        this.updateLoopDisplay();
+      }
+
+      // Update state tracking
+      this.currentState = {
+        ...savedState,
+        sessionStartTime: Date.now(), // Reset session time
+        lastPosition: this.playerService.getCurrentTime()
+      };
+
+      console.log('[EnhancedPlaybackControls] State restored successfully');
+    } catch (error) {
+      console.error('[EnhancedPlaybackControls] Failed to restore state:', error);
+    }
+  }
+
+  private updateCurrentState(): void {
+    const currentTime = this.playerService.getCurrentTime();
+    const videoId = this.getCurrentVideoId();
+    
+    this.currentState = {
+      ...this.currentState,
+      speed: this.currentSpeed,
+      loop: this.currentLoop,
+      vocabularyMode: this.vocabularyModeActive,
+      lastVideoId: videoId,
+      lastPosition: currentTime,
+      totalWatchTime: this.currentState.totalWatchTime + (Date.now() - this.currentState.sessionStartTime) / 1000
+    };
+  }
+
+  private getCurrentVideoId(): string | null {
+    try {
+      const url = new URL(window.location.href);
+      return url.searchParams.get('v');
+    } catch {
+      return null;
+    }
+  }
+
+  private isValidLoopSegment(loop: LoopSegment): boolean {
+    const duration = this.playerService.getDuration();
+    return loop.startTime >= 0 && 
+           loop.endTime <= duration && 
+           loop.startTime < loop.endTime;
+  }
+
+  private startStateTracking(): void {
+    if (this.stateUpdateInterval) {
+      clearInterval(this.stateUpdateInterval);
+    }
+
+    // Update state every 10 seconds
+    this.stateUpdateInterval = window.setInterval(() => {
+      this.updateCurrentState();
+      this.saveState();
+    }, 10000);
+  }
+
+  private stopStateTracking(): void {
+    if (this.stateUpdateInterval) {
+      clearInterval(this.stateUpdateInterval);
+      this.stateUpdateInterval = null;
+    }
+  }
+
+  public setAutoResume(enabled: boolean): void {
+    this.autoResumeEnabled = enabled;
+  }
+
+  public getAutoResume(): boolean {
+    return this.autoResumeEnabled;
+  }
+
+  public getSessionStats(): {
+    sessionDuration: number;
+    totalWatchTime: number;
+    loopCount: number;
+    speedChanges: number;
+    averageSpeed: number;
+  } {
+    const sessionDuration = (Date.now() - this.currentState.sessionStartTime) / 1000;
+    
+    return {
+      sessionDuration,
+      totalWatchTime: this.currentState.totalWatchTime,
+      loopCount: this.currentState.loopCount,
+      speedChanges: this.currentState.speedChanges,
+      averageSpeed: this.currentSpeed // Could be enhanced to track true average
+    };
+  }
+
+  public async clearState(): Promise<boolean> {
+    try {
+      const currentVideoId = this.getCurrentVideoId();
+      if (!currentVideoId) return false;
+
+      const stateKey = `enhanced-controls-state-${currentVideoId}`;
+      // Clear cache by setting null with immediate expiry
+      const result = await this.storageService.setCache(stateKey, null, 0);
+      
+      // Reset current state to defaults
+      this.currentState = {
+        speed: 1.0,
+        loop: null,
+        vocabularyMode: false,
+        lastVideoId: currentVideoId,
+        lastPosition: 0,
+        sessionStartTime: Date.now(),
+        totalWatchTime: 0,
+        loopCount: 0,
+        speedChanges: 0
+      };
+      
+      return result.success;
+    } catch (error) {
+      console.error('[EnhancedPlaybackControls] Failed to clear state:', error);
+      return false;
+    }
+  }
+
+  // ========================================
   // Utility Methods
   // ========================================
 
@@ -1576,5 +2660,122 @@ export class EnhancedPlaybackControlsComponent {
         console.error('[EnhancedPlaybackControls] Event listener error:', error);
       }
     });
+  }
+
+  // ========================================
+  // Fullscreen Support
+  // ========================================
+
+  private setupFullscreenObserver(): void {
+    // Listen for fullscreen changes via document events
+    document.addEventListener('fullscreenchange', this.fullscreenChangeHandler);
+    document.addEventListener('webkitfullscreenchange', this.fullscreenChangeHandler);
+    document.addEventListener('mozfullscreenchange', this.fullscreenChangeHandler);
+    document.addEventListener('MSFullscreenChange', this.fullscreenChangeHandler);
+
+    // Also observe DOM changes for YouTube's fullscreen class changes
+    this.fullscreenObserver = new MutationObserver(() => {
+      this.checkFullscreenState();
+    });
+
+    // Watch for changes on video container and player elements
+    const videoContainer = document.querySelector('#movie_player, .html5-video-container, .ytp-fullscreen');
+    if (videoContainer) {
+      this.fullscreenObserver.observe(videoContainer, {
+        attributes: true,
+        attributeFilter: ['class'],
+        subtree: true
+      });
+    }
+
+    // Initial fullscreen state check
+    this.checkFullscreenState();
+  }
+
+  private handleFullscreenChange(): void {
+    // Small delay to ensure DOM has updated
+    setTimeout(() => {
+      this.checkFullscreenState();
+    }, 100);
+  }
+
+  private checkFullscreenState(): void {
+    const wasFullscreen = this.isFullscreenMode;
+    
+    // Check multiple fullscreen indicators
+    const isDocumentFullscreen = !!(
+      document.fullscreenElement ||
+      (document as any).webkitFullscreenElement ||
+      (document as any).mozFullScreenElement ||
+      (document as any).msFullscreenElement
+    );
+
+    const isYouTubeFullscreen = !!(
+      document.querySelector('.ytp-fullscreen') ||
+      document.querySelector('#movie_player.ytp-fullscreen') ||
+      document.querySelector('.html5-video-container.ytp-fullscreen')
+    );
+
+    this.isFullscreenMode = isDocumentFullscreen || isYouTubeFullscreen;
+
+    // Update UI if fullscreen state changed
+    if (wasFullscreen !== this.isFullscreenMode) {
+      this.updateFullscreenMode();
+      
+      // Emit fullscreen change event
+      this.emitEvent({
+        type: 'fullscreen_change' as any,
+        value: this.isFullscreenMode,
+        timestamp: Date.now()
+      });
+    }
+  }
+
+  private updateFullscreenMode(): void {
+    if (!this.container) return;
+
+    if (this.isFullscreenMode) {
+      this.container.classList.add('fullscreen-mode');
+      
+      // Adjust positioning for fullscreen
+      this.adjustFullscreenPosition();
+      
+      // Show fullscreen feedback
+      this.showActionToast('Fullscreen mode', 'success', 1500);
+    } else {
+      this.container.classList.remove('fullscreen-mode');
+      
+      // Reset to normal positioning
+      this.updateControlsPosition();
+      
+      // Show exit fullscreen feedback
+      this.showActionToast('Exited fullscreen', 'success', 1500);
+    }
+  }
+
+  private adjustFullscreenPosition(): void {
+    if (!this.container || !this.isFullscreenMode) return;
+
+    // Ensure controls are properly positioned in fullscreen
+    const style = this.container.style;
+    style.position = 'fixed';
+    style.bottom = '80px';
+    style.left = '50%';
+    style.transform = 'translateX(-50%)';
+    style.zIndex = '2147483647';
+  }
+
+  private removeFullscreenObserver(): void {
+    // Remove document event listeners
+    document.removeEventListener('fullscreenchange', this.fullscreenChangeHandler);
+    document.removeEventListener('webkitfullscreenchange', this.fullscreenChangeHandler);
+    document.removeEventListener('mozfullscreenchange', this.fullscreenChangeHandler);
+    document.removeEventListener('MSFullscreenChange', this.fullscreenChangeHandler);
+
+    // Disconnect mutation observer
+    if (this.fullscreenObserver) {
+      this.fullscreenObserver.disconnect();
+      this.fullscreenObserver = null;
+    }
   }
 } 
