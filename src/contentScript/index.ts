@@ -474,7 +474,7 @@ class LinguaTubeContentScript {
          const videoElement = document.querySelector('video') as HTMLVideoElement;
          const isPaused = videoElement?.paused || false;
 
-                 // Only update if caption text actually changed
+                 // Handle caption text changes
          if (currentCaptionText !== lastCaptionText) {
            console.log(`[LinguaTube] Caption sync: "${lastCaptionText}" → "${currentCaptionText}" (paused: ${isPaused})`);
            
@@ -499,11 +499,9 @@ class LinguaTubeContentScript {
            }
            
            if (isExtension) {
-             // True word extension - just update the text
-             console.log('[LinguaTube] True extension detected, updating...');
-             // Always clear and recreate to avoid accumulation
-             this.sendCaptionEvent('cue_end', lastCaptionText, cueId);
-             this.sendCaptionEvent('cue_start', currentCaptionText, ++cueId);
+             // True word extension - update in-place without clearing (no flicker!)
+             console.log('[LinguaTube] True extension detected, updating in-place...');
+             this.sendCaptionEvent('cue_update', currentCaptionText, cueId);
            } else {
              // New sentence or different content
              console.log('[LinguaTube] New caption content...');
@@ -520,6 +518,24 @@ class LinguaTubeContentScript {
            }
 
            lastCaptionText = currentCaptionText;
+         }
+         
+         // CRITICAL: Keep caption visible when paused
+         // Only refresh if we just paused (not on every mutation when already paused)
+         if (isPaused && lastCaptionText && currentCaptionText) {
+           const videoElement = document.querySelector('video') as HTMLVideoElement;
+           if (videoElement && !videoElement.dataset.linguaTubePausedHandled) {
+             // Mark as handled to prevent spam
+             videoElement.dataset.linguaTubePausedHandled = 'true';
+             console.log('[LinguaTube] Video paused, ensuring caption stays visible...');
+             this.sendCaptionEvent('cue_update', currentCaptionText, cueId);
+           }
+         } else if (!isPaused) {
+           // Clear the pause flag when playing
+           const videoElement = document.querySelector('video') as HTMLVideoElement;
+           if (videoElement) {
+             delete videoElement.dataset.linguaTubePausedHandled;
+           }
          }
       } catch (error) {
         console.error('[LinguaTube] Error syncing captions:', error);
@@ -570,15 +586,33 @@ class LinguaTubeContentScript {
       });
     }
 
+    // Watch for play/pause state changes to ensure captions stay visible when paused
+    const videoElement = document.querySelector('video') as HTMLVideoElement;
+    const handlePauseStateChange = () => {
+      setTimeout(() => {
+        // Small delay to ensure state is updated
+        syncWithNativeCaptions();
+      }, 100);
+    };
+
+    if (videoElement) {
+      videoElement.addEventListener('play', handlePauseStateChange);
+      videoElement.addEventListener('pause', handlePauseStateChange);
+    }
+
     // Store cleanup function
     this.state.captionObserverCleanup = () => {
       console.log('[LinguaTube] Cleaning up simplified caption observer...');
       captionObserver.disconnect();
       buttonObserver.disconnect();
+      if (videoElement) {
+        videoElement.removeEventListener('play', handlePauseStateChange);
+        videoElement.removeEventListener('pause', handlePauseStateChange);
+      }
     };
   }
 
-  private sendCaptionEvent(type: 'cue_start' | 'cue_end', text: string, cueId: number): void {
+  private sendCaptionEvent(type: 'cue_start' | 'cue_end' | 'cue_update', text: string, cueId: number): void {
     if (!this.state.components.playerService) return;
 
     const videoElement = document.querySelector('video') as HTMLVideoElement;
@@ -597,7 +631,7 @@ class LinguaTubeContentScript {
     const event = {
       type: type,
       cue,
-      activeCues: type === 'cue_start' ? [{
+      activeCues: (type === 'cue_start' || type === 'cue_update') ? [{
         ...cue,
         isActive: true,
         timeRemaining: 5,
