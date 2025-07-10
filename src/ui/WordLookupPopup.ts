@@ -1227,6 +1227,8 @@ export class WordLookupPopup {
   private isVisible: boolean = false;
   private isLoading: boolean = false;
   private currentWord: string = '';
+  private currentSourceLanguage: string = 'en'; // Default fallback
+  private currentTargetLanguage: string = 'es'; // Default fallback
   private autoHideTimeout: ReturnType<typeof setTimeout> | null = null;
   private loadingTimeout: ReturnType<typeof setTimeout> | null = null;
   private actionLoadingStates: Map<string, boolean> = new Map();
@@ -1407,30 +1409,116 @@ export class WordLookupPopup {
   // Public API
   // ========================================
 
-  public async show(word: string, position: { x: number; y: number }): Promise<void>;
-  public async show(data: { word: string; position: { x: number; y: number }; sourceLanguage?: string; targetLanguage?: string; context?: string }): Promise<void>;
   public async show(wordOrData: string | { word: string; position: { x: number; y: number }; sourceLanguage?: string; targetLanguage?: string; context?: string }, position?: { x: number; y: number }): Promise<void> {
-    // Handle overloaded parameters
-    let word: string;
-    let pos: { x: number; y: number };
-    let context: string | undefined;
-    
-    if (typeof wordOrData === 'string') {
-      word = wordOrData;
-      pos = position!;
-      context = undefined;
-    } else {
-      word = wordOrData.word;
-      pos = wordOrData.position;
-      context = wordOrData.context;
+    try {
+      this.clearErrorState();
+      
+      // Parse input parameters
+      let word: string;
+      let pos: { x: number; y: number };
+      let sourceLanguage: string | undefined;
+      let targetLanguage: string | undefined;
+      let context: string | undefined;
+
+      if (typeof wordOrData === 'string') {
+        word = wordOrData;
+        pos = position || { x: 0, y: 0 };
+        sourceLanguage = this.currentSourceLanguage;
+        targetLanguage = this.currentTargetLanguage;
+      } else {
+        word = wordOrData.word;
+        pos = wordOrData.position;
+        sourceLanguage = wordOrData.sourceLanguage || this.currentSourceLanguage;
+        targetLanguage = wordOrData.targetLanguage || this.currentTargetLanguage;
+        context = wordOrData.context;
+      }
+
+      // Enhanced word validation with language-specific handling
+      if (!word || word.trim().length === 0) {
+        throw new Error('Empty word provided');
+      }
+
+      // Simple word preprocessing - just trim whitespace
+      const processedWord = word.trim();
+      
+      console.log(`[WordLookupPopup] 🔍 Showing lookup for word: "${processedWord}" (original: "${word}")`);
+      console.log(`[WordLookupPopup] - Source language: ${sourceLanguage}`);
+      console.log(`[WordLookupPopup] - Target language: ${targetLanguage}`);
+      console.log(`[WordLookupPopup] - Position:`, pos);
+
+      // Set languages if provided
+      if (sourceLanguage && targetLanguage) {
+        this.currentSourceLanguage = sourceLanguage;
+        this.currentTargetLanguage = targetLanguage;
+      }
+
+      // Store current word
+      this.currentWord = processedWord;
+
+      // Show popup immediately with loading state
+      this.showLoadingState();
+      this.positionPopup(pos);
+      this.makeVisible();
+
+      // Load content asynchronously
+      const content = await this.loadWordContent(processedWord);
+      this.updateContent(content);
+
+      // Set up auto-hide if configured
+      this.setupAutoHide();
+
+      // Set initial focus for accessibility
+      this.setInitialFocus();
+
+      // Emit show event
+      this.emit('show', { word: processedWord, position: pos, sourceLanguage, targetLanguage });
+
+    } catch (error) {
+      console.error('[WordLookupPopup] Failed to show popup:', error);
+      
+      // Show language-specific error message
+      const errorContext = this.classifyError(error as Error, {
+        service: 'popup',
+        operation: 'show',
+        word: typeof wordOrData === 'string' ? wordOrData : wordOrData.word
+      });
+      
+      this.showEnhancedErrorState(errorContext);
+      this.emit('error', error);
     }
+  }
+
+  /**
+   * Preprocess word based on source language characteristics
+   */
+
+
+  /**
+   * Make the popup visible with animation
+   */
+  private makeVisible(): void {
+    if (!this.popupContainer) return;
     
+    this.isVisible = true;
+    this.popupContainer.classList.add('visible');
+    
+    // Attach click-outside listeners with small delay to prevent immediate closure
+    this.createTimeout(() => {
+      this.attachClickOutsideListeners();
+    }, 50);
+    
+    // Trigger event
+    this.events.onShow?.();
+  }
+
+  /**
+   * Show loading state
+   */
+  private showLoadingState(): void {
     if (this.isVisible) {
       this.hide();
     }
-
-    this.currentWord = word;
-    this.isVisible = true;
+    
     this.isLoading = true;
     
     // Clear any existing loading timeout
@@ -1438,57 +1526,13 @@ export class WordLookupPopup {
       clearTimeout(this.loadingTimeout);
     }
     
-    // Position popup
-    this.positionPopup(pos);
-    
-    // Show loading state (skeleton for better UX)
+    // Show skeleton loading for better UX
     this.showSkeletonLoading();
-    
-    // Make visible
-    if (this.popupContainer) {
-      this.popupContainer.classList.add('visible');
-    }
-    
-    // Set initial focus for accessibility (using tracked timeout)
-    this.createTimeout(() => {
-      this.setInitialFocus();
-    }, this.config.animationDuration);
-    
-    // Attach click-outside listeners with small delay to prevent immediate closure (using tracked timeout)
-    this.createTimeout(() => {
-      this.attachClickOutsideListeners();
-    }, 50);
-    
-    // Trigger event
-    this.events.onShow?.();
     
     // Set loading timeout (15 seconds)
     this.loadingTimeout = setTimeout(() => {
       this.showLoadingTimeout();
     }, 15000);
-    
-    // Load content (using tracked operation)
-    try {
-      const contentPromise = this.loadWordContent(word);
-      const content = await this.trackOperation(contentPromise);
-      
-      // Only update if not destroyed
-      if (!this.isDestroyed) {
-        this.updateContent(content);
-      }
-    } catch (error) {
-      if (!this.isDestroyed) {
-        this.showErrorState(error as Error);
-        this.events.onError?.(error as Error);
-      }
-    } finally {
-      this.isLoading = false;
-      this.clearTrackedTimeout(this.loadingTimeout);
-      this.loadingTimeout = null;
-    }
-    
-    // Set up auto-hide
-    this.setupAutoHide();
   }
 
   public hide(): void {
@@ -1610,66 +1654,90 @@ export class WordLookupPopup {
   // ========================================
 
   private async loadWordContent(word: string): Promise<PopupContent> {
-    // Progressive loading: show translation first, then definition
+    console.log(`[WordLookupPopup] Loading content for word: "${word}"`);
+    console.log(`[WordLookupPopup] Source language: ${this.currentSourceLanguage}, Target language: ${this.currentTargetLanguage}`);
+    
+    // Progressive loading: show translation first, then definition (if applicable)
     let translation = '';
     let definition: any = { meanings: [], phonetics: [] };
     
     try {
       // Load translation first (usually faster) - tracked operation
+      console.log(`[WordLookupPopup] Getting translation...`);
       const translationPromise = this.translationService.translateText({
         text: word,
-        fromLanguage: 'en',
-        toLanguage: 'es'
+        fromLanguage: this.currentSourceLanguage,
+        toLanguage: this.currentTargetLanguage
       });
       translation = await this.trackOperation(translationPromise);
+      console.log(`[WordLookupPopup] Translation received: "${translation}"`);
       
       // Show partial content with translation (only if not destroyed)
       if (!this.isDestroyed) {
         this.showPartialContent(word, translation);
       }
       
-      // Then load definition - tracked operation
-      const definitionPromise = this.dictionaryService.getDefinition(word);
-      definition = await this.trackOperation(definitionPromise);
-      
-    } catch (error) {
-      // If translation fails, try definition only - tracked operation
-      if (!translation && !this.isDestroyed) {
+      // Only try to get definition if the source language is English
+      // (since DictionaryApiService only supports English)
+      if (this.currentSourceLanguage === 'en' || this.currentSourceLanguage === 'auto') {
         try {
+          console.log(`[WordLookupPopup] Getting definition for English word...`);
           const definitionPromise = this.dictionaryService.getDefinition(word);
           definition = await this.trackOperation(definitionPromise);
+          console.log(`[WordLookupPopup] Definition received:`, definition);
+        } catch (definitionError) {
+          console.log(`[WordLookupPopup] Definition lookup failed (expected for non-English words):`, definitionError);
+          // For non-English words, this is expected - don't treat as an error
+          // Just continue with translation-only content
+        }
+      } else {
+        console.log(`[WordLookupPopup] Skipping definition lookup for non-English word (${this.currentSourceLanguage})`);
+      }
+      
+    } catch (error) {
+      console.error(`[WordLookupPopup] Translation failed:`, error);
+      
+      // If translation fails, try definition only (for English words)
+      if (!translation && !this.isDestroyed && (this.currentSourceLanguage === 'en' || this.currentSourceLanguage === 'auto')) {
+        try {
+          console.log(`[WordLookupPopup] Trying definition-only fallback...`);
+          const definitionPromise = this.dictionaryService.getDefinition(word);
+          definition = await this.trackOperation(definitionPromise);
+          console.log(`[WordLookupPopup] Definition fallback successful`);
         } catch (fallbackError) {
+          console.error(`[WordLookupPopup] Both translation and dictionary services failed:`, error, fallbackError);
           // Both services failed - throw with better context
           throw new Error(`Both translation and dictionary services failed. Translation: ${(error as Error).message}, Dictionary: ${(fallbackError as Error).message}`);
         }
-      } else if (!this.isDestroyed) {
-        // Translation succeeded but definition failed - create partial failure
-        const partialError = new Error(`Definition lookup failed: ${(error as Error).message}`);
-        (partialError as any).isPartialFailure = true;
-        throw partialError;
+      } else {
+        // Translation failed and we can't get definitions for non-English words
+        throw error;
       }
     }
 
-    return {
+    const content = {
       word,
       translation,
       phonetic: definition.phonetics?.[0]?.text || '',
-      definitions: definition.meanings.map((meaning: any) => ({
+      definitions: definition.meanings ? definition.meanings.map((meaning: any) => ({
         text: meaning.definitions[0]?.definition || '',
         partOfSpeech: meaning.partOfSpeech,
         level: 'intermediate' as const
-      })),
-      examples: definition.meanings.flatMap((meaning: any) => 
+      })) : [],
+      examples: definition.meanings ? definition.meanings.flatMap((meaning: any) => 
         meaning.definitions.slice(0, 2).map((def: any) => ({
           text: def.example || '',
           translation: '',
           source: 'dictionary'
         }))
-      ).filter((ex: any) => ex.text),
-      partOfSpeech: definition.meanings[0]?.partOfSpeech || '',
-      sourceLanguage: 'en',
-      targetLanguage: 'es'
+      ).filter((ex: any) => ex.text) : [],
+      partOfSpeech: definition.meanings?.[0]?.partOfSpeech || '',
+      sourceLanguage: this.currentSourceLanguage,
+      targetLanguage: this.currentTargetLanguage
     };
+
+    console.log(`[WordLookupPopup] Final content:`, content);
+    return content;
   }
 
   private showPartialContent(word: string, translation: string): void {
@@ -1762,30 +1830,6 @@ export class WordLookupPopup {
               <span class="button-text">💾 Save Word</span>
             </button>
           ` : ''}
-        </div>
-      </div>
-    `;
-  }
-
-  private showLoadingState(): void {
-    if (!this.popupContainer) return;
-
-    this.popupContainer.classList.add('loading');
-    this.popupContainer.innerHTML = `
-      <div class="popup-content">
-        <div class="popup-header">
-          <div class="word-title">Loading...</div>
-        </div>
-        <div style="display: flex; flex-direction: column; align-items: center; padding: 20px;">
-          <div class="loading-spinner"></div>
-          <div class="loading-dots">
-            <div class="loading-dot"></div>
-            <div class="loading-dot"></div>
-            <div class="loading-dot"></div>
-          </div>
-          <span style="margin-top: 16px; color: #718096; font-size: 14px;">
-            Loading word information...
-          </span>
         </div>
       </div>
     `;
@@ -1962,8 +2006,8 @@ export class WordLookupPopup {
         word: this.currentWord,
         translation: '', // This would be populated from current content
         context: '',
-        sourceLanguage: 'en',
-        targetLanguage: 'es',
+        sourceLanguage: this.currentSourceLanguage,
+        targetLanguage: this.currentTargetLanguage,
         videoId: '',
         videoTitle: '',
         timestamp: Date.now(),
@@ -2527,6 +2571,14 @@ export class WordLookupPopup {
   }
 
   /**
+   * Set default languages for word lookup
+   */
+  public setDefaultLanguages(sourceLanguage: string, targetLanguage: string): void {
+    this.currentSourceLanguage = sourceLanguage;
+    this.currentTargetLanguage = targetLanguage;
+  }
+
+  /**
    * Get current configuration
    */
   public getConfig(): WordLookupConfig {
@@ -2664,15 +2716,28 @@ export class WordLookupPopup {
     let maxRetries = 3;
     let fallbackAvailable = false;
 
-    // Check for partial failure first
+    // Check for partial failure first (but only for English words where definitions are expected)
     if ((error as any).isPartialFailure || message.includes('definition lookup failed')) {
-      type = ErrorType.PARTIAL_FAILURE;
-      severity = ErrorSeverity.LOW;
-      userMessage = 'Partial information loaded';
-      guidance = 'Some content is missing but you can continue';
-      retryable = true;
-      maxRetries = 1;
-      fallbackAvailable = false;
+      // Only treat as partial failure if we're expecting definitions (English words)
+      if (context.word && (this.currentSourceLanguage === 'en' || this.currentSourceLanguage === 'auto')) {
+        type = ErrorType.PARTIAL_FAILURE;
+        severity = ErrorSeverity.LOW;
+        userMessage = 'Partial information loaded';
+        guidance = 'Some content is missing but you can continue';
+        retryable = true;
+        maxRetries = 1;
+        fallbackAvailable = false;
+      } else {
+        // For non-English words, definition failure is expected and not an error
+        // This shouldn't be classified as an error at all
+        type = ErrorType.UNKNOWN;
+        severity = ErrorSeverity.LOW;
+        userMessage = 'Translation loaded successfully';
+        guidance = 'Definition not available for non-English words';
+        retryable = false;
+        maxRetries = 0;
+        fallbackAvailable = false;
+      }
     }
 
     // Network-related errors

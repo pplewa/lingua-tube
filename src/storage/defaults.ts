@@ -21,7 +21,7 @@ import {
 // ========================================
 
 export const DEFAULT_LANGUAGE_SETTINGS: LanguageSettings = {
-  sourceLanguage: 'en', // English as default learning language
+  sourceLanguage: 'auto', // Let translation API auto-detect the language
   nativeLanguage: 'en', // Will be detected/set by user
   autoDetectSource: true,
   fallbackLanguage: 'en',

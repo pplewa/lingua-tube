@@ -298,11 +298,12 @@ export class DictionaryApiService implements IDictionaryService {
       );
     }
 
-    // Validate word contains only valid characters (letters, spaces, hyphens, apostrophes)
-    const validWordPattern = /^[a-zA-Z\s\-']+$/;
-    if (!validWordPattern.test(word.trim())) {
+    // Simple validation - just check for basic sanity
+    // Let the dictionary API handle language-specific validation
+    const trimmedWord = word.trim();
+    if (trimmedWord.length === 0) {
       throw this.createDictionaryError(
-        'Word contains invalid characters. Only letters, spaces, hyphens, and apostrophes are allowed.',
+        'Word cannot be empty',
         DictionaryErrorCode.INVALID_WORD,
         { word, language }
       );

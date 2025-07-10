@@ -1639,11 +1639,82 @@
         ],
         "status": "pending",
         "subtasks": []
+      },
+      {
+        "id": 19,
+        "title": "Fix Subtitle Language Selection and Word Translation Functionality",
+        "description": "Ensure that the subtitle translation system respects the user's selected subtitle language (e.g., Thai) instead of always defaulting to English, and enable word-level translation and selection in all supported subtitle languages.",
+        "details": "Refactor the subtitle translation workflow so that when a user selects a subtitle language (e.g., Thai, Spanish), the system translates subtitles into that language rather than always defaulting to English. Update the DualSubtitleManager and translation service integration to dynamically use the user's selected language as the translation target. Ensure that the UI for subtitle language selection is correctly wired to the translation logic. Additionally, modify the subtitle rendering and interaction logic to allow users to select and translate individual words in any supported subtitle language, not just English. This may require updating the word segmentation and click-handling logic to support non-English scripts and languages. Carefully test for edge cases such as right-to-left languages and languages with complex word boundaries. Update caching and batching logic to support multiple target languages efficiently.",
+        "testStrategy": "1. Manually test subtitle language selection with various languages (e.g., Thai, Spanish, French) and verify that subtitles are translated into the selected language, not just English. 2. Verify that individual words in non-English subtitles are selectable and can be translated on click, including for languages with complex scripts. 3. Write unit and integration tests for the translation service to ensure correct language routing and handling of multiple target languages. 4. Test UI updates for subtitle language selection and ensure the correct language is reflected in both the subtitles and word translation popups. 5. Validate that caching and batching mechanisms work correctly for multiple languages. 6. Test for regressions in English subtitle translation and word selection. 7. Check for proper handling of right-to-left and non-Latin scripts.",
+        "status": "pending",
+        "dependencies": [
+          4,
+          5,
+          9,
+          15
+        ],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Audit Subtitle Language Selection Flow",
+            "description": "Trace the end-to-end flow of subtitle language selection from the user interface through to the translation API calls, identifying where the selected language is lost or overridden.",
+            "dependencies": [],
+            "details": "Review the code and configuration for the subtitle language selection UI, DualSubtitleManager, and translation service integration. Document the current chain of language detection and propagation.\n<info added on 2025-07-10T08:01:59.649Z>\nThe subtitle language selection flow is broken due to a missing connection between subtitle track selection and translation settings. When a user selects a non-English subtitle track, the system correctly identifies the language (e.g., Thai) but fails to update the `sourceLanguage` setting in the translation system, which remains defaulted to \"en\". \n\nKey issues:\n- In `src/contentScript/index.ts` (lines 290-335), subtitle tracks are discovered and selected, but the selected track's language code is never propagated to update the translation settings\n- `DualSubtitleManager.loadUserSettings()` loads the default or previously saved settings rather than using the currently selected subtitle track's language\n- Both `sourceLanguage` and `nativeLanguage` default to \"en\" in `src/storage/defaults.ts`\n- The system logs `preferredTrack.languageCode` but never uses this value to update the translation source language\n\nThis disconnect causes the translation system to always translate from English regardless of the actual subtitle language being displayed, breaking functionality when non-English subtitles are selected.\n</info added on 2025-07-10T08:01:59.649Z>",
+            "status": "done",
+            "testStrategy": "Simulate user selection of various subtitle languages and log the language parameter at each stage to confirm correct propagation."
+          },
+          {
+            "id": 2,
+            "title": "Refactor Translation Target Language Handling",
+            "description": "Update the translation workflow so that the user's selected subtitle language is dynamically used as the translation target, rather than defaulting to English.",
+            "dependencies": [
+              1
+            ],
+            "details": "Modify the DualSubtitleManager and translation service integration to accept and use the selected language as the target for subtitle translation.\n<info added on 2025-07-10T08:04:40.417Z>\n**IMPLEMENTATION COMPLETED**: \n\n**Changes Made to Fix Language Propagation:**\n\n1. **Content Script Enhancement** (`src/contentScript/index.ts`):\n   - Added `updateLanguageSettings()` method that automatically updates user settings when subtitle track is discovered\n   - Modified `setupSubtitleDiscoveryEventListeners()` to call language update before starting subtitle observation\n   - Language update triggers when `preferredTrack` is selected, updating `sourceLanguage` in storage to match subtitle track\n   - Propagates language change to `DualSubtitleManager` using `setLanguages()` method\n\n2. **Fixed TypeScript Error** (`src/ui/DualSubtitleManager.ts`):\n   - Corrected method call in `handleWordClick()` to remove extra `context` parameter that was causing build failure\n   - Method signature expects 3 parameters, was being called with 4\n\n**How It Works:**\n- User selects Thai subtitles → Extension discovers Thai track\n- `updateLanguageSettings('th')` automatically updates storage settings \n- `DualSubtitleManager.setLanguages('th', currentNativeLanguage)` propagates change\n- `WordLookupPopup.setDefaultLanguages('th', currentNativeLanguage)` receives updated languages\n- Translation requests now use correct source language instead of hardcoded 'en'\n\n**Testing Status:**\n✅ Build passes without TypeScript errors\n✅ Code ready for testing with Thai subtitles\n</info added on 2025-07-10T08:04:40.417Z>",
+            "status": "done",
+            "testStrategy": "Verify that subtitles are translated into the user-selected language for multiple languages (e.g., Thai, Spanish) and not just English."
+          },
+          {
+            "id": 3,
+            "title": "Enhance Word-Level Selection and Translation for All Languages",
+            "description": "Update subtitle rendering and interaction logic to support word-level selection and translation in all supported subtitle languages, including non-English scripts.",
+            "dependencies": [
+              2
+            ],
+            "details": "Implement or adapt word segmentation and click-handling logic to handle languages with complex word boundaries and scripts, ensuring accurate word selection.\n<info added on 2025-07-10T08:08:01.458Z>\n**LANGUAGE-AWARE WORD SELECTION IMPLEMENTATION COMPLETED**:\n\n**Major Enhancement - Multi-Language Word Segmentation:**\n\n1. **Language Detection System** (`detectLanguage()`):\n   - Automatically detects Thai, CJK (Chinese/Japanese/Korean), Arabic, and Latin scripts\n   - Uses Unicode character range analysis with threshold-based detection\n   - Thai detection: Unicode range 0x0E00-0x0E7F (>30% threshold)\n\n2. **Advanced Word Segmentation** (`segmentWordsAdvanced()`):\n   - **Thai**: Custom heuristic-based segmentation since Thai doesn't use spaces\n   - **CJK**: Character-level segmentation (each character is typically a word)\n   - **Arabic**: Space-based with support for connecting letters\n   - **Latin**: Traditional space-based segmentation (fallback)\n\n3. **Thai-Specific Features** (`segmentThaiText()` + `isThaiWordBoundary()`):\n   - Implements basic Thai word boundary detection using vowel/consonant patterns\n   - Handles Thai Unicode range including consonants, vowels, and tone marks\n   - Uses probabilistic boundary detection for consonant clusters\n\n4. **Unicode-Aware Character Detection** (`isWordCharacter()`):\n   - **Thai**: Supports Unicode range 0x0E00-0x0E7F + Latin + numbers\n   - **CJK**: Supports multiple Unicode blocks (CJK Unified, Hiragana, Katakana)\n   - **Arabic**: Supports Unicode range 0x0600-0x06FF + Latin + numbers\n   - **Latin**: Uses existing regex `/\\w/` pattern\n\n5. **Language-Aware Word Cleaning** (`cleanWordForTranslation()`):\n   - Preserves Unicode characters specific to each language\n   - Thai: Keeps Thai Unicode + Latin + numbers\n   - CJK: Keeps all CJK blocks + Latin + numbers  \n   - Arabic: Keeps Arabic Unicode + Latin + numbers\n\n**Updated Methods:**\n- `segmentWords()`: Now uses advanced segmentation and language detection\n- `renderTargetLine()`: Uses language-aware segmentation for creating clickable spans\n- `handleWordClick()`: Uses language-aware word cleaning before translation\n\n**Expected Results:**\n✅ Thai words should now be individually selectable and clickable\n✅ Word boundaries properly detected for Thai text without spaces\n✅ Translation requests preserve Thai characters\n✅ Works for other languages (CJK, Arabic) as well\n✅ Maintains backward compatibility with English/Latin languages\n\n**Testing Status:**\n✅ Build passes without TypeScript errors\n✅ Ready for testing with Thai subtitles to verify word selectability\n</info added on 2025-07-10T08:08:01.458Z>",
+            "status": "done",
+            "testStrategy": "Test word selection and translation in subtitles for languages with different scripts (e.g., Thai, Arabic, Spanish), including edge cases like right-to-left and script-specific segmentation."
+          },
+          {
+            "id": 4,
+            "title": "Update Caching and Batching for Multi-Language Support",
+            "description": "Refactor caching and batching logic to efficiently handle subtitle translations and word-level translations for multiple target languages.",
+            "dependencies": [
+              2
+            ],
+            "details": "Ensure that translation results are cached and batched per target language to avoid redundant API calls and improve performance.",
+            "status": "pending",
+            "testStrategy": "Monitor cache hits/misses and batching behavior when switching between different subtitle languages and performing word-level translations."
+          },
+          {
+            "id": 5,
+            "title": "Comprehensive Testing and Edge Case Validation",
+            "description": "Conduct thorough testing of the updated subtitle translation and word selection features, focusing on edge cases such as right-to-left languages and languages with complex word boundaries.",
+            "dependencies": [
+              3,
+              4
+            ],
+            "details": "Develop and execute test cases covering all supported languages, UI flows, and interaction patterns. Validate correct translation, selection, and performance.",
+            "status": "pending",
+            "testStrategy": "Perform manual and automated tests for each supported language, including regression tests for previously supported features and new edge cases."
+          }
+        ]
       }
     ],
     "metadata": {
       "created": "2025-07-08T23:43:19.534Z",
-      "updated": "2025-07-10T04:55:46.657Z",
+      "updated": "2025-07-10T08:08:44.824Z",
       "description": "Tasks for master context"
     }
   }

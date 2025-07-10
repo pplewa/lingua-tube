@@ -9,6 +9,7 @@ import { StorageService } from '../storage';
 import { TranslationApiService } from '../translation/TranslationApiService';
 import { translationCacheService } from '../translation/TranslationCacheService';
 import { UserSettings } from '../storage/types';
+import { WordLookupPopup } from './WordLookupPopup';
 
 // ========================================
 // Types and Interfaces
@@ -53,6 +54,7 @@ export class DualSubtitleManager {
   private playerService: PlayerInteractionService;
   private storageService: StorageService;
   private translationService: TranslationApiService;
+  private wordLookupPopup: WordLookupPopup | null = null;
   
   private config: SubtitleManagerConfig;
   private currentVideoId: string | null = null;
@@ -71,11 +73,13 @@ export class DualSubtitleManager {
   constructor(
     playerService: PlayerInteractionService,
     storageService: StorageService,
-    translationService: TranslationApiService
+    translationService: TranslationApiService,
+    wordLookupPopup?: WordLookupPopup
   ) {
     this.playerService = playerService;
     this.storageService = storageService;
     this.translationService = translationService;
+    this.wordLookupPopup = wordLookupPopup || null;
     
     this.config = {
       autoTranslate: true,
@@ -129,27 +133,39 @@ export class DualSubtitleManager {
         return true;
       }
 
-      // Check translation service status from background service
-      await this.checkTranslationStatus();
+      console.log('[DualSubtitleManager] Starting initialization...');
+
+      // Check translation service status from background service (non-blocking)
+      this.checkTranslationStatus().catch(error => {
+        console.warn('[DualSubtitleManager] Translation status check failed:', error);
+      });
 
       // Load user settings
+      console.log('[DualSubtitleManager] Loading user settings...');
       await this.loadUserSettings();
+      console.log('[DualSubtitleManager] User settings loaded');
       
       // Initialize subtitle component
+      console.log('[DualSubtitleManager] Creating subtitle component...');
       this.subtitleComponent = new DualSubtitleComponent(
         this.playerService,
         this.storageService,
         await this.createSubtitleConfig()
       );
+      console.log('[DualSubtitleManager] Subtitle component created');
 
+      console.log('[DualSubtitleManager] Initializing subtitle component...');
       const initSuccess = await this.subtitleComponent.initialize();
       if (!initSuccess) {
         console.error('[DualSubtitleManager] Failed to initialize subtitle component');
         return false;
       }
+      console.log('[DualSubtitleManager] Subtitle component initialized');
 
       // Set up subtitle component event handlers
+      console.log('[DualSubtitleManager] Setting up event handlers...');
       this.setupSubtitleEventHandlers();
+      console.log('[DualSubtitleManager] Event handlers set up');
       
       // Get current video ID
       this.currentVideoId = this.extractVideoId(window.location.href);
@@ -201,6 +217,11 @@ export class DualSubtitleManager {
         // Update languages
         this.sourceLanguage = settings.languages.sourceLanguage;
         this.targetLanguage = settings.languages.nativeLanguage;
+        
+        // Update WordLookupPopup with user's language preferences
+        if (this.wordLookupPopup) {
+          this.wordLookupPopup.setDefaultLanguages(this.sourceLanguage, this.targetLanguage);
+        }
         
         // Update manager config
         this.config = {
@@ -295,12 +316,17 @@ export class DualSubtitleManager {
 
   private async handleWordClick(event: WordClickEvent): Promise<void> {
     try {
+      console.log(`[DualSubtitleManager] Handling word click for: "${event.word}"`);
+      console.log(`[DualSubtitleManager] Current languages - Source: ${this.sourceLanguage}, Target: ${this.targetLanguage}`);
+      
       const { word, cueId, context, position } = event;
       
       // Get translation for the word
+      console.log(`[DualSubtitleManager] Getting translation for word: "${word}" with context: "${context}"`);
       const translation = await this.getWordTranslation(word, context);
+      console.log(`[DualSubtitleManager] Translation result: "${translation}"`);
       
-      // Show translation tooltip
+      // Show translation tooltip with context
       this.showTranslationTooltip(word, translation, position);
       
       // Create vocabulary entry if auto-save is enabled
@@ -434,15 +460,23 @@ export class DualSubtitleManager {
 
   private async getWordTranslation(word: string, context: string): Promise<string> {
     try {
+      console.log(`[DualSubtitleManager] Getting translation for word: "${word}"`);
+      console.log(`[DualSubtitleManager] Translation params - From: ${this.sourceLanguage}, To: ${this.targetLanguage}`);
+      
       // Check cache first
       if (this.config.cacheTranslations) {
         const cached = await translationCacheService.get(word, this.sourceLanguage, this.targetLanguage);
-        if (cached) return cached;
+        if (cached) {
+          console.log(`[DualSubtitleManager] Found cached translation: "${cached}"`);
+          return cached;
+        }
       }
 
       // Request translation with context
       const contextWords = this.extractContext(context, word);
       const textToTranslate = contextWords.length > 1 ? contextWords.join(' ') : word;
+      
+      console.log(`[DualSubtitleManager] Text to translate: "${textToTranslate}"`);
       
       const translation = await this.translationService.translateText({
         text: textToTranslate,
@@ -450,10 +484,14 @@ export class DualSubtitleManager {
         toLanguage: this.targetLanguage
       });
 
+      console.log(`[DualSubtitleManager] Raw translation result: "${translation}"`);
+
       // If we translated with context, extract just the word translation
       const wordTranslation = contextWords.length > 1 ? 
         this.extractWordFromTranslation(translation, word, contextWords) : 
         translation;
+
+      console.log(`[DualSubtitleManager] Final word translation: "${wordTranslation}"`);
 
       // Cache the word translation
       if (this.config.cacheTranslations) {
@@ -562,9 +600,23 @@ export class DualSubtitleManager {
   }
 
   private showTranslationTooltip(word: string, translation: string, position: { x: number; y: number }): void {
-    // This could be implemented as a separate tooltip component
-    // For now, just log to console
-    console.log(`[DualSubtitleManager] Translation for "${word}": ${translation}`);
+    console.log(`[DualSubtitleManager] Showing translation tooltip for word: "${word}"`);
+    console.log(`[DualSubtitleManager] Translation: "${translation}"`);
+    console.log(`[DualSubtitleManager] Position:`, position);
+    console.log(`[DualSubtitleManager] Word lookup popup available:`, !!this.wordLookupPopup);
+    
+    if (this.wordLookupPopup) {
+      this.wordLookupPopup.show({
+        word,
+        position,
+        sourceLanguage: this.sourceLanguage,
+        targetLanguage: this.targetLanguage,
+        context: '' // Could be enhanced to pass subtitle context
+      });
+    } else {
+      // Fallback to console log if popup is not available
+      console.log(`[DualSubtitleManager] Translation for "${word}": ${translation}`);
+    }
   }
 
   // ========================================
@@ -602,6 +654,11 @@ export class DualSubtitleManager {
   public setLanguages(sourceLanguage: string, targetLanguage: string): void {
     this.sourceLanguage = sourceLanguage;
     this.targetLanguage = targetLanguage;
+    
+    // Update WordLookupPopup with new language settings
+    if (this.wordLookupPopup) {
+      this.wordLookupPopup.setDefaultLanguages(sourceLanguage, targetLanguage);
+    }
     
     // Clear caches and queues since language changed
     this.clearTranslationQueue();

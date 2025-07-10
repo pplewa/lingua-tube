@@ -383,8 +383,6 @@ export class DualSubtitleComponent {
     }
     
     this.subtitleSyncHandler = this.handleSubtitleSync.bind(this);
-    
-    this.loadConfigFromStorage();
   }
 
   // ========================================
@@ -398,38 +396,54 @@ export class DualSubtitleComponent {
         return true;
       }
 
+      console.log('[DualSubtitleComponent] Starting initialization...');
+
+      // Load config from storage first
+      console.log('[DualSubtitleComponent] Loading config from storage...');
+      await this.loadConfigFromStorage();
+      console.log('[DualSubtitleComponent] Config loaded from storage');
+
       // Find YouTube player container
+      console.log('[DualSubtitleComponent] Finding YouTube player container...');
       const playerContainer = this.findPlayerContainer();
       if (!playerContainer) {
         console.error('[DualSubtitleComponent] Could not find YouTube player container');
         return false;
       }
+      console.log('[DualSubtitleComponent] Player container found');
 
       // Create shadow DOM container
+      console.log('[DualSubtitleComponent] Creating container...');
       this.container = this.createContainer();
       if (!this.container) {
         console.error('[DualSubtitleComponent] Failed to create container');
         return false;
       }
+      console.log('[DualSubtitleComponent] Container created');
 
       // Attach to player
+      console.log('[DualSubtitleComponent] Attaching to player...');
       playerContainer.appendChild(this.container);
+      console.log('[DualSubtitleComponent] Attached to player');
 
       // Create shadow root and content
+      console.log('[DualSubtitleComponent] Creating shadow DOM...');
       this.createShadowDOM();
       this.createSubtitleElements();
       this.applyConfiguration();
+      console.log('[DualSubtitleComponent] Shadow DOM created');
 
       // Set up observers
+      console.log('[DualSubtitleComponent] Setting up observers...');
       this.setupResizeObserver();
       this.setupMutationObserver();
       this.setupVocabularyEventListeners();
-
-      // Set up vocabulary event listeners
-      this.setupVocabularyEventListeners();
+      console.log('[DualSubtitleComponent] Observers set up');
 
       // Connect to subtitle sync
+      console.log('[DualSubtitleComponent] Connecting to subtitle sync...');
       this.playerService.addSubtitleSyncListener(this.subtitleSyncHandler);
+      console.log('[DualSubtitleComponent] Connected to subtitle sync');
 
       this.isInitialized = true;
       console.log('[DualSubtitleComponent] Initialized successfully');
@@ -709,27 +723,171 @@ export class DualSubtitleComponent {
     }
   }
 
+  /**
+   * Enhanced word segmentation for multiple languages including Thai
+   * Uses Thai linguistic rules from http://www.thai-language.com/ref/breaking-words
+   */
   private segmentWords(text: string): WordSegment[] {
-    const words = text.split(/(\s+)/).filter(segment => segment.trim().length > 0);
+    if (!text) return [];
     
-    return words.map((word, index) => ({
+    console.log(`[DualSubtitleComponent] Segmenting text: "${text}"`);
+    
+    // Detect if text contains Thai characters
+    const containsThai = /[\u0E00-\u0E7F]/.test(text);
+    
+    if (containsThai) {
+      return this.segmentThaiText(text);
+    } else {
+      // For non-Thai languages, use simple space-based segmentation
+      return this.segmentNonThaiText(text);
+    }
+  }
+
+  /**
+   * Thai word segmentation using linguistic rules
+   */
+  private segmentThaiText(text: string): WordSegment[] {
+    const words: string[] = [];
+    
+    // Thai syllable boundary markers based on linguistic rules
+    const preposedVowels = /[เแโใไ]/; // Start a syllable
+    const endingSyllableMarkers = /[ะ]/; // End a syllable (with exceptions)
+    const finalVowelMarkers = /[อำ]/; // End a syllable
+    const garanMarker = /อ์/; // การันต์ - usually ends syllable
+    const toneMarks = /[\u0E48-\u0E4B]/; // Tone marks ่ ้ ๊ ๋
+    const vowelMarkers = /[\u0E31\u0E34-\u0E3A\u0E47-\u0E4E]/; // Various vowel markers
+    
+    // For Thai subtitles, we'll use a heuristic approach since
+    // full word segmentation requires complex dictionary lookup
+    
+    // First, split on any existing spaces (some Thai subtitles do have spaces)
+    const spaceSeparatedParts = text.split(/\s+/).filter(part => part.length > 0);
+    
+    for (const part of spaceSeparatedParts) {
+      // Apply Thai-specific segmentation rules
+      const thaiWords = this.segmentThaiPart(part);
+      words.push(...thaiWords);
+    }
+    
+    const segments = words.map((word, index) => ({
       text: word,
       index,
-      isClickable: this.config.clickableWords && /\w/.test(word), // Only words with letters
-      translation: undefined, // Will be populated on demand
+      isClickable: word.length > 0,
+      translation: undefined,
       partOfSpeech: undefined
     }));
+    
+    console.log(`[DualSubtitleComponent] Thai segmented into ${segments.length} words:`, segments.map(s => s.text));
+    return segments;
+  }
+
+  /**
+   * Segment a Thai text part using syllable boundary rules
+   */
+  private segmentThaiPart(text: string): string[] {
+    if (!text) return [];
+    
+    const words: string[] = [];
+    let currentWord = '';
+    let i = 0;
+    
+    while (i < text.length) {
+      const char = text[i];
+      const nextChar = text[i + 1];
+      const prevChar = text[i - 1];
+      
+      // Thai consonants
+      const isThaiConsonant = /[\u0E01-\u0E2E]/.test(char);
+      // Thai vowels (including preposed ones)
+      const isThaiVowel = /[\u0E30-\u0E3A\u0E40-\u0E44\u0E47-\u0E4E]/.test(char);
+      // Preposed vowels that start syllables
+      const isPreposedVowel = /[เแโใไ]/.test(char);
+      // Tone marks
+      const isToneMark = /[\u0E48-\u0E4B]/.test(char);
+      
+      currentWord += char;
+      
+      // Check for syllable boundaries
+      let shouldBreak = false;
+      
+      // Rule 1: Preposed vowels start a new syllable (except for the first character)
+      if (isPreposedVowel && currentWord.length > 1) {
+        // Don't break if we're at the start of processing
+        if (words.length > 0 || i > 0) {
+          shouldBreak = true;
+          currentWord = char; // Start new word with the preposed vowel
+        }
+      }
+      
+      // Rule 2: Look for natural breaking points
+      // If we have a complete syllable pattern (consonant + vowel + optional tone + optional final consonant)
+      if (currentWord.length >= 2 && isThaiConsonant && nextChar) {
+        const nextIsPreposedVowel = /[เแโใไ]/.test(nextChar);
+        if (nextIsPreposedVowel) {
+          shouldBreak = true;
+        }
+      }
+      
+      // Rule 3: Look for punctuation or numbers as natural breaks
+      if (/[\u0E50-\u0E59\s\.,!?;:]/.test(char)) {
+        shouldBreak = true;
+      }
+      
+      // Rule 4: Heuristic - if we have a reasonably long sequence, break it
+      if (currentWord.length >= 6 && isThaiConsonant && nextChar && /[\u0E01-\u0E2E]/.test(nextChar)) {
+        shouldBreak = true;
+      }
+      
+      if (shouldBreak || i === text.length - 1) {
+        if (currentWord.trim().length > 0) {
+          words.push(currentWord.trim());
+        }
+        currentWord = '';
+      }
+      
+      i++;
+    }
+    
+    // Add any remaining word
+    if (currentWord.trim().length > 0) {
+      words.push(currentWord.trim());
+    }
+    
+    // Filter out empty strings and very short fragments
+    return words.filter(word => word.length > 0 && /[\u0E00-\u0E7F]/.test(word));
+  }
+
+  /**
+   * Non-Thai word segmentation (space-based)
+   */
+  private segmentNonThaiText(text: string): WordSegment[] {
+    const words: string[] = [];
+    
+    // Split on spaces first
+    const spaceSeparatedParts = text.split(/\s+/).filter(part => part.length > 0);
+    
+    for (const part of spaceSeparatedParts) {
+      // Further split by punctuation while preserving letters/numbers
+      const subWords = part.match(/[\p{L}\p{N}]+/gu) || [];
+      words.push(...subWords);
+    }
+    
+    const segments = words.map((word, index) => ({
+      text: word,
+      index,
+      isClickable: word.length > 0,
+      translation: undefined,
+      partOfSpeech: undefined
+    }));
+    
+    console.log(`[DualSubtitleComponent] Non-Thai segmented into ${segments.length} words:`, segments.map(s => s.text));
+    return segments;
   }
 
   private updateSubtitleDisplay(): void {
-    if (!this.targetLine || !this.nativeLine || !this.subtitleContainer) return;
+    if (!this.targetLine || !this.nativeLine) return;
 
-    if (this.currentCues.length === 0) {
-      this.hideSubtitles();
-      return;
-    }
-
-    // Combine active cues (usually just one, but could be multiple)
+    // Combine all active cues
     const combinedTarget = this.currentCues.map(cue => cue.targetText).join(' ');
     const combinedNative = this.currentCues.map(cue => cue.nativeText).join(' ');
 
@@ -749,6 +907,8 @@ export class DualSubtitleComponent {
   private renderTargetLine(text: string): void {
     if (!this.targetLine) return;
 
+    console.log(`[DualSubtitleComponent] Rendering target line: "${text}"`);
+
     if (!this.config.clickableWords) {
       this.targetLine.textContent = text;
       return;
@@ -757,40 +917,69 @@ export class DualSubtitleComponent {
     // Clear existing content
     this.targetLine.innerHTML = '';
 
-    // Create clickable word spans
-    const words = text.split(/(\s+)/);
+    // Get segmented words
+    const words = this.segmentWords(text);
     
-    for (const word of words) {
-      if (/\w/.test(word)) {
-        // Create clickable word span
-        const wordSpan = document.createElement('span');
-        wordSpan.className = 'clickable-word';
-        wordSpan.textContent = word;
-        
-        // Check if word is in vocabulary and add appropriate class
-        this.checkVocabularyWord(word).then((isVocabularyWord: boolean) => {
-          if (isVocabularyWord) {
-            wordSpan.classList.add('vocabulary-word');
-          }
-        }).catch(error => {
-          console.warn('[DualSubtitleComponent] Error checking vocabulary word:', error);
-        });
-        
-        wordSpan.addEventListener('click', (event) => {
-          this.handleWordClick(word, event);
-        });
-        
-        this.targetLine.appendChild(wordSpan);
-      } else if (word.trim().length > 0) {
-        // Non-word text (punctuation, etc.)
-        const textNode = document.createTextNode(word);
-        this.targetLine.appendChild(textNode);
-      } else {
-        // Whitespace
-        const textNode = document.createTextNode(word);
+    if (words.length === 0) {
+      this.targetLine.textContent = text;
+      return;
+    }
+
+    // Create a more robust rendering approach
+    let currentText = text;
+    let wordIndex = 0;
+    
+    // Process each word and render it with surrounding text
+    while (wordIndex < words.length && currentText.length > 0) {
+      const word = words[wordIndex];
+      const wordStartIndex = currentText.indexOf(word.text);
+      
+      if (wordStartIndex === -1) {
+        // Word not found, skip it
+        wordIndex++;
+        continue;
+      }
+      
+      // Add any text before the word (spaces, punctuation, etc.)
+      const beforeWord = currentText.substring(0, wordStartIndex);
+      if (beforeWord.length > 0) {
+        const textNode = document.createTextNode(beforeWord);
         this.targetLine.appendChild(textNode);
       }
+      
+      // Create clickable word span
+      const wordSpan = document.createElement('span');
+      wordSpan.className = 'clickable-word';
+      wordSpan.textContent = word.text;
+      
+      // Check if word is in vocabulary and add appropriate class
+      this.checkVocabularyWord(word.text).then((isVocabularyWord: boolean) => {
+        if (isVocabularyWord) {
+          wordSpan.classList.add('vocabulary-word');
+        }
+      }).catch(error => {
+        console.warn('[DualSubtitleComponent] Error checking vocabulary word:', error);
+      });
+      
+      wordSpan.addEventListener('click', (event) => {
+        console.log(`[DualSubtitleComponent] Word clicked: "${word.text}"`);
+        this.handleWordClick(word.text, event);
+      });
+      
+      this.targetLine.appendChild(wordSpan);
+      
+      // Move to the next part of the text
+      currentText = currentText.substring(wordStartIndex + word.text.length);
+      wordIndex++;
     }
+    
+    // Add any remaining text
+    if (currentText.length > 0) {
+      const textNode = document.createTextNode(currentText);
+      this.targetLine.appendChild(textNode);
+    }
+    
+    console.log(`[DualSubtitleComponent] Rendered ${words.length} clickable words`);
   }
 
   private handleWordClick(word: string, event: MouseEvent): void {
@@ -800,8 +989,12 @@ export class DualSubtitleComponent {
     event.stopPropagation();
 
     const rect = (event.target as HTMLElement).getBoundingClientRect();
+    const cleanedWord = word.trim(); // Simple cleaning - just remove whitespace
+    
+    console.log(`[DualSubtitleComponent] Handling word click for: "${cleanedWord}"`);
+    
     const wordClickEvent: WordClickEvent = {
-      word: word.replace(/[^\w]/g, ''), // Clean word of punctuation
+      word: cleanedWord,
       translation: undefined, // Will be populated by translation service
       context: this.currentCues.map(cue => cue.targetText).join(' '),
       timestamp: this.playerService.getCurrentTime(),
@@ -812,24 +1005,18 @@ export class DualSubtitleComponent {
       }
     };
 
+    console.log(`[DualSubtitleComponent] Word click event:`, wordClickEvent);
+    console.log(`[DualSubtitleComponent] Number of listeners: ${this.wordClickListeners.size}`);
+
     // Notify all word click listeners
     this.wordClickListeners.forEach(listener => {
       try {
+        console.log(`[DualSubtitleComponent] Calling word click listener...`);
         listener(wordClickEvent);
       } catch (error) {
-        console.error('[DualSubtitleComponent] Word click listener error:', error);
+        console.error('[DualSubtitleComponent] Error in word click listener:', error);
       }
     });
-
-    // Auto-hide native language if configured
-    if (this.config.autoHideNative && this.nativeLine) {
-      this.nativeLine.style.display = 'none';
-      setTimeout(() => {
-        if (this.nativeLine && this.config.showNativeLanguage) {
-          this.nativeLine.style.display = 'block';
-        }
-      }, 2000);
-    }
   }
 
   private showSubtitles(): void {
