@@ -7,6 +7,8 @@
 import { PlayerInteractionService, SubtitleSyncEvent, ActiveSubtitleCue } from '../youtube/PlayerInteractionService';
 import { StorageService } from '../storage';
 import { UserSettings, SubtitleSettings } from '../storage/types';
+import { VocabularyManager } from '../vocabulary/VocabularyManager';
+import { VocabularyObserver, VocabularyEventType } from '../vocabulary/VocabularyObserver';
 
 // ========================================
 // Types and Interfaces
@@ -197,6 +199,60 @@ const SUBTITLE_CONTAINER_STYLES = `
     transform: scale(0.98);
   }
 
+  /* Vocabulary highlighting styles */
+  .clickable-word.highlighted,
+  .clickable-word.vocabulary-word {
+    background-color: rgba(255, 235, 59, 0.8) !important;
+    color: #000000 !important;
+    text-shadow: none !important;
+    border: 1px solid #ffc107;
+    box-shadow: 0 0 4px rgba(255, 193, 7, 0.5);
+    font-weight: 600;
+  }
+
+  .clickable-word.vocabulary-word:hover {
+    background-color: rgba(255, 193, 7, 0.9) !important;
+    box-shadow: 0 0 6px rgba(255, 193, 7, 0.7);
+    transform: scale(1.02);
+  }
+
+  .clickable-word.vocabulary-word::after {
+    content: '📚';
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    font-size: 10px;
+    background: rgba(255, 193, 7, 0.9);
+    border-radius: 50%;
+    width: 14px;
+    height: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #ffc107;
+  }
+
+  /* High contrast mode for vocabulary words */
+  @media (prefers-contrast: high) {
+    .clickable-word.vocabulary-word {
+      background-color: #ffff00 !important;
+      color: #000000 !important;
+      border: 2px solid #000000;
+    }
+  }
+
+  /* Reduced motion for vocabulary highlighting */
+  @media (prefers-reduced-motion: reduce) {
+    .clickable-word.vocabulary-word {
+      transition: none;
+      transform: none;
+    }
+    
+    .clickable-word.vocabulary-word:hover {
+      transform: none;
+    }
+  }
+
   .subtitle-container.compact .subtitle-line.native {
     display: none;
   }
@@ -297,16 +353,20 @@ export class DualSubtitleComponent {
   
   private playerService: PlayerInteractionService;
   private storageService: StorageService;
+  private vocabularyManager: VocabularyManager;
+  private vocabularyObserver: VocabularyObserver;
   
   private wordClickListeners: Set<WordClickCallback> = new Set();
   private visibilityListeners: Set<SubtitleVisibilityCallback> = new Set();
-  
+
   private resizeObserver: ResizeObserver | null = null;
   private mutationObserver: MutationObserver | null = null;
   private lastPlayerSize: { width: number; height: number } = { width: 0, height: 0 };
-  
+
   private subtitleSyncHandler: (event: SubtitleSyncEvent) => void;
-  
+  private vocabularyCache: Map<string, string> = new Map();
+  private vocabularyEventListeners: Map<VocabularyEventType, (event: VocabularyEventType) => void> = new Map();
+
   constructor(
     playerService: PlayerInteractionService,
     storageService: StorageService,
@@ -315,6 +375,9 @@ export class DualSubtitleComponent {
     this.playerService = playerService;
     this.storageService = storageService;
     
+    this.vocabularyManager = VocabularyManager.getInstance();
+    this.vocabularyObserver = VocabularyObserver.getInstance();
+
     if (initialConfig) {
       this.config = { ...this.config, ...initialConfig };
     }
@@ -360,6 +423,10 @@ export class DualSubtitleComponent {
       // Set up observers
       this.setupResizeObserver();
       this.setupMutationObserver();
+      this.setupVocabularyEventListeners();
+
+      // Set up vocabulary event listeners
+      this.setupVocabularyEventListeners();
 
       // Connect to subtitle sync
       this.playerService.addSubtitleSyncListener(this.subtitleSyncHandler);
@@ -407,6 +474,15 @@ export class DualSubtitleComponent {
       // Clear listeners
       this.wordClickListeners.clear();
       this.visibilityListeners.clear();
+      
+      // Clean up vocabulary event listeners
+      this.vocabularyObserver.off(VocabularyEventType.WORD_ADDED);
+      this.vocabularyObserver.off(VocabularyEventType.WORD_REMOVED);
+      this.vocabularyObserver.off(VocabularyEventType.VOCABULARY_CLEARED);
+      this.vocabularyObserver.off(VocabularyEventType.VOCABULARY_IMPORTED);
+      
+      // Clear vocabulary cache
+      this.vocabularyCache.clear();
       
       this.isInitialized = false;
       console.log('[DualSubtitleComponent] Destroyed successfully');
@@ -691,6 +767,15 @@ export class DualSubtitleComponent {
         wordSpan.className = 'clickable-word';
         wordSpan.textContent = word;
         
+        // Check if word is in vocabulary and add appropriate class
+        this.checkVocabularyWord(word).then((isVocabularyWord: boolean) => {
+          if (isVocabularyWord) {
+            wordSpan.classList.add('vocabulary-word');
+          }
+        }).catch(error => {
+          console.warn('[DualSubtitleComponent] Error checking vocabulary word:', error);
+        });
+        
         wordSpan.addEventListener('click', (event) => {
           this.handleWordClick(word, event);
         });
@@ -877,6 +962,24 @@ export class DualSubtitleComponent {
     }
   }
 
+  private setupVocabularyEventListeners(): void {
+    // Listen for vocabulary changes that affect highlighting
+    this.vocabularyObserver.on(VocabularyEventType.WORD_ADDED, this.handleVocabularyChange.bind(this));
+    this.vocabularyObserver.on(VocabularyEventType.WORD_REMOVED, this.handleVocabularyChange.bind(this));
+    this.vocabularyObserver.on(VocabularyEventType.VOCABULARY_CLEARED, this.handleVocabularyChange.bind(this));
+    this.vocabularyObserver.on(VocabularyEventType.VOCABULARY_IMPORTED, this.handleVocabularyChange.bind(this));
+  }
+
+  private handleVocabularyChange(): void {
+    // Clear vocabulary cache to force refresh
+    this.vocabularyCache.clear();
+    
+    // Re-render current subtitles with updated highlighting
+    if (this.isVisible && this.currentCues.length > 0) {
+      this.updateSubtitleDisplay();
+    }
+  }
+
   // ========================================
   // Event Management
   // ========================================
@@ -940,9 +1043,12 @@ export class DualSubtitleComponent {
   public highlightWord(word: string, highlight: boolean = true): void {
     if (!this.targetLine) return;
 
+    const cleanWord = word.replace(/[^\w]/g, '').toLowerCase();
     const wordSpans = this.targetLine.querySelectorAll('.clickable-word');
+    
     wordSpans.forEach(span => {
-      if (span.textContent?.toLowerCase().includes(word.toLowerCase())) {
+      const spanText = span.textContent?.replace(/[^\w]/g, '').toLowerCase();
+      if (spanText === cleanWord) {
         if (highlight) {
           span.classList.add('highlighted');
         } else {
@@ -950,5 +1056,60 @@ export class DualSubtitleComponent {
         }
       }
     });
+  }
+
+  /**
+   * Highlight all vocabulary words in current subtitles
+   */
+  public async highlightVocabularyWords(): Promise<void> {
+    if (!this.targetLine) return;
+
+    const wordSpans = this.targetLine.querySelectorAll('.clickable-word');
+    
+    for (const span of wordSpans) {
+      const word = span.textContent?.replace(/[^\w]/g, '') || '';
+      if (word) {
+        const isVocabularyWord = await this.checkVocabularyWord(word);
+        if (isVocabularyWord) {
+          span.classList.add('vocabulary-word');
+        } else {
+          span.classList.remove('vocabulary-word');
+        }
+      }
+    }
+  }
+
+  /**
+   * Remove all vocabulary highlighting
+   */
+  public clearVocabularyHighlighting(): void {
+    if (!this.targetLine) return;
+
+    const wordSpans = this.targetLine.querySelectorAll('.vocabulary-word');
+    wordSpans.forEach(span => {
+      span.classList.remove('vocabulary-word');
+    });
+  }
+
+  private async checkVocabularyWord(word: string): Promise<boolean> {
+    if (this.vocabularyCache.has(word)) {
+      return this.vocabularyCache.get(word) === 'true';
+    }
+
+    try {
+      // Try to check with common source languages
+      const cleanWord = word.replace(/[^\w]/g, '').toLowerCase();
+      const isVocabularyWord = await this.vocabularyManager.isWordSaved(cleanWord, 'auto') ||
+                              await this.vocabularyManager.isWordSaved(cleanWord, 'en') ||
+                              await this.vocabularyManager.isWordSaved(cleanWord, 'es') ||
+                              await this.vocabularyManager.isWordSaved(cleanWord, 'fr') ||
+                              await this.vocabularyManager.isWordSaved(cleanWord, 'de');
+      
+      this.vocabularyCache.set(word, isVocabularyWord.toString());
+      return isVocabularyWord;
+    } catch (error) {
+      console.warn('[DualSubtitleComponent] Error checking vocabulary word:', error);
+      return false;
+    }
   }
 } 

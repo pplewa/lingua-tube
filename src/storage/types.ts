@@ -24,6 +24,11 @@ export interface VocabularyItem {
   readonly lastReviewed?: number;
   readonly reviewCount: number;
   readonly difficulty?: 'easy' | 'medium' | 'hard';
+  readonly tags?: string[];
+  readonly learningStatus?: 'new' | 'learning' | 'mastered' | 'review';
+  readonly notes?: string;
+  readonly frequency?: number;
+  readonly lastModified?: number;
 }
 
 /**

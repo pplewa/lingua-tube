@@ -72,6 +72,61 @@ export interface PopupEvents {
 }
 
 // ========================================
+// Enhanced Error Handling System
+// ========================================
+
+export enum ErrorType {
+  NETWORK = 'NETWORK',
+  SERVICE_UNAVAILABLE = 'SERVICE_UNAVAILABLE',
+  RATE_LIMIT = 'RATE_LIMIT',
+  TIMEOUT = 'TIMEOUT',
+  VALIDATION = 'VALIDATION',
+  TRANSLATION_FAILED = 'TRANSLATION_FAILED',
+  DICTIONARY_FAILED = 'DICTIONARY_FAILED',
+  PARTIAL_FAILURE = 'PARTIAL_FAILURE',
+  TTS_FAILED = 'TTS_FAILED',
+  STORAGE_FAILED = 'STORAGE_FAILED',
+  UNKNOWN = 'UNKNOWN'
+}
+
+export enum ErrorSeverity {
+  LOW = 'LOW',       // Minor issues, user can continue
+  MEDIUM = 'MEDIUM', // Some functionality affected
+  HIGH = 'HIGH',     // Major functionality broken
+  CRITICAL = 'CRITICAL' // Complete failure
+}
+
+export interface ErrorContext {
+  readonly type: ErrorType;
+  readonly severity: ErrorSeverity;
+  readonly message: string;
+  readonly userMessage: string;
+  readonly guidance: string;
+  readonly retryable: boolean;
+  readonly autoRetry: boolean;
+  readonly retryDelay: number; // ms
+  readonly maxRetries: number;
+  readonly fallbackAvailable: boolean;
+  readonly originalError: Error;
+  readonly timestamp: number;
+  readonly context: {
+    readonly word?: string;
+    readonly service?: string;
+    readonly operation?: string;
+    readonly attempt?: number;
+  };
+}
+
+export interface ErrorState {
+  readonly hasError: boolean;
+  readonly currentError: ErrorContext | null;
+  readonly retryCount: number;
+  readonly lastRetryTime: number;
+  readonly isRetrying: boolean;
+  readonly errorHistory: ErrorContext[];
+}
+
+// ========================================
 // CSS Styles
 // ========================================
 
@@ -117,6 +172,7 @@ const POPUP_STYLES = `
     opacity: 0;
     transition: all var(--popup-animation-duration) cubic-bezier(0.4, 0, 0.2, 1);
     border: 1px solid rgba(0, 0, 0, 0.1);
+    will-change: transform, opacity;
   }
 
   .popup-container.visible {
@@ -124,21 +180,64 @@ const POPUP_STYLES = `
     opacity: 1;
   }
 
-  /* Position-based styling */
+  /* Position-based entrance animations */
   .popup-container.position-top {
     transform-origin: bottom center;
+    transform: scale(0.8) translateY(-20px);
+  }
+
+  .popup-container.position-top.visible {
+    transform: scale(1) translateY(0);
   }
 
   .popup-container.position-bottom {
     transform-origin: top center;
+    transform: scale(0.8) translateY(20px);
+  }
+
+  .popup-container.position-bottom.visible {
+    transform: scale(1) translateY(0);
   }
 
   .popup-container.position-left {
     transform-origin: right center;
+    transform: scale(0.8) translateX(-20px);
+  }
+
+  .popup-container.position-left.visible {
+    transform: scale(1) translateX(0);
   }
 
   .popup-container.position-right {
     transform-origin: left center;
+    transform: scale(0.8) translateX(20px);
+  }
+
+  .popup-container.position-right.visible {
+    transform: scale(1) translateX(0);
+  }
+
+  /* Exit animations */
+  .popup-container.hiding {
+    transform: scale(0.9) translateY(-5px);
+    opacity: 0;
+    transition: all calc(var(--popup-animation-duration) * 0.8) cubic-bezier(0.4, 0, 1, 1);
+  }
+
+  .popup-container.position-top.hiding {
+    transform: scale(0.9) translateY(-10px);
+  }
+
+  .popup-container.position-bottom.hiding {
+    transform: scale(0.9) translateY(10px);
+  }
+
+  .popup-container.position-left.hiding {
+    transform: scale(0.9) translateX(-10px);
+  }
+
+  .popup-container.position-right.hiding {
+    transform: scale(0.9) translateX(10px);
   }
 
   /* Mobile positioning adjustments */
@@ -155,10 +254,21 @@ const POPUP_STYLES = `
     transform: translateY(8px);
   }
 
-  /* Positioning arrows/indicators */
-  .popup-container.position-top::before {
+  /* Positioning arrows with animations */
+  .popup-container::before {
     content: '';
     position: absolute;
+    opacity: 0;
+    transition: opacity calc(var(--popup-animation-duration) * 0.6) ease;
+    z-index: -1;
+  }
+
+  .popup-container.visible::before {
+    opacity: 1;
+    transition-delay: calc(var(--popup-animation-duration) * 0.4);
+  }
+
+  .popup-container.position-top::before {
     bottom: -8px;
     left: 50%;
     transform: translateX(-50%);
@@ -170,8 +280,6 @@ const POPUP_STYLES = `
   }
 
   .popup-container.position-bottom::before {
-    content: '';
-    position: absolute;
     top: -8px;
     left: 50%;
     transform: translateX(-50%);
@@ -183,8 +291,6 @@ const POPUP_STYLES = `
   }
 
   .popup-container.position-left::before {
-    content: '';
-    position: absolute;
     right: -8px;
     top: 50%;
     transform: translateY(-50%);
@@ -196,8 +302,6 @@ const POPUP_STYLES = `
   }
 
   .popup-container.position-right::before {
-    content: '';
-    position: absolute;
     left: -8px;
     top: 50%;
     transform: translateY(-50%);
@@ -214,6 +318,190 @@ const POPUP_STYLES = `
 
   .popup-container.error {
     border-left: 4px solid #e53e3e;
+  }
+
+  /* Loading state animations */
+  .loading-spinner {
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+    border: 3px solid rgba(0, 0, 0, 0.1);
+    border-radius: 50%;
+    border-top-color: var(--popup-accent-color);
+    animation: spin 1s linear infinite;
+    margin: 0 auto;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .loading-dots {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 4px;
+    margin-top: 16px;
+  }
+
+  .loading-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--popup-accent-color);
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+
+  .loading-dot:nth-child(1) { animation-delay: 0s; }
+  .loading-dot:nth-child(2) { animation-delay: 0.2s; }
+  .loading-dot:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes pulse {
+    0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+    40% { opacity: 1; transform: scale(1); }
+  }
+
+  /* Skeleton loading UI */
+  .skeleton {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: shimmer 2s infinite;
+    border-radius: 4px;
+  }
+
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+
+  .skeleton-text {
+    height: 16px;
+    margin: 8px 0;
+  }
+
+  .skeleton-text.large {
+    height: 24px;
+    width: 70%;
+  }
+
+  .skeleton-text.medium {
+    height: 18px;
+    width: 85%;
+  }
+
+  .skeleton-text.small {
+    height: 14px;
+    width: 60%;
+  }
+
+  .skeleton-button {
+    height: 36px;
+    width: 80px;
+    border-radius: 6px;
+  }
+
+  /* Loading timeout warning */
+  .loading-timeout {
+    color: #f56565;
+    font-size: 12px;
+    margin-top: 8px;
+    text-align: center;
+  }
+
+  /* Action loading states */
+  .action-button.loading {
+    position: relative;
+    pointer-events: none;
+  }
+
+  .action-button.loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 16px;
+    height: 16px;
+    margin: -8px 0 0 -8px;
+    border: 2px solid transparent;
+    border-top: 2px solid currentColor;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+
+  .action-button.loading .button-text {
+    opacity: 0;
+  }
+
+  .action-button:focus {
+    outline: 2px solid var(--popup-accent-color);
+    outline-offset: 2px;
+  }
+
+  .action-button:focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  .action-button:focus-visible {
+    outline: 2px solid var(--popup-accent-color);
+    outline-offset: 2px;
+  }
+
+  /* Content reveal animations */
+  .popup-content {
+    opacity: 0;
+    transform: translateY(8px);
+    transition: all calc(var(--popup-animation-duration) * 0.6) ease;
+    transition-delay: calc(var(--popup-animation-duration) * 0.2);
+  }
+
+  .popup-container.visible .popup-content {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .popup-header {
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: all calc(var(--popup-animation-duration) * 0.6) ease;
+    transition-delay: calc(var(--popup-animation-duration) * 0.3);
+  }
+
+  .popup-container.visible .popup-header {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .translation-section,
+  .definitions-section,
+  .examples-section,
+  .actions-section {
+    opacity: 0;
+    transform: translateY(6px);
+    transition: all calc(var(--popup-animation-duration) * 0.6) ease;
+  }
+
+  .popup-container.visible .translation-section {
+    opacity: 1;
+    transform: translateY(0);
+    transition-delay: calc(var(--popup-animation-duration) * 0.4);
+  }
+
+  .popup-container.visible .definitions-section {
+    opacity: 1;
+    transform: translateY(0);
+    transition-delay: calc(var(--popup-animation-duration) * 0.5);
+  }
+
+  .popup-container.visible .examples-section {
+    opacity: 1;
+    transform: translateY(0);
+    transition-delay: calc(var(--popup-animation-duration) * 0.6);
+  }
+
+  .popup-container.visible .actions-section {
+    opacity: 1;
+    transform: translateY(0);
+    transition-delay: calc(var(--popup-animation-duration) * 0.7);
   }
 
   .popup-header {
@@ -249,12 +537,42 @@ const POPUP_STYLES = `
     padding: 4px;
     margin: -4px;
     border-radius: 4px;
-    transition: all 0.2s ease;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .close-button::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.1);
+    transform: translate(-50%, -50%);
+    transition: all 0.3s ease;
   }
 
   .close-button:hover {
     color: #718096;
     background: rgba(0, 0, 0, 0.05);
+    transform: scale(1.1);
+  }
+
+  .close-button:hover::before {
+    width: 100%;
+    height: 100%;
+  }
+
+  .close-button:active {
+    transform: scale(0.95);
+  }
+
+  .close-button:focus {
+    outline: 2px solid var(--popup-accent-color);
+    outline-offset: 2px;
   }
 
   .translation-section {
@@ -279,6 +597,13 @@ const POPUP_STYLES = `
 
   .definitions-section {
     margin-bottom: 16px;
+  }
+
+  .definitions-section ul,
+  .examples-section ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
   }
 
   .section-title {
@@ -351,30 +676,72 @@ const POPUP_STYLES = `
     font-size: 12px;
     font-weight: 500;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 4px;
+    position: relative;
+    overflow: hidden;
+    will-change: transform, background-color;
+  }
+
+  .action-button::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    transition: width 0.3s ease, height 0.3s ease;
   }
 
   .action-button:hover {
     background: var(--popup-accent-color);
     color: white;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+
+  .action-button:hover::before {
+    width: 100%;
+    height: 100%;
+  }
+
+  .action-button:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
   }
 
   .action-button:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
   }
 
   .action-button.primary {
     background: var(--popup-accent-color);
     color: white;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .action-button.primary::before {
+    background: rgba(255, 255, 255, 0.15);
   }
 
   .action-button.primary:hover {
     background: #3182ce;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+  }
+
+  .action-button.primary:active {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   }
 
   .loading-spinner {
@@ -385,20 +752,7 @@ const POPUP_STYLES = `
     color: #718096;
   }
 
-  .spinner {
-    width: 24px;
-    height: 24px;
-    border: 3px solid rgba(66, 153, 225, 0.2);
-    border-top: 3px solid var(--popup-accent-color);
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin-right: 12px;
-  }
 
-  @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-  }
 
   .error-message {
     display: flex;
@@ -669,9 +1023,194 @@ const POPUP_STYLES = `
       transition: none;
     }
     
-    .spinner {
+    .loading-spinner {
       animation: none;
     }
+    
+    .loading-dot {
+      animation: none;
+    }
+  }
+
+  /* ========================================
+   * Enhanced Error States
+   * ======================================== */
+
+  .popup-container.error {
+    border-left: 4px solid #e53e3e;
+  }
+
+  .error-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 20px;
+    text-align: center;
+  }
+
+  .error-icon {
+    font-size: 32px;
+    margin-bottom: 12px;
+    display: block;
+  }
+
+  .error-icon.network { color: #f56565; }
+  .error-icon.service { color: #ed8936; }
+  .error-icon.timeout { color: #ecc94b; }
+  .error-icon.validation { color: #9f7aea; }
+  .error-icon.partial { color: #4299e1; }
+  .error-icon.critical { color: #e53e3e; }
+
+  .error-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--popup-text-color);
+    margin-bottom: 8px;
+  }
+
+  .error-message {
+    font-size: 14px;
+    color: #718096;
+    margin-bottom: 12px;
+    line-height: 1.5;
+  }
+
+  .error-guidance {
+    font-size: 13px;
+    color: #a0aec0;
+    margin-bottom: 20px;
+    line-height: 1.4;
+    max-width: 280px;
+  }
+
+  .error-actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .error-retry-button {
+    background: var(--popup-accent-color);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 16px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .error-retry-button:hover {
+    background: #3182ce;
+    transform: translateY(-1px);
+  }
+
+  .error-retry-button:disabled {
+    background: #cbd5e0;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .error-retry-button.retrying {
+    background: #cbd5e0;
+    cursor: not-allowed;
+  }
+
+  .error-secondary-button {
+    background: transparent;
+    color: var(--popup-accent-color);
+    border: 1px solid var(--popup-accent-color);
+    border-radius: 6px;
+    padding: 10px 16px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .error-secondary-button:hover {
+    background: var(--popup-accent-color);
+    color: white;
+  }
+
+  .error-dismiss-button {
+    background: transparent;
+    color: #718096;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .error-dismiss-button:hover {
+    background: #f7fafc;
+    border-color: #cbd5e0;
+  }
+
+  .retry-countdown {
+    font-size: 12px;
+    color: #a0aec0;
+    margin-top: 8px;
+  }
+
+  .error-details {
+    margin-top: 16px;
+    padding: 12px;
+    background: #f7fafc;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
+  }
+
+  .error-details-toggle {
+    background: none;
+    border: none;
+    color: #4299e1;
+    font-size: 12px;
+    cursor: pointer;
+    text-decoration: underline;
+  }
+
+  .error-details-content {
+    margin-top: 8px;
+    font-size: 11px;
+    color: #718096;
+    font-family: monospace;
+    white-space: pre-wrap;
+    max-height: 100px;
+    overflow-y: auto;
+  }
+
+  .partial-error-banner {
+    background: #fef5e7;
+    border: 1px solid #f6ad55;
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: #c05621;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .offline-indicator {
+    background: #fed7d7;
+    border: 1px solid #fc8181;
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: #c53030;
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
 `;
 
@@ -683,19 +1222,41 @@ export class WordLookupPopup {
   private container: HTMLElement | null = null;
   private shadowRoot: ShadowRoot | null = null;
   private popupContainer: HTMLElement | null = null;
-  
+
   private config: WordLookupConfig;
   private isVisible: boolean = false;
   private isLoading: boolean = false;
   private currentWord: string = '';
   private autoHideTimeout: ReturnType<typeof setTimeout> | null = null;
-  
+  private loadingTimeout: ReturnType<typeof setTimeout> | null = null;
+  private actionLoadingStates: Map<string, boolean> = new Map();
+  private clickOutsideHandler: ((event: Event) => void) | null = null;
+  private touchOutsideHandler: ((event: Event) => void) | null = null;
+
+  // Cleanup tracking
+  private keyboardHandler: ((event: KeyboardEvent) => void) | null = null;
+  private animationTimeouts: Set<ReturnType<typeof setTimeout>> = new Set();
+  private pendingOperations: Set<Promise<any>> = new Set();
+  private isDestroyed: boolean = false;
+  private beforeUnloadHandler: ((event: BeforeUnloadEvent) => void) | null = null;
+  private pagehideHandler: ((event: PageTransitionEvent) => void) | null = null;
+
   private dictionaryService: DictionaryApiService;
   private translationService: TranslationApiService;
   private ttsService: TTSService;
   private storageService: StorageService;
-  
+
   private events: { [K in keyof PopupEvents]?: PopupEvents[K] } = {};
+
+  // Enhanced error state management
+  private errorState: ErrorState = {
+    hasError: false,
+    currentError: null,
+    retryCount: 0,
+    lastRetryTime: 0,
+    isRetrying: false,
+    errorHistory: []
+  };
   
   constructor(
     dictionaryService: DictionaryApiService,
@@ -754,6 +1315,10 @@ export class WordLookupPopup {
       pointer-events: none;
     `;
     
+    // Add ARIA attributes for accessibility
+    this.container.setAttribute('aria-live', 'polite');
+    this.container.setAttribute('aria-atomic', 'true');
+    
     // Append to body
     document.body.appendChild(this.container);
   }
@@ -771,6 +1336,10 @@ export class WordLookupPopup {
     // Create popup container
     this.popupContainer = document.createElement('div');
     this.popupContainer.className = 'popup-container';
+    this.popupContainer.setAttribute('role', 'dialog');
+    this.popupContainer.setAttribute('aria-modal', 'true');
+    this.popupContainer.setAttribute('aria-labelledby', 'popup-title');
+    this.popupContainer.setAttribute('tabindex', '-1');
     this.shadowRoot.appendChild(this.popupContainer);
     
     // Apply configuration
@@ -795,26 +1364,67 @@ export class WordLookupPopup {
   }
 
   private setupEventListeners(): void {
-    // Close on escape key
-    document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape' && this.isVisible) {
-        this.hide();
+    // Create and track keyboard handler
+    this.keyboardHandler = (event: KeyboardEvent) => {
+      if (!this.isVisible || this.isDestroyed) return;
+      
+      switch (event.key) {
+        case 'Escape':
+          event.preventDefault();
+          this.hide();
+          break;
+        case 'Tab':
+          this.handleTabNavigation(event);
+          break;
+        case 'Enter':
+        case ' ':
+          this.handleEnterSpace(event);
+          break;
       }
-    });
+    };
 
-    // Close on click outside
-    document.addEventListener('click', (event) => {
-      if (this.isVisible && !this.container?.contains(event.target as Node)) {
-        this.hide();
-      }
-    });
+    // Attach keyboard listener
+    document.addEventListener('keydown', this.keyboardHandler);
+
+    // Set up page unload handlers for automatic cleanup
+    this.beforeUnloadHandler = () => {
+      this.destroySync();
+    };
+    
+    this.pagehideHandler = () => {
+      this.destroySync();
+    };
+    
+    window.addEventListener('beforeunload', this.beforeUnloadHandler);
+    window.addEventListener('pagehide', this.pagehideHandler);
+
+    // Set up click-outside handlers (will be attached/detached dynamically)
+    this.clickOutsideHandler = (event) => this.handleClickOutside(event);
+    this.touchOutsideHandler = (event) => this.handleTouchOutside(event);
   }
 
   // ========================================
   // Public API
   // ========================================
 
-  public async show(word: string, position: { x: number; y: number }): Promise<void> {
+  public async show(word: string, position: { x: number; y: number }): Promise<void>;
+  public async show(data: { word: string; position: { x: number; y: number }; sourceLanguage?: string; targetLanguage?: string; context?: string }): Promise<void>;
+  public async show(wordOrData: string | { word: string; position: { x: number; y: number }; sourceLanguage?: string; targetLanguage?: string; context?: string }, position?: { x: number; y: number }): Promise<void> {
+    // Handle overloaded parameters
+    let word: string;
+    let pos: { x: number; y: number };
+    let context: string | undefined;
+    
+    if (typeof wordOrData === 'string') {
+      word = wordOrData;
+      pos = position!;
+      context = undefined;
+    } else {
+      word = wordOrData.word;
+      pos = wordOrData.position;
+      context = wordOrData.context;
+    }
+    
     if (this.isVisible) {
       this.hide();
     }
@@ -823,29 +1433,58 @@ export class WordLookupPopup {
     this.isVisible = true;
     this.isLoading = true;
     
-    // Position popup
-    this.positionPopup(position);
+    // Clear any existing loading timeout
+    if (this.loadingTimeout) {
+      clearTimeout(this.loadingTimeout);
+    }
     
-    // Show loading state
-    this.showLoadingState();
+    // Position popup
+    this.positionPopup(pos);
+    
+    // Show loading state (skeleton for better UX)
+    this.showSkeletonLoading();
     
     // Make visible
     if (this.popupContainer) {
       this.popupContainer.classList.add('visible');
     }
     
+    // Set initial focus for accessibility (using tracked timeout)
+    this.createTimeout(() => {
+      this.setInitialFocus();
+    }, this.config.animationDuration);
+    
+    // Attach click-outside listeners with small delay to prevent immediate closure (using tracked timeout)
+    this.createTimeout(() => {
+      this.attachClickOutsideListeners();
+    }, 50);
+    
     // Trigger event
     this.events.onShow?.();
     
-    // Load content
+    // Set loading timeout (15 seconds)
+    this.loadingTimeout = setTimeout(() => {
+      this.showLoadingTimeout();
+    }, 15000);
+    
+    // Load content (using tracked operation)
     try {
-      const content = await this.loadWordContent(word);
-      this.updateContent(content);
+      const contentPromise = this.loadWordContent(word);
+      const content = await this.trackOperation(contentPromise);
+      
+      // Only update if not destroyed
+      if (!this.isDestroyed) {
+        this.updateContent(content);
+      }
     } catch (error) {
-      this.showErrorState(error as Error);
-      this.events.onError?.(error as Error);
+      if (!this.isDestroyed) {
+        this.showErrorState(error as Error);
+        this.events.onError?.(error as Error);
+      }
     } finally {
       this.isLoading = false;
+      this.clearTrackedTimeout(this.loadingTimeout);
+      this.loadingTimeout = null;
     }
     
     // Set up auto-hide
@@ -859,6 +1498,7 @@ export class WordLookupPopup {
     
     if (this.popupContainer) {
       this.popupContainer.classList.remove('visible');
+      this.popupContainer.classList.add('hiding');
     }
     
     // Clear auto-hide timeout
@@ -867,6 +1507,31 @@ export class WordLookupPopup {
       this.autoHideTimeout = null;
     }
     
+    // Clear loading timeout
+    if (this.loadingTimeout) {
+      clearTimeout(this.loadingTimeout);
+      this.loadingTimeout = null;
+    }
+    
+    // Clear action loading states
+    this.actionLoadingStates.clear();
+    
+    // Clear error state when hiding
+    this.clearErrorState();
+    
+    // Detach click-outside listeners
+    this.detachClickOutsideListeners();
+    
+    // Remove container after animation (using tracked timeout)
+    this.createTimeout(() => {
+      if (this.container && this.container.parentNode && !this.isDestroyed) {
+        this.container.parentNode.removeChild(this.container);
+      }
+    }, this.config.animationDuration * 0.8);
+    
+    // Restore focus
+    this.restoreFocus();
+    
     // Trigger event
     this.events.onHide?.();
   }
@@ -874,21 +1539,58 @@ export class WordLookupPopup {
   public updateContent(content: PopupContent): void {
     if (!this.popupContainer) return;
 
+    // Clear error state on successful content update
+    this.clearErrorState();
+    
     this.popupContainer.classList.remove('loading', 'error');
     this.popupContainer.innerHTML = this.renderContent(content);
     this.attachEventHandlers();
   }
 
-  public destroy(): void {
-    this.hide();
-    
-    if (this.container && this.container.parentNode) {
-      this.container.parentNode.removeChild(this.container);
+  public async destroy(): Promise<void> {
+    // If already destroyed, return early
+    if (this.isDestroyed) return;
+
+    // Hide the popup first (but don't wait for animation)
+    if (this.isVisible) {
+      this.isVisible = false;
+      if (this.popupContainer) {
+        this.popupContainer.classList.remove('visible');
+        this.popupContainer.classList.add('hiding');
+      }
     }
+
+    // Wait for pending operations to complete (with timeout)
+    try {
+      await this.waitForPendingOperations(2000); // 2 second timeout
+    } catch (error) {
+      console.warn('[WordLookupPopup] Some operations did not complete during cleanup:', error);
+    }
+
+    // Perform complete cleanup
+    this.performCompleteCleanup();
+
+    console.log('[WordLookupPopup] Component destroyed and cleaned up');
+  }
+
+  /**
+   * Synchronous destroy for cases where async is not possible
+   * @deprecated Use destroy() instead for proper cleanup
+   */
+  public destroySync(): void {
+    if (this.isDestroyed) return;
     
-    this.container = null;
-    this.shadowRoot = null;
-    this.popupContainer = null;
+    console.warn('[WordLookupPopup] Using synchronous destroy - some operations may not complete properly');
+    this.performCompleteCleanup();
+  }
+
+  /**
+   * Called when the component is removed from the DOM
+   * Provides automatic cleanup for browser navigation/page unload scenarios
+   */
+  public disconnectedCallback(): void {
+    console.log('[WordLookupPopup] Component disconnected from DOM, performing cleanup');
+    this.destroySync();
   }
 
   // ========================================
@@ -908,15 +1610,45 @@ export class WordLookupPopup {
   // ========================================
 
   private async loadWordContent(word: string): Promise<PopupContent> {
-    // Get word definition and translation
-    const [definition, translation] = await Promise.all([
-      this.dictionaryService.getDefinition(word),
-      this.translationService.translateText({
+    // Progressive loading: show translation first, then definition
+    let translation = '';
+    let definition: any = { meanings: [], phonetics: [] };
+    
+    try {
+      // Load translation first (usually faster) - tracked operation
+      const translationPromise = this.translationService.translateText({
         text: word,
         fromLanguage: 'en',
         toLanguage: 'es'
-      })
-    ]);
+      });
+      translation = await this.trackOperation(translationPromise);
+      
+      // Show partial content with translation (only if not destroyed)
+      if (!this.isDestroyed) {
+        this.showPartialContent(word, translation);
+      }
+      
+      // Then load definition - tracked operation
+      const definitionPromise = this.dictionaryService.getDefinition(word);
+      definition = await this.trackOperation(definitionPromise);
+      
+    } catch (error) {
+      // If translation fails, try definition only - tracked operation
+      if (!translation && !this.isDestroyed) {
+        try {
+          const definitionPromise = this.dictionaryService.getDefinition(word);
+          definition = await this.trackOperation(definitionPromise);
+        } catch (fallbackError) {
+          // Both services failed - throw with better context
+          throw new Error(`Both translation and dictionary services failed. Translation: ${(error as Error).message}, Dictionary: ${(fallbackError as Error).message}`);
+        }
+      } else if (!this.isDestroyed) {
+        // Translation succeeded but definition failed - create partial failure
+        const partialError = new Error(`Definition lookup failed: ${(error as Error).message}`);
+        (partialError as any).isPartialFailure = true;
+        throw partialError;
+      }
+    }
 
     return {
       word,
@@ -940,58 +1672,97 @@ export class WordLookupPopup {
     };
   }
 
+  private showPartialContent(word: string, translation: string): void {
+    if (!this.popupContainer || !this.isLoading) return;
+    
+    this.popupContainer.classList.remove('loading');
+    this.popupContainer.innerHTML = `
+      <div class="popup-content">
+        <div class="popup-header">
+          <div>
+            <h3 class="word-title">${this.escapeHtml(word)}</h3>
+          </div>
+          <button class="close-button" type="button" aria-label="Close">×</button>
+        </div>
+        
+        <div class="translation-section">
+          <p class="translation-text">${this.escapeHtml(translation)}</p>
+        </div>
+        
+        <div class="definitions-section">
+          <div class="skeleton skeleton-text medium"></div>
+          <div class="skeleton skeleton-text small"></div>
+        </div>
+        
+        <div class="actions-section" style="display: flex; gap: 8px;">
+          <div class="skeleton skeleton-button"></div>
+          <div class="skeleton skeleton-button"></div>
+        </div>
+      </div>
+    `;
+    
+    this.attachEventHandlers();
+  }
+
   private renderContent(content: PopupContent): string {
     return `
-      <div class="popup-header">
-        <div>
-          <h3 class="word-title">${this.escapeHtml(content.word)}</h3>
-          ${content.phonetic && this.config.showPhonetics ? 
-            `<span class="phonetic">${this.escapeHtml(content.phonetic)}</span>` : ''}
+      <div class="popup-content">
+        <div class="popup-header">
+          <div>
+            <h3 class="word-title" id="popup-title">${this.escapeHtml(content.word)}</h3>
+            ${content.phonetic && this.config.showPhonetics ? 
+              `<span class="phonetic" aria-label="Pronunciation: ${this.escapeHtml(content.phonetic)}">/${this.escapeHtml(content.phonetic)}/</span>` : ''}
+          </div>
+          <button class="close-button" type="button" aria-label="Close word lookup popup">×</button>
         </div>
-        <button class="close-button" type="button" aria-label="Close">×</button>
-      </div>
-      
-      <div class="translation-section">
-        <p class="translation-text">${this.escapeHtml(content.translation)}</p>
-        ${content.partOfSpeech ? 
-          `<span class="part-of-speech">${this.escapeHtml(content.partOfSpeech)}</span>` : ''}
-      </div>
-      
-      ${content.definitions.length > 0 ? `
-        <div class="definitions-section">
-          <h4 class="section-title">Definitions</h4>
-          ${content.definitions.map(def => `
-            <div class="definition-item">
-              <p class="definition-text">${this.escapeHtml(def.text)}</p>
-            </div>
-          `).join('')}
+        
+        <div class="translation-section">
+          <p class="translation-text">${this.escapeHtml(content.translation)}</p>
+          ${content.partOfSpeech ? 
+            `<span class="part-of-speech">${this.escapeHtml(content.partOfSpeech)}</span>` : ''}
         </div>
-      ` : ''}
-      
-      ${content.examples.length > 0 && this.config.showExamples ? `
-        <div class="examples-section">
-          <h4 class="section-title">Examples</h4>
-          ${content.examples.slice(0, 3).map(ex => `
-            <div class="example-item">
-              <p class="example-text">${this.escapeHtml(ex.text)}</p>
-              ${ex.translation ? 
-                `<p class="example-translation">${this.escapeHtml(ex.translation)}</p>` : ''}
-            </div>
-          `).join('')}
-        </div>
-      ` : ''}
-      
-      <div class="actions-section">
-        ${this.config.enableTTS ? `
-          <button class="action-button" type="button" data-action="tts">
-            🔊 Listen
-          </button>
+        
+        ${content.definitions.length > 0 ? `
+          <div class="definitions-section" role="region" aria-labelledby="definitions-title">
+            <h4 class="section-title" id="definitions-title">Definitions</h4>
+            <ul role="list" aria-label="Word definitions">
+              ${content.definitions.map((def, index) => `
+                <li class="definition-item" role="listitem">
+                  <p class="definition-text">${this.escapeHtml(def.text)}</p>
+                  ${def.partOfSpeech ? `<span class="part-of-speech" aria-label="Part of speech">${this.escapeHtml(def.partOfSpeech)}</span>` : ''}
+                </li>
+              `).join('')}
+            </ul>
+          </div>
         ` : ''}
-        ${this.config.enableVocabulary ? `
-          <button class="action-button primary" type="button" data-action="save">
-            💾 Save Word
-          </button>
+        
+        ${content.examples.length > 0 && this.config.showExamples ? `
+          <div class="examples-section" role="region" aria-labelledby="examples-title">
+            <h4 class="section-title" id="examples-title">Examples</h4>
+            <ul role="list" aria-label="Usage examples">
+              ${content.examples.slice(0, 3).map((ex, index) => `
+                <li class="example-item" role="listitem">
+                  <p class="example-text">${this.escapeHtml(ex.text)}</p>
+                  ${ex.translation ? 
+                    `<p class="example-translation" aria-label="Translation">${this.escapeHtml(ex.translation)}</p>` : ''}
+                </li>
+              `).join('')}
+            </ul>
+          </div>
         ` : ''}
+        
+        <div class="actions-section" role="group" aria-label="Word actions">
+          ${this.config.enableTTS ? `
+            <button class="action-button" type="button" data-action="tts" aria-label="Listen to pronunciation of ${this.escapeHtml(content.word)}">
+              <span class="button-text">🔊 Listen</span>
+            </button>
+          ` : ''}
+          ${this.config.enableVocabulary ? `
+            <button class="action-button primary" type="button" data-action="save" aria-label="Save ${this.escapeHtml(content.word)} to vocabulary">
+              <span class="button-text">💾 Save Word</span>
+            </button>
+          ` : ''}
+        </div>
       </div>
     `;
   }
@@ -1001,26 +1772,116 @@ export class WordLookupPopup {
 
     this.popupContainer.classList.add('loading');
     this.popupContainer.innerHTML = `
-      <div class="loading-spinner">
-        <div class="spinner"></div>
-        <span>Loading word information...</span>
+      <div class="popup-content">
+        <div class="popup-header">
+          <div class="word-title">Loading...</div>
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: center; padding: 20px;">
+          <div class="loading-spinner"></div>
+          <div class="loading-dots">
+            <div class="loading-dot"></div>
+            <div class="loading-dot"></div>
+            <div class="loading-dot"></div>
+          </div>
+          <span style="margin-top: 16px; color: #718096; font-size: 14px;">
+            Loading word information...
+          </span>
+        </div>
       </div>
     `;
   }
 
-  private showErrorState(error: Error): void {
+  private showLoadingTimeout(): void {
+    if (!this.popupContainer || !this.isLoading) return;
+
+    // Add timeout warning to existing loading state
+    const loadingContainer = this.popupContainer.querySelector('div[style*="padding: 20px"]');
+    if (loadingContainer) {
+      const timeoutWarning = document.createElement('div');
+      timeoutWarning.className = 'loading-timeout';
+      timeoutWarning.textContent = 'This is taking longer than expected...';
+      loadingContainer.appendChild(timeoutWarning);
+    }
+  }
+
+  private showSkeletonLoading(): void {
     if (!this.popupContainer) return;
 
-    this.popupContainer.classList.add('error');
+    this.popupContainer.classList.add('loading');
     this.popupContainer.innerHTML = `
-      <div class="error-message">
-        <span class="error-icon">⚠️</span>
-        <span>Failed to load word information: ${this.escapeHtml(error.message)}</span>
-        <button class="retry-button" type="button" data-action="retry">Retry</button>
+      <div class="popup-content">
+        <div class="popup-header">
+          <div class="skeleton skeleton-text large"></div>
+        </div>
+        <div class="translation-section">
+          <div class="skeleton skeleton-text medium"></div>
+          <div class="skeleton skeleton-text small"></div>
+        </div>
+        <div class="definitions-section">
+          <div class="skeleton skeleton-text medium"></div>
+          <div class="skeleton skeleton-text small"></div>
+          <div class="skeleton skeleton-text medium"></div>
+        </div>
+        <div class="actions-section" style="display: flex; gap: 8px;">
+          <div class="skeleton skeleton-button"></div>
+          <div class="skeleton skeleton-button"></div>
+        </div>
       </div>
     `;
+  }
+
+  private setActionLoading(action: string, isLoading: boolean): void {
+    this.actionLoadingStates.set(action, isLoading);
     
-    this.attachEventHandlers();
+    if (!this.popupContainer) return;
+    
+    const button = this.popupContainer.querySelector(`[data-action="${action}"]`) as HTMLButtonElement;
+    if (!button) return;
+    
+    if (isLoading) {
+      button.classList.add('loading');
+      button.disabled = true;
+    } else {
+      button.classList.remove('loading');
+      button.disabled = false;
+    }
+  }
+
+  private showActionSuccess(action: string, message: string): void {
+    if (!this.popupContainer) return;
+    
+    const button = this.popupContainer.querySelector(`[data-action="${action}"]`) as HTMLButtonElement;
+    if (!button) return;
+    
+    const originalText = button.innerHTML;
+    button.innerHTML = `<span class="button-text">✓ ${message}</span>`;
+    button.style.background = '#48bb78';
+    button.style.borderColor = '#48bb78';
+    button.style.color = 'white';
+    
+    // Revert after 2 seconds
+    setTimeout(() => {
+      button.innerHTML = originalText;
+      button.style.background = '';
+      button.style.borderColor = '';
+      button.style.color = '';
+    }, 2000);
+  }
+
+  private showErrorState(error: Error): void {
+    if (!this.popupContainer || this.isDestroyed) return;
+
+    console.error('[WordLookupPopup] Error occurred:', error);
+    
+    // Use enhanced error handling
+    const errorContext = this.classifyError(error, {
+      service: 'unknown',
+      operation: 'load',
+      word: this.currentWord
+    });
+    
+    this.updateErrorState(errorContext);
+    this.showEnhancedErrorState(errorContext);
   }
 
   private attachEventHandlers(): void {
@@ -1057,22 +1918,47 @@ export class WordLookupPopup {
   }
 
   private async playTTS(): Promise<void> {
-    if (!this.currentWord) return;
+    if (!this.currentWord || this.isDestroyed) return;
+
+    const actionKey = 'tts';
+    this.setActionLoading(actionKey, true);
 
     try {
-      await this.ttsService.speak(this.currentWord);
-      this.events.onTTSPlayed?.(this.currentWord);
+      const ttsPromise = this.ttsService.speak(this.currentWord);
+      await this.trackOperation(ttsPromise);
+      
+      if (!this.isDestroyed) {
+        this.events.onTTSPlayed?.(this.currentWord);
+      }
     } catch (error) {
       console.error('[WordLookupPopup] TTS failed:', error);
-      this.events.onError?.(error as Error);
+      if (!this.isDestroyed) {
+        // Use enhanced error handling for TTS errors
+        const errorContext = this.classifyError(error as Error, {
+          service: 'tts',
+          operation: 'tts',
+          word: this.currentWord
+        });
+        
+        this.updateErrorState(errorContext);
+        this.showEnhancedErrorState(errorContext);
+        this.events.onError?.(error as Error);
+      }
+    } finally {
+      if (!this.isDestroyed) {
+        this.setActionLoading(actionKey, false);
+      }
     }
   }
 
   private async saveWord(): Promise<void> {
-    if (!this.currentWord) return;
+    if (!this.currentWord || this.isDestroyed) return;
+
+    const actionKey = 'save';
+    this.setActionLoading(actionKey, true);
 
     try {
-      await this.storageService.saveWord({
+      const savePromise = this.storageService.saveWord({
         word: this.currentWord,
         translation: '', // This would be populated from current content
         context: '',
@@ -1084,27 +1970,57 @@ export class WordLookupPopup {
         reviewCount: 0
       });
       
-      this.events.onWordSaved?.(this.currentWord);
+      await this.trackOperation(savePromise);
+      
+      if (!this.isDestroyed) {
+        this.events.onWordSaved?.(this.currentWord);
+        
+        // Show success feedback
+        this.showActionSuccess(actionKey, 'Word saved!');
+      }
     } catch (error) {
       console.error('[WordLookupPopup] Save word failed:', error);
-      this.events.onError?.(error as Error);
+      if (!this.isDestroyed) {
+        // Use enhanced error handling for storage errors
+        const errorContext = this.classifyError(error as Error, {
+          service: 'storage',
+          operation: 'save',
+          word: this.currentWord
+        });
+        
+        this.updateErrorState(errorContext);
+        this.showEnhancedErrorState(errorContext);
+        this.events.onError?.(error as Error);
+      }
+    } finally {
+      if (!this.isDestroyed) {
+        this.setActionLoading(actionKey, false);
+      }
     }
   }
 
   private async retryLoad(): Promise<void> {
-    if (!this.currentWord) return;
+    if (!this.currentWord || this.isDestroyed) return;
 
     this.isLoading = true;
     this.showLoadingState();
     
     try {
-      const content = await this.loadWordContent(this.currentWord);
-      this.updateContent(content);
+      const contentPromise = this.loadWordContent(this.currentWord);
+      const content = await this.trackOperation(contentPromise);
+      
+      if (!this.isDestroyed) {
+        this.updateContent(content);
+      }
     } catch (error) {
-      this.showErrorState(error as Error);
-      this.events.onError?.(error as Error);
+      if (!this.isDestroyed) {
+        this.showErrorState(error as Error);
+        this.events.onError?.(error as Error);
+      }
     } finally {
-      this.isLoading = false;
+      if (!this.isDestroyed) {
+        this.isLoading = false;
+      }
     }
   }
 
@@ -1385,9 +2301,965 @@ export class WordLookupPopup {
     }
   }
 
+  // ========================================
+  // Keyboard Navigation and Accessibility
+  // ========================================
+
+  private handleTabNavigation(event: KeyboardEvent): void {
+    if (!this.popupContainer) return;
+    
+    const focusableElements = this.getFocusableElements();
+    if (focusableElements.length === 0) return;
+    
+    const firstElement = focusableElements[0];
+    const lastElement = focusableElements[focusableElements.length - 1];
+    const currentFocus = this.shadowRoot?.activeElement as HTMLElement;
+    
+    // Focus trapping
+    if (event.shiftKey) {
+      // Shift+Tab - move backward
+      if (currentFocus === firstElement || !currentFocus) {
+        event.preventDefault();
+        lastElement.focus();
+      }
+    } else {
+      // Tab - move forward
+      if (currentFocus === lastElement || !currentFocus) {
+        event.preventDefault();
+        firstElement.focus();
+      }
+    }
+  }
+
+  private handleEnterSpace(event: KeyboardEvent): void {
+    if (!this.shadowRoot) return;
+    
+    const target = event.target as HTMLElement;
+    if (target.tagName === 'BUTTON' && target.hasAttribute('data-action')) {
+      event.preventDefault();
+      target.click();
+    }
+  }
+
+  private getFocusableElements(): HTMLElement[] {
+    if (!this.popupContainer) return [];
+    
+    const focusableSelectors = [
+      'button:not([disabled])',
+      'a[href]',
+      'input:not([disabled])',
+      'select:not([disabled])',
+      'textarea:not([disabled])',
+      '[tabindex]:not([tabindex="-1"])'
+    ];
+    
+    const elements = this.popupContainer.querySelectorAll(focusableSelectors.join(','));
+    return Array.from(elements) as HTMLElement[];
+  }
+
+  private setInitialFocus(): void {
+    if (!this.popupContainer) return;
+    
+    // Focus the popup container first
+    this.popupContainer.focus();
+    
+    // Then focus the first focusable element
+    const focusableElements = this.getFocusableElements();
+    if (focusableElements.length > 0) {
+      focusableElements[0].focus();
+    }
+  }
+
+  private restoreFocus(): void {
+    // Restore focus to the element that was focused before the popup opened
+    // This would typically be the element that triggered the popup
+    const activeElement = document.activeElement as HTMLElement;
+    if (activeElement && activeElement.blur) {
+      activeElement.blur();
+    }
+  }
+
+  // ========================================
+  // Click-Outside Detection
+  // ========================================
+
+  private handleClickOutside(event: Event): void {
+    if (!this.isVisible || !this.container) return;
+
+    const target = event.target as Node;
+    const clickedElement = event.composedPath?.()?.[0] as Element || target as Element;
+    
+    // Check if click is outside the popup container
+    if (!this.isClickInsidePopup(clickedElement)) {
+      // Add small delay to prevent conflicts with other click handlers
+      setTimeout(() => {
+        if (this.isVisible) {
+          this.hide();
+        }
+      }, 10);
+    }
+  }
+
+  private handleTouchOutside(event: Event): void {
+    if (!this.isVisible || !this.container) return;
+
+    const touchEvent = event as TouchEvent;
+    if (touchEvent.touches.length === 0) return;
+
+    const touch = touchEvent.touches[0];
+    const target = document.elementFromPoint(touch.clientX, touch.clientY);
+    
+    if (target && !this.isClickInsidePopup(target)) {
+      // Add small delay to prevent conflicts with other touch handlers
+      setTimeout(() => {
+        if (this.isVisible) {
+          this.hide();
+        }
+      }, 10);
+    }
+  }
+
+  private isClickInsidePopup(element: Element | Node): boolean {
+    if (!this.container || !element) return false;
+
+    // Check if element is within the main container
+    if (this.container.contains(element as Node)) {
+      return true;
+    }
+
+    // Check shadow DOM specifically
+    if (this.shadowRoot && this.shadowRoot.contains(element as Node)) {
+      return true;
+    }
+
+    // Check if element is within shadow DOM using composedPath
+    const path = (element as Element).getRootNode?.();
+    if (path === this.shadowRoot) {
+      return true;
+    }
+
+    // Additional check for elements that might be related to the popup
+    const elementAsHTMLElement = element as HTMLElement;
+    if (elementAsHTMLElement.closest) {
+      const popupAncestor = elementAsHTMLElement.closest('#linguatube-word-lookup-popup');
+      if (popupAncestor) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private attachClickOutsideListeners(): void {
+    if (!this.clickOutsideHandler || !this.touchOutsideHandler) return;
+
+    // Use capture phase to ensure we get the event before other handlers
+    document.addEventListener('click', this.clickOutsideHandler, true);
+    document.addEventListener('mousedown', this.clickOutsideHandler, true);
+    document.addEventListener('touchstart', this.touchOutsideHandler, true);
+    document.addEventListener('touchend', this.touchOutsideHandler, true);
+  }
+
+  private detachClickOutsideListeners(): void {
+    if (!this.clickOutsideHandler || !this.touchOutsideHandler) return;
+
+    document.removeEventListener('click', this.clickOutsideHandler, true);
+    document.removeEventListener('mousedown', this.clickOutsideHandler, true);
+    document.removeEventListener('touchstart', this.touchOutsideHandler, true);
+    document.removeEventListener('touchend', this.touchOutsideHandler, true);
+  }
+
+  // Public method to temporarily disable click-outside (useful for testing or special cases)
+  public disableClickOutside(): void {
+    this.detachClickOutsideListeners();
+  }
+
+  // Public method to re-enable click-outside
+  public enableClickOutside(): void {
+    if (this.isVisible) {
+      this.attachClickOutsideListeners();
+    }
+  }
+
+  // ========================================
+  // Extended API Methods
+  // ========================================
+
+  /**
+   * Get current popup state
+   */
+  public getState(): { isVisible: boolean; isLoading: boolean; currentWord: string; error: Error | null } {
+    return {
+      isVisible: this.isVisible,
+      isLoading: this.isLoading,
+      currentWord: this.currentWord,
+      error: null // Could be enhanced to track errors
+    };
+  }
+
+  /**
+   * Check if popup is currently visible
+   */
+  public isPopupVisible(): boolean {
+    return this.isVisible;
+  }
+
+  /**
+   * Check if popup is currently loading
+   */
+  public isPopupLoading(): boolean {
+    return this.isLoading;
+  }
+
+  /**
+   * Get current word being looked up
+   */
+  public getCurrentWord(): string {
+    return this.currentWord;
+  }
+
+  /**
+   * Update popup configuration
+   */
+  public updateConfig(newConfig: Partial<WordLookupConfig>): void {
+    this.config = { ...this.config, ...newConfig };
+    this.applyConfiguration();
+  }
+
+  /**
+   * Get current configuration
+   */
+  public getConfig(): WordLookupConfig {
+    return { ...this.config };
+  }
+
+  /**
+   * Update popup position
+   */
+  public updatePosition(position: { x: number; y: number }): void {
+    if (this.isVisible) {
+      this.positionPopup(position);
+    }
+  }
+
+  /**
+   * Set focus to popup
+   */
+  public focus(): void {
+    if (this.isVisible) {
+      this.setInitialFocus();
+    }
+  }
+
+  /**
+   * Enable/disable click-outside detection
+   */
+  public setClickOutsideEnabled(enabled: boolean): void {
+    if (enabled) {
+      this.enableClickOutside();
+    } else {
+      this.disableClickOutside();
+    }
+  }
+
+  /**
+   * Refresh content (re-fetch from services)
+   */
+  public async refreshContent(): Promise<void> {
+    if (this.currentWord && this.isVisible && !this.isDestroyed) {
+      this.isLoading = true;
+      this.showSkeletonLoading();
+      
+      try {
+        const contentPromise = this.loadWordContent(this.currentWord);
+        const content = await this.trackOperation(contentPromise);
+        
+        if (!this.isDestroyed) {
+          this.updateContent(content);
+        }
+      } catch (error) {
+        if (!this.isDestroyed) {
+          this.showErrorState(error as Error);
+          this.events.onError?.(error as Error);
+        }
+      } finally {
+        if (!this.isDestroyed) {
+          this.isLoading = false;
+        }
+      }
+    }
+  }
+
+  /**
+   * Copy content to clipboard
+   */
+  public async copyToClipboard(content: 'word' | 'translation' | 'definition' | 'all'): Promise<void> {
+    if (!this.currentWord) return;
+    
+    try {
+      let textToCopy = '';
+      
+      switch (content) {
+        case 'word':
+          textToCopy = this.currentWord;
+          break;
+        case 'translation':
+          // Would need to store current content to access translation
+          textToCopy = this.currentWord; // Fallback
+          break;
+        case 'definition':
+          // Would need to store current content to access definition
+          textToCopy = this.currentWord; // Fallback
+          break;
+        case 'all':
+          textToCopy = this.currentWord; // Would format all content
+          break;
+      }
+      
+      await navigator.clipboard.writeText(textToCopy);
+      console.log(`[WordLookupPopup] Copied ${content} to clipboard`);
+    } catch (error) {
+      console.error('[WordLookupPopup] Failed to copy to clipboard:', error);
+    }
+  }
+
+  /**
+   * Enhanced event listener with typed events
+   */
+  public once(event: keyof PopupEvents, callback: (...args: any[]) => void): void {
+    const wrappedCallback = (...args: any[]) => {
+      callback(...args);
+      this.off(event);
+    };
+    this.on(event, wrappedCallback);
+  }
+
+  /**
+   * Emit custom event
+   */
+  public emit(event: string, data: any): void {
+    // Could be enhanced to support custom events
+    console.log(`[WordLookupPopup] Custom event: ${event}`, data);
+  }
+
   private escapeHtml(text: string): string {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+  }
+
+  // ========================================
+  // Enhanced Error Handling System
+  // ========================================
+
+  private classifyError(error: Error, context: { service?: string; operation?: string; word?: string }): ErrorContext {
+    const message = error.message.toLowerCase();
+    let type = ErrorType.UNKNOWN;
+    let severity = ErrorSeverity.MEDIUM;
+    let userMessage = 'Something went wrong';
+    let guidance = 'Please try again';
+    let retryable = true;
+    let autoRetry = false;
+    let retryDelay = 1000;
+    let maxRetries = 3;
+    let fallbackAvailable = false;
+
+    // Check for partial failure first
+    if ((error as any).isPartialFailure || message.includes('definition lookup failed')) {
+      type = ErrorType.PARTIAL_FAILURE;
+      severity = ErrorSeverity.LOW;
+      userMessage = 'Partial information loaded';
+      guidance = 'Some content is missing but you can continue';
+      retryable = true;
+      maxRetries = 1;
+      fallbackAvailable = false;
+    }
+
+    // Network-related errors
+    if (message.includes('network') || message.includes('fetch') || message.includes('connection')) {
+      type = ErrorType.NETWORK;
+      severity = ErrorSeverity.HIGH;
+      userMessage = 'Network connection failed';
+      guidance = 'Check your internet connection and try again';
+      autoRetry = true;
+      retryDelay = 2000;
+      maxRetries = 3;
+    }
+    // Rate limiting
+    else if (message.includes('rate limit') || message.includes('too many requests') || message.includes('429')) {
+      type = ErrorType.RATE_LIMIT;
+      severity = ErrorSeverity.MEDIUM;
+      userMessage = 'Too many requests';
+      guidance = 'Please wait a moment before trying again';
+      autoRetry = true;
+      retryDelay = 5000;
+      maxRetries = 2;
+    }
+    // Timeout errors
+    else if (message.includes('timeout') || message.includes('timed out')) {
+      type = ErrorType.TIMEOUT;
+      severity = ErrorSeverity.MEDIUM;
+      userMessage = 'Request timed out';
+      guidance = 'The service is taking longer than expected. Try again';
+      autoRetry = true;
+      retryDelay = 3000;
+      maxRetries = 2;
+    }
+    // Service unavailable
+    else if (message.includes('service unavailable') || message.includes('502') || message.includes('503')) {
+      type = ErrorType.SERVICE_UNAVAILABLE;
+      severity = ErrorSeverity.HIGH;
+      userMessage = 'Service temporarily unavailable';
+      guidance = 'The translation service is down. Try again later';
+      autoRetry = false;
+      retryDelay = 10000;
+      maxRetries = 1;
+    }
+    // Translation-specific errors
+    else if (context.service === 'translation' || context.operation === 'translate') {
+      type = ErrorType.TRANSLATION_FAILED;
+      severity = ErrorSeverity.MEDIUM;
+      userMessage = 'Translation failed';
+      guidance = 'Unable to translate this word. Try a different word';
+      fallbackAvailable = true; // Can try dictionary only
+      maxRetries = 2;
+    }
+    // Dictionary-specific errors
+    else if (context.service === 'dictionary' || context.operation === 'dictionary') {
+      type = ErrorType.DICTIONARY_FAILED;
+      severity = ErrorSeverity.MEDIUM;
+      userMessage = 'Definition not found';
+      guidance = 'No definition available for this word';
+      fallbackAvailable = true; // Can try translation only
+      maxRetries = 2;
+    }
+    // TTS errors
+    else if (context.service === 'tts' || context.operation === 'tts') {
+      type = ErrorType.TTS_FAILED;
+      severity = ErrorSeverity.LOW;
+      userMessage = 'Audio playback failed';
+      guidance = 'Unable to play pronunciation. Check your audio settings';
+      retryable = true;
+      maxRetries = 1;
+    }
+    // Storage errors
+    else if (context.service === 'storage' || context.operation === 'save') {
+      type = ErrorType.STORAGE_FAILED;
+      severity = ErrorSeverity.LOW;
+      userMessage = 'Failed to save word';
+      guidance = 'Unable to save to vocabulary. Try again';
+      maxRetries = 2;
+    }
+    // Validation errors
+    else if (message.includes('invalid') || message.includes('validation')) {
+      type = ErrorType.VALIDATION;
+      severity = ErrorSeverity.LOW;
+      userMessage = 'Invalid input';
+      guidance = 'Please check the word and try again';
+      retryable = false;
+      maxRetries = 0;
+    }
+
+    return {
+      type,
+      severity,
+      message: error.message,
+      userMessage,
+      guidance,
+      retryable,
+      autoRetry,
+      retryDelay,
+      maxRetries,
+      fallbackAvailable,
+      originalError: error,
+      timestamp: Date.now(),
+      context: {
+        word: context.word,
+        service: context.service,
+        operation: context.operation,
+        attempt: this.errorState.retryCount + 1
+      }
+    };
+  }
+
+  private updateErrorState(errorContext: ErrorContext): void {
+    this.errorState = {
+      hasError: true,
+      currentError: errorContext,
+      retryCount: this.errorState.retryCount,
+      lastRetryTime: Date.now(),
+      isRetrying: false,
+      errorHistory: [...this.errorState.errorHistory, errorContext].slice(-10) // Keep last 10 errors
+    };
+  }
+
+  private clearErrorState(): void {
+    this.errorState = {
+      hasError: false,
+      currentError: null,
+      retryCount: 0,
+      lastRetryTime: 0,
+      isRetrying: false,
+      errorHistory: this.errorState.errorHistory // Keep history for analytics
+    };
+  }
+
+  private getErrorIcon(type: ErrorType): string {
+    switch (type) {
+      case ErrorType.NETWORK:
+        return '🌐';
+      case ErrorType.SERVICE_UNAVAILABLE:
+        return '🔧';
+      case ErrorType.RATE_LIMIT:
+        return '⏱️';
+      case ErrorType.TIMEOUT:
+        return '⏰';
+      case ErrorType.VALIDATION:
+        return '⚠️';
+      case ErrorType.TRANSLATION_FAILED:
+        return '🔤';
+      case ErrorType.DICTIONARY_FAILED:
+        return '📖';
+      case ErrorType.PARTIAL_FAILURE:
+        return '⚡';
+      case ErrorType.TTS_FAILED:
+        return '🔊';
+      case ErrorType.STORAGE_FAILED:
+        return '💾';
+      default:
+        return '❌';
+    }
+  }
+
+  private getErrorIconClass(type: ErrorType): string {
+    switch (type) {
+      case ErrorType.NETWORK:
+        return 'network';
+      case ErrorType.SERVICE_UNAVAILABLE:
+        return 'service';
+      case ErrorType.TIMEOUT:
+        return 'timeout';
+      case ErrorType.VALIDATION:
+        return 'validation';
+      case ErrorType.PARTIAL_FAILURE:
+        return 'partial';
+      case ErrorType.RATE_LIMIT:
+      case ErrorType.TRANSLATION_FAILED:
+      case ErrorType.DICTIONARY_FAILED:
+      case ErrorType.TTS_FAILED:
+      case ErrorType.STORAGE_FAILED:
+      default:
+        return 'critical';
+    }
+  }
+
+  private renderEnhancedErrorState(errorContext: ErrorContext): string {
+    const icon = this.getErrorIcon(errorContext.type);
+    const iconClass = this.getErrorIconClass(errorContext.type);
+    const canRetry = errorContext.retryable && this.errorState.retryCount < errorContext.maxRetries;
+    const isOffline = !navigator.onLine;
+
+    let actions = '';
+    
+    if (canRetry) {
+      actions += `
+        <button class="error-retry-button" type="button" data-action="retry" ${this.errorState.isRetrying ? 'disabled' : ''}>
+          ${this.errorState.isRetrying ? '⏳ Retrying...' : '🔄 Try Again'}
+        </button>
+      `;
+    }
+
+    if (errorContext.fallbackAvailable) {
+      actions += `
+        <button class="error-secondary-button" type="button" data-action="fallback">
+          📖 Try Definition Only
+        </button>
+      `;
+    }
+
+    actions += `
+      <button class="error-dismiss-button" type="button" data-action="dismiss">
+        Dismiss
+      </button>
+    `;
+
+    return `
+      <div class="popup-content">
+        <div class="popup-header">
+          <div class="error-title">Word Lookup Error</div>
+          <button class="close-button" type="button" aria-label="Close">×</button>
+        </div>
+        
+        ${isOffline ? `
+          <div class="offline-indicator">
+            📡 You appear to be offline. Check your connection.
+          </div>
+        ` : ''}
+        
+        <div class="error-container">
+          <span class="error-icon ${iconClass}">${icon}</span>
+          <div class="error-title">${this.escapeHtml(errorContext.userMessage)}</div>
+          <div class="error-message">${this.escapeHtml(errorContext.guidance)}</div>
+          
+          <div class="error-actions">
+            ${actions}
+          </div>
+          
+          ${errorContext.autoRetry && canRetry ? `
+            <div class="retry-countdown">
+              Auto-retry in <span id="countdown">${Math.ceil(errorContext.retryDelay / 1000)}</span> seconds
+            </div>
+          ` : ''}
+          
+          <div class="error-details">
+            <button class="error-details-toggle" type="button" data-action="toggle-details">
+              Show Details
+            </button>
+            <div class="error-details-content" style="display: none;">
+              Error Type: ${errorContext.type}
+              Severity: ${errorContext.severity}
+              Attempt: ${errorContext.context.attempt}/${errorContext.maxRetries}
+              Service: ${errorContext.context.service || 'Unknown'}
+              
+              Technical Details:
+              ${this.escapeHtml(errorContext.message)}
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  private async handleEnhancedRetry(errorContext: ErrorContext): Promise<void> {
+    if (!errorContext.retryable || this.errorState.retryCount >= errorContext.maxRetries) {
+      console.warn('[WordLookupPopup] Retry not allowed or max retries exceeded');
+      return;
+    }
+
+    // Update state to indicate retrying
+    this.errorState = {
+      ...this.errorState,
+      isRetrying: true,
+      retryCount: this.errorState.retryCount + 1
+    };
+
+    try {
+      // Add delay before retry
+      await new Promise(resolve => setTimeout(resolve, errorContext.retryDelay));
+      
+      if (this.isDestroyed) return;
+
+      // Attempt to reload content
+      await this.retryLoad();
+      
+      // Clear error state on success
+      this.clearErrorState();
+      
+    } catch (error) {
+      // Handle retry failure
+      const newErrorContext = this.classifyError(error as Error, {
+        service: errorContext.context.service,
+        operation: errorContext.context.operation,
+        word: this.currentWord
+      });
+      
+      this.updateErrorState(newErrorContext);
+      this.renderEnhancedErrorState(newErrorContext);
+    } finally {
+      // Update state to indicate not retrying
+      this.errorState = {
+        ...this.errorState,
+        isRetrying: false
+      };
+    }
+  }
+
+  private async handleFallbackAction(): Promise<void> {
+    if (!this.currentWord || this.isDestroyed) return;
+
+    try {
+      // Try dictionary-only fallback
+      const definition = await this.trackOperation(
+        this.dictionaryService.getDefinition(this.currentWord)
+      );
+
+      if (!this.isDestroyed) {
+        const fallbackContent: PopupContent = {
+          word: this.currentWord,
+          translation: '', // No translation available
+          phonetic: definition.phonetics?.[0]?.text || '',
+          definitions: definition.meanings.map((meaning: any) => ({
+            text: meaning.definitions[0]?.definition || '',
+            partOfSpeech: meaning.partOfSpeech,
+            level: 'intermediate' as const
+          })),
+          examples: definition.meanings.flatMap((meaning: any) => 
+            meaning.definitions.slice(0, 2).map((def: any) => ({
+              text: def.example || '',
+              translation: '',
+              source: 'dictionary'
+            }))
+          ).filter((ex: any) => ex.text),
+          partOfSpeech: definition.meanings[0]?.partOfSpeech || '',
+          sourceLanguage: 'en',
+          targetLanguage: 'es'
+        };
+
+        // Show partial content with warning
+        this.updateContent(fallbackContent);
+        
+        // Add partial failure banner
+        if (this.popupContainer) {
+          const banner = document.createElement('div');
+          banner.className = 'partial-error-banner';
+          banner.innerHTML = `
+            ⚠️ Translation unavailable. Showing definition only.
+          `;
+          this.popupContainer.querySelector('.popup-content')?.prepend(banner);
+        }
+
+        this.clearErrorState();
+      }
+    } catch (error) {
+      // Fallback also failed
+      const errorContext = this.classifyError(error as Error, {
+        service: 'dictionary',
+        operation: 'fallback',
+        word: this.currentWord
+      });
+      
+                    this.updateErrorState(errorContext);
+       this.showEnhancedErrorState(errorContext);
+     }
+   }
+
+   private showEnhancedErrorState(errorContext: ErrorContext): void {
+     if (!this.popupContainer || this.isDestroyed) return;
+
+     // Add error class to container
+     this.popupContainer.classList.add('error');
+     
+     // Render enhanced error UI
+     const errorHTML = this.renderEnhancedErrorState(errorContext);
+     this.popupContainer.innerHTML = errorHTML;
+     
+     // Attach enhanced error event handlers
+     this.attachEnhancedErrorHandlers(errorContext);
+     
+     // Start auto-retry countdown if applicable
+     if (errorContext.autoRetry && errorContext.retryable && this.errorState.retryCount < errorContext.maxRetries) {
+       this.startAutoRetryCountdown(errorContext);
+     }
+   }
+
+   private attachEnhancedErrorHandlers(errorContext: ErrorContext): void {
+     if (!this.popupContainer) return;
+
+     // Retry button
+     const retryButton = this.popupContainer.querySelector('[data-action="retry"]') as HTMLButtonElement;
+     if (retryButton) {
+       retryButton.addEventListener('click', () => {
+         this.handleEnhancedRetry(errorContext);
+       });
+     }
+
+     // Fallback button
+     const fallbackButton = this.popupContainer.querySelector('[data-action="fallback"]') as HTMLButtonElement;
+     if (fallbackButton) {
+       fallbackButton.addEventListener('click', () => {
+         this.handleFallbackAction();
+       });
+     }
+
+     // Dismiss button
+     const dismissButton = this.popupContainer.querySelector('[data-action="dismiss"]') as HTMLButtonElement;
+     if (dismissButton) {
+       dismissButton.addEventListener('click', () => {
+         this.hide();
+       });
+     }
+
+     // Close button
+     const closeButton = this.popupContainer.querySelector('.close-button') as HTMLButtonElement;
+     if (closeButton) {
+       closeButton.addEventListener('click', () => {
+         this.hide();
+       });
+     }
+
+     // Details toggle
+     const detailsToggle = this.popupContainer.querySelector('[data-action="toggle-details"]') as HTMLButtonElement;
+     const detailsContent = this.popupContainer.querySelector('.error-details-content') as HTMLElement;
+     if (detailsToggle && detailsContent) {
+       detailsToggle.addEventListener('click', () => {
+         const isVisible = detailsContent.style.display !== 'none';
+         detailsContent.style.display = isVisible ? 'none' : 'block';
+         detailsToggle.textContent = isVisible ? 'Show Details' : 'Hide Details';
+       });
+     }
+   }
+
+   private startAutoRetryCountdown(errorContext: ErrorContext): void {
+     const countdownElement = this.popupContainer?.querySelector('#countdown');
+     if (!countdownElement) return;
+
+     let remaining = Math.ceil(errorContext.retryDelay / 1000);
+     
+     const updateCountdown = () => {
+       if (countdownElement && remaining > 0) {
+         countdownElement.textContent = remaining.toString();
+         remaining--;
+         this.createTimeout(updateCountdown, 1000);
+       } else if (remaining <= 0) {
+         // Auto-retry
+         this.handleEnhancedRetry(errorContext);
+       }
+     };
+
+     updateCountdown();
+   }
+
+  // ========================================
+  // Cleanup Utilities
+  // ========================================
+
+  /**
+   * Creates a tracked timeout that will be automatically cleared on destroy
+   */
+  private createTimeout(callback: () => void, delay: number): ReturnType<typeof setTimeout> {
+    const timeoutId = setTimeout(() => {
+      this.animationTimeouts.delete(timeoutId);
+      if (!this.isDestroyed) {
+        callback();
+      }
+    }, delay);
+    
+    this.animationTimeouts.add(timeoutId);
+    return timeoutId;
+  }
+
+  /**
+   * Creates a tracked promise that will be monitored for cleanup
+   */
+  private trackOperation<T>(promise: Promise<T>): Promise<T> {
+    this.pendingOperations.add(promise);
+    
+    const cleanup = () => {
+      this.pendingOperations.delete(promise);
+    };
+    
+    promise.then(cleanup, cleanup);
+    return promise;
+  }
+
+  /**
+   * Clears a tracked timeout
+   */
+  private clearTrackedTimeout(timeoutId: ReturnType<typeof setTimeout> | null): void {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      this.animationTimeouts.delete(timeoutId);
+    }
+  }
+
+  /**
+   * Removes global event listeners
+   */
+  private removeGlobalEventListeners(): void {
+    if (this.keyboardHandler) {
+      document.removeEventListener('keydown', this.keyboardHandler);
+      this.keyboardHandler = null;
+    }
+    
+    if (this.beforeUnloadHandler) {
+      window.removeEventListener('beforeunload', this.beforeUnloadHandler);
+      this.beforeUnloadHandler = null;
+    }
+    
+    if (this.pagehideHandler) {
+      window.removeEventListener('pagehide', this.pagehideHandler);
+      this.pagehideHandler = null;
+    }
+  }
+
+  /**
+   * Clears all pending timeouts
+   */
+  private clearAllTimeouts(): void {
+    // Clear tracked animation timeouts
+    this.animationTimeouts.forEach(timeoutId => {
+      clearTimeout(timeoutId);
+    });
+    this.animationTimeouts.clear();
+
+    // Clear specific timeouts
+    if (this.autoHideTimeout) {
+      clearTimeout(this.autoHideTimeout);
+      this.autoHideTimeout = null;
+    }
+
+    if (this.loadingTimeout) {
+      clearTimeout(this.loadingTimeout);
+      this.loadingTimeout = null;
+    }
+  }
+
+  /**
+   * Waits for pending operations to complete or times out
+   */
+  private async waitForPendingOperations(timeoutMs: number = 5000): Promise<void> {
+    if (this.pendingOperations.size === 0) return;
+
+    const timeoutPromise = new Promise<void>((resolve) => {
+      setTimeout(resolve, timeoutMs);
+    });
+
+    const allOperations = Promise.allSettled(Array.from(this.pendingOperations));
+    
+    await Promise.race([allOperations, timeoutPromise]);
+  }
+
+  /**
+   * Performs thorough cleanup of all resources
+   */
+  private performCompleteCleanup(): void {
+    // Mark as destroyed to prevent further operations
+    this.isDestroyed = true;
+
+    // Clear all timeouts
+    this.clearAllTimeouts();
+
+    // Remove global event listeners
+    this.removeGlobalEventListeners();
+
+    // Detach click-outside listeners
+    this.detachClickOutsideListeners();
+
+    // Clear collections and maps
+    this.actionLoadingStates.clear();
+    this.pendingOperations.clear();
+
+    // Clear event handlers
+    this.events = {};
+
+    // Clear DOM references
+    if (this.container && this.container.parentNode) {
+      this.container.parentNode.removeChild(this.container);
+    }
+
+    // Nullify all references
+    this.container = null;
+    this.shadowRoot = null;
+    this.popupContainer = null;
+    this.clickOutsideHandler = null;
+    this.touchOutsideHandler = null;
+    this.keyboardHandler = null;
+    this.beforeUnloadHandler = null;
+    this.pagehideHandler = null;
+
+    // Reset state
+    this.isVisible = false;
+    this.isLoading = false;
+    this.currentWord = '';
   }
 } 

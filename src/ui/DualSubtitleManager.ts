@@ -357,11 +357,11 @@ export class DualSubtitleManager {
     try {
       this.pendingTranslations.add(cueId);
       
-      const translation = await this.translationService.translateText(
-        request.text,
-        request.sourceLanguage,
-        request.targetLanguage
-      );
+      const translation = await this.translationService.translateText({
+        text: request.text,
+        fromLanguage: request.sourceLanguage,
+        toLanguage: request.targetLanguage
+      });
 
       // Cache the translation
       if (this.config.cacheTranslations) {
@@ -412,11 +412,11 @@ export class DualSubtitleManager {
       const contextWords = this.extractContext(context, word);
       const textToTranslate = contextWords.length > 1 ? contextWords.join(' ') : word;
       
-      const translation = await this.translationService.translateText(
-        textToTranslate,
-        this.sourceLanguage,
-        this.targetLanguage
-      );
+      const translation = await this.translationService.translateText({
+        text: textToTranslate,
+        fromLanguage: this.sourceLanguage,
+        toLanguage: this.targetLanguage
+      });
 
       // If we translated with context, extract just the word translation
       const wordTranslation = contextWords.length > 1 ? 
