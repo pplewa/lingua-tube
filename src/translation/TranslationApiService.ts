@@ -121,7 +121,20 @@ export class TranslationApiService {
    * Translate text from one language to another
    */
   async translateText(request: TranslateTextRequest): Promise<string> {
-    await this.ensureClientReady();
+    try {
+      await this.ensureClientReady();
+    } catch (error) {
+      // If client initialization fails due to missing API key, provide graceful fallback
+      if (error instanceof TranslationErrorImpl && error.code === TranslationErrorCode.MISSING_API_KEY) {
+        console.warn('[TranslationApiService] API key not configured, returning fallback message');
+        throw this.createTranslationError(
+          'Translation service not configured. Please add your Microsoft Translator API key to enable translation features.',
+          TranslationErrorCode.SERVICE_NOT_CONFIGURED,
+          { originalError: error }
+        );
+      }
+      throw error;
+    }
 
     // Validate request
     this.validateTranslateRequest(request);

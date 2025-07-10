@@ -106,6 +106,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     case 'TRANSLATION_COMPLETED':
       handleTranslationCompleted(request.data, sendResponse);
       break;
+    case 'SET_API_KEY':
+      handleSetApiKey(request.apiKey, sendResponse);
+      break;
+    case 'GET_TRANSLATION_STATUS':
+      handleGetTranslationStatus(sendResponse);
+      break;
     default:
       sendResponse({ error: 'Unknown message type' });
   }
@@ -369,6 +375,87 @@ async function handleTranslationCompleted(data: any, sendResponse: (response: an
   }
 }
 
+async function handleSetApiKey(apiKey: string, sendResponse: (response: any) => void) {
+  try {
+    if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length === 0) {
+      sendResponse({ 
+        success: false, 
+        error: { message: 'Invalid API key provided' } 
+      });
+      return;
+    }
+
+    const configService = new ConfigService();
+    await configService.setApiKey(apiKey.trim());
+    
+    console.log('[LinguaTube] ✅ API key updated manually via message');
+    
+    // Test the configuration
+    try {
+      const config = await configService.getConfig();
+      console.log('[LinguaTube] Translation service re-configured with new key');
+      
+      sendResponse({ 
+        success: true, 
+        message: 'API key configured successfully',
+        config: {
+          endpoint: config.endpoint,
+          region: config.region || 'global',
+          isReady: true
+        }
+      });
+    } catch (configError) {
+      sendResponse({ 
+        success: false, 
+        error: { message: 'API key saved but configuration test failed', details: configError } 
+      });
+    }
+  } catch (error) {
+    sendResponse({ 
+      success: false, 
+      error: { message: 'Failed to set API key', details: error } 
+    });
+  }
+}
+
+async function handleGetTranslationStatus(sendResponse: (response: any) => void) {
+  try {
+    const configService = new ConfigService();
+    
+    let status = {
+      configured: false,
+      hasApiKey: false,
+      endpoint: null as string | null,
+      lastError: null as string | null
+    };
+
+    try {
+      // Check if we have an API key
+      const apiKey = await configService.getApiKey();
+      status.hasApiKey = !!apiKey;
+      
+      if (apiKey) {
+        // Try to get full config
+        const config = await configService.getConfig();
+        status.configured = true;
+        status.endpoint = config.endpoint;
+      }
+    } catch (error) {
+      status.lastError = error instanceof Error ? error.message : 'Unknown configuration error';
+    }
+
+    sendResponse({ 
+      success: true, 
+      status
+    });
+  } catch (error) {
+    sendResponse({ 
+      success: false, 
+      error: { message: 'Failed to get translation status', details: error } 
+    });
+  }
+}
+
 // ========================================
 // Utility Functions
 // ========================================
@@ -513,10 +600,34 @@ async function initializeTranslationService(): Promise<void> {
     // Get API key from environment variable
     const apiKey = import.meta.env.VITE_TRANSLATION_API_KEY;
     
+    console.log('[LinguaTube] Environment variable check:', {
+      hasApiKey: !!apiKey,
+      apiKeyLength: apiKey ? apiKey.length : 0,
+      // Only show first/last few chars for security
+      apiKeyPreview: apiKey ? `${apiKey.substring(0, 4)}...${apiKey.substring(apiKey.length - 4)}` : 'undefined'
+    });
+    
     if (!apiKey) {
-      console.error('[LinguaTube] ❌ VITE_TRANSLATION_API_KEY not found in environment variables');
-      console.error('[LinguaTube] Please add VITE_TRANSLATION_API_KEY=your_api_key to your .env file');
-      throw new Error('Translation API key not configured in environment variables');
+      console.warn('[LinguaTube] ⚠️ VITE_TRANSLATION_API_KEY not found in environment variables');
+      console.warn('[LinguaTube] This usually means the .env file was not properly loaded during build.');
+      console.warn('[LinguaTube] Translation features will be disabled until an API key is configured.');
+      
+      // Check if there's already an API key stored in Chrome storage
+      try {
+        const existingKey = await configService.getApiKey();
+        if (existingKey) {
+          console.log('[LinguaTube] ✅ Found existing API key in Chrome storage, using that instead');
+          const config = await configService.getConfig();
+          console.log('[LinguaTube] Translation service ready with stored key, endpoint:', config.endpoint);
+          return;
+        }
+      } catch (error) {
+        console.log('[LinguaTube] No existing API key found in storage either');
+      }
+      
+      // Don't throw error, just log warning - let extension work without translation
+      console.warn('[LinguaTube] Extension will continue without translation features');
+      return;
     }
     
     // Check if API key is already configured
@@ -553,6 +664,7 @@ async function initializeTranslationService(): Promise<void> {
     
   } catch (error) {
     console.error('[LinguaTube] ❌ Failed to initialize translation service:', error);
-    throw error;
+    // Don't re-throw the error, just log it - let extension work without translation
+    console.warn('[LinguaTube] Extension will continue without translation features');
   }
 }

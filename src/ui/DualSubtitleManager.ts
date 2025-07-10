@@ -432,7 +432,23 @@ export class DualSubtitleManager {
 
     } catch (error) {
       console.error('[DualSubtitleManager] Word translation failed:', error);
-      return word; // Fallback to original word
+      
+      // Provide specific error feedback for authentication issues
+      if (error && typeof error === 'object' && 'code' in error) {
+        const translationError = error as { code: string; message: string };
+        
+        if (translationError.code === 'UNAUTHORIZED' || translationError.code === 'SERVICE_NOT_CONFIGURED') {
+          console.warn('[DualSubtitleManager] Translation service authentication failed');
+          // Show user-friendly error message in console for debugging
+          console.log('Translation Error: Please configure your Microsoft Translator API key in the .env file');
+          return `[Translation Error: API key needed]`;
+        } else if (translationError.code === 'MISSING_API_KEY') {
+          console.warn('[DualSubtitleManager] Translation API key missing');
+          return `[No API key configured]`;
+        }
+      }
+      
+      return word; // Fallback to original word for other errors
     }
   }
 
