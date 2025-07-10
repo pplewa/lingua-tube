@@ -1990,19 +1990,8 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
 
   private setupKeyboardShortcuts(): void {
     // Define keyboard shortcuts
-    this.keyboardShortcuts.set('Space', () => {
-      // Toggle play/pause
-      try {
-        const isPlaying = !this.playerService.isPaused();
-        if (isPlaying) {
-          this.playerService.pause();
-        } else {
-          this.playerService.play();
-        }
-      } catch (error) {
-        console.warn('[EnhancedPlaybackControls] Failed to toggle play/pause:', error);
-      }
-    });
+    // Note: Removed Space key mapping to avoid conflicts with YouTube's native play/pause behavior
+    // Users can still use other controls for play/pause functionality
 
     this.keyboardShortcuts.set('ArrowLeft', () => {
       this.navigateSentence('previous');
