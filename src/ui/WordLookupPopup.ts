@@ -1576,8 +1576,6 @@ export class WordLookupPopup {
     
     // Trigger event
     this.events.onHide?.();
-    // this.destroySync();
-    // this.initialize();
   }
 
   public updateContent(content: PopupContent): void {
