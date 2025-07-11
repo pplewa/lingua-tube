@@ -26,11 +26,12 @@ export default defineManifest({
       run_at: 'document_end',
     },
   ],
+  host_permissions: ['<all_urls>'],
   web_accessible_resources: [
     {
       resources: ['img/logo-16.png', 'img/logo-32.png', 'img/logo-48.png', 'img/logo-128.png'],
       matches: ['*://*.youtube.com/*'],
     },
   ],
-  permissions: ['storage', 'activeTab', 'scripting', 'notifications', 'contextMenus', 'tabs']
+  permissions: ['storage', 'activeTab', 'scripting', 'notifications', 'contextMenus', 'tabs', 'webRequest']
 })
