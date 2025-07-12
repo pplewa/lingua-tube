@@ -33,5 +33,13 @@ export default defineManifest({
       matches: ['*://*.youtube.com/*'],
     },
   ],
-  permissions: ['storage', 'activeTab', 'scripting', 'notifications', 'contextMenus', 'tabs', 'webRequest']
+  permissions: [
+    'storage',
+    'activeTab',
+    'scripting',
+    'notifications',
+    'contextMenus',
+    'tabs',
+    'webRequest',
+  ],
 })

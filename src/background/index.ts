@@ -68,16 +68,15 @@ console.log('[LinguaTube] Background service worker starting...')
   }
 })()
 
-
 // extract and store Proof of Origin (PO) Token from YouTube API requests
 chrome.webRequest.onBeforeRequest.addListener(
   function (details) {
-    const url = new URL(details.url);
-    const pot = url.searchParams.get('pot');
-    console.log('[LinguaTube] POT:', pot);
+    const url = new URL(details.url)
+    const pot = url.searchParams.get('pot')
+    console.log('[LinguaTube] POT:', pot)
     chrome.storage.local.set({ pot }).then(() => {
-      console.log("Value was set");
-    });
+      console.log('Value was set')
+    })
     return { cancel: false }
   },
   { urls: ['*://*.youtube.com/api/timedtext*DESKTOP*'] },

@@ -13,26 +13,29 @@ import {
   SubtitleDiscoveryError,
   SubtitleErrorCode,
   DEFAULT_DISCOVERY_CONFIG,
-  LanguageInfo
-} from './types';
-import { YouTubePlayerResponseParser } from './PlayerResponseParser';
-import { SubtitleTrackProcessor } from './SubtitleTrackProcessor';
+  LanguageInfo,
+} from './types'
+import { YouTubePlayerResponseParser } from './PlayerResponseParser'
+import { SubtitleTrackProcessor } from './SubtitleTrackProcessor'
 
 /**
  * Main implementation of the subtitle discovery service
  */
 export class LinguaTubeSubtitleDiscoveryService implements SubtitleDiscoveryService {
-  private config: SubtitleDiscoveryConfig;
-  private eventListeners: Map<SubtitleDiscoveryEvent, Array<(event: SubtitleDiscoveryEventData) => void>>;
-  private isMonitoringActive = false;
-  private currentVideoId: string | null = null;
-  private currentTracks: SubtitleTrack[] = [];
-  private observer: MutationObserver | null = null;
+  private config: SubtitleDiscoveryConfig
+  private eventListeners: Map<
+    SubtitleDiscoveryEvent,
+    Array<(event: SubtitleDiscoveryEventData) => void>
+  >
+  private isMonitoringActive = false
+  private currentVideoId: string | null = null
+  private currentTracks: SubtitleTrack[] = []
+  private observer: MutationObserver | null = null
 
   constructor(config: Partial<SubtitleDiscoveryConfig> = {}) {
-    this.config = { ...DEFAULT_DISCOVERY_CONFIG, ...config };
-    this.eventListeners = new Map();
-    this.initializeEventListeners();
+    this.config = { ...DEFAULT_DISCOVERY_CONFIG, ...config }
+    this.eventListeners = new Map()
+    this.initializeEventListeners()
   }
 
   // ========================================
@@ -41,42 +44,44 @@ export class LinguaTubeSubtitleDiscoveryService implements SubtitleDiscoveryServ
 
   async discoverSubtitles(): Promise<SubtitleDiscoveryResult> {
     try {
-      console.log('[LinguaTube] Starting subtitle discovery...');
+      console.log('[LinguaTube] Starting subtitle discovery...')
 
       // Verify we're on a valid video page
       if (!YouTubePlayerResponseParser.isValidVideoPage()) {
         const error: SubtitleDiscoveryError = {
           code: SubtitleErrorCode.INVALID_VIDEO_PAGE,
           message: 'Not on a valid YouTube video page',
-          recoverable: false
-        };
-        return this.createErrorResult(error);
+          recoverable: false,
+        }
+        return this.createErrorResult(error)
       }
 
-             // Get video context
-       const videoId = YouTubePlayerResponseParser.getCurrentVideoId();
-       const videoTitle = YouTubePlayerResponseParser.getCurrentVideoTitle();
+      // Get video context
+      const videoId = YouTubePlayerResponseParser.getCurrentVideoId()
+      const videoTitle = YouTubePlayerResponseParser.getCurrentVideoTitle()
 
-       // Wait for player response if needed
-       const available = await YouTubePlayerResponseParser.waitForPlayerResponse(this.config.observerTimeout);
-       if (!available) {
-         const error: SubtitleDiscoveryError = {
-           code: SubtitleErrorCode.PLAYER_NOT_LOADED,
-           message: 'YouTube player not loaded within timeout',
-           recoverable: true
-         };
-         return this.createErrorResult(error, videoId || undefined, videoTitle || undefined);
-       }
+      // Wait for player response if needed
+      const available = await YouTubePlayerResponseParser.waitForPlayerResponse(
+        this.config.observerTimeout,
+      )
+      if (!available) {
+        const error: SubtitleDiscoveryError = {
+          code: SubtitleErrorCode.PLAYER_NOT_LOADED,
+          message: 'YouTube player not loaded within timeout',
+          recoverable: true,
+        }
+        return this.createErrorResult(error, videoId || undefined, videoTitle || undefined)
+      }
 
       // Parse player response
-      const parseResult = await YouTubePlayerResponseParser.parsePlayerResponse();
+      const parseResult = await YouTubePlayerResponseParser.parsePlayerResponse()
       if (!parseResult.success) {
         const error: SubtitleDiscoveryError = {
           code: SubtitleErrorCode.PLAYER_RESPONSE_MISSING,
           message: parseResult.error || 'Failed to parse player response',
-          recoverable: true
-        };
-        return this.createErrorResult(error, videoId, videoTitle);
+          recoverable: true,
+        }
+        return this.createErrorResult(error, videoId, videoTitle)
       }
 
       // Check if captions are available
@@ -84,19 +89,19 @@ export class LinguaTubeSubtitleDiscoveryService implements SubtitleDiscoveryServ
         const error: SubtitleDiscoveryError = {
           code: SubtitleErrorCode.CAPTIONS_NOT_AVAILABLE,
           message: 'No subtitle tracks available for this video',
-          recoverable: false
-        };
-        return this.createErrorResult(error, videoId, videoTitle);
+          recoverable: false,
+        }
+        return this.createErrorResult(error, videoId, videoTitle)
       }
 
       // Process subtitle tracks
-      const tracks = SubtitleTrackProcessor.processSubtitleTracks(parseResult.captions);
-      const filteredTracks = this.applyConfigFilters(tracks);
-      const languageInfo = SubtitleTrackProcessor.getLanguageInfo(filteredTracks);
+      const tracks = SubtitleTrackProcessor.processSubtitleTracks(parseResult.captions)
+      const filteredTracks = this.applyConfigFilters(tracks)
+      const languageInfo = SubtitleTrackProcessor.getLanguageInfo(filteredTracks)
 
       // Update internal state
-      this.currentVideoId = videoId;
-      this.currentTracks = filteredTracks;
+      this.currentVideoId = videoId
+      this.currentTracks = filteredTracks
 
       // Create successful result
       const result: SubtitleDiscoveryResult = {
@@ -105,43 +110,42 @@ export class LinguaTubeSubtitleDiscoveryService implements SubtitleDiscoveryServ
         availableLanguages: languageInfo,
         videoId: videoId || undefined,
         videoTitle: videoTitle || undefined,
-        timestamp: Date.now()
-      };
+        timestamp: Date.now(),
+      }
 
       // Emit event
-      this.emitEvent(SubtitleDiscoveryEvent.TRACKS_DISCOVERED, result);
+      this.emitEvent(SubtitleDiscoveryEvent.TRACKS_DISCOVERED, result)
 
-      console.log(`[LinguaTube] Successfully discovered ${filteredTracks.length} subtitle tracks`);
-      return result;
-
+      console.log(`[LinguaTube] Successfully discovered ${filteredTracks.length} subtitle tracks`)
+      return result
     } catch (error) {
-      console.error('[LinguaTube] Subtitle discovery failed:', error);
+      console.error('[LinguaTube] Subtitle discovery failed:', error)
       const discoveryError: SubtitleDiscoveryError = {
         code: SubtitleErrorCode.UNKNOWN_ERROR,
         message: `Discovery failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
         recoverable: true,
-        details: { originalError: error }
-      };
-      return this.createErrorResult(discoveryError);
+        details: { originalError: error },
+      }
+      return this.createErrorResult(discoveryError)
     }
   }
 
   async getAvailableSubtitleTracks(): Promise<SubtitleTrack[]> {
     if (this.currentTracks.length === 0) {
-      const result = await this.discoverSubtitles();
-      return result.success ? result.tracks : [];
+      const result = await this.discoverSubtitles()
+      return result.success ? result.tracks : []
     }
-    return this.currentTracks;
+    return this.currentTracks
   }
 
   async getSubtitleTrackByLanguage(languageCode: string): Promise<SubtitleTrack | null> {
-    const tracks = await this.getAvailableSubtitleTracks();
-    return tracks.find(track => track.languageCode === languageCode) || null;
+    const tracks = await this.getAvailableSubtitleTracks()
+    return tracks.find((track) => track.languageCode === languageCode) || null
   }
 
   async getPreferredSubtitleTrack(languageCodes: string[]): Promise<SubtitleTrack | null> {
-    const tracks = await this.getAvailableSubtitleTracks();
-    return SubtitleTrackProcessor.findBestTrack(tracks, languageCodes, true);
+    const tracks = await this.getAvailableSubtitleTracks()
+    return SubtitleTrackProcessor.findBestTrack(tracks, languageCodes, true)
   }
 
   // ========================================
@@ -149,29 +153,29 @@ export class LinguaTubeSubtitleDiscoveryService implements SubtitleDiscoveryServ
   // ========================================
 
   isAutoGenerated(track: SubtitleTrack): boolean {
-    return track.isAutoGenerated;
+    return track.isAutoGenerated
   }
 
   isTranslatable(track: SubtitleTrack): boolean {
-    return track.isTranslatable;
+    return track.isTranslatable
   }
 
   getTrackQuality(track: SubtitleTrack): 'high' | 'medium' | 'low' {
     // Manual captions are always high quality
     if (!track.isAutoGenerated) {
-      return 'high';
+      return 'high'
     }
 
     // For auto-generated tracks, use confidence if available
     if (track.confidence !== undefined) {
-      if (track.confidence >= 0.8) return 'high';
-      if (track.confidence >= 0.7) return 'medium';
-      return 'low';
+      if (track.confidence >= 0.8) return 'high'
+      if (track.confidence >= 0.7) return 'medium'
+      return 'low'
     }
 
     // Fallback based on language support
-    const commonLanguages = ['en', 'es', 'fr', 'de', 'ja', 'ko', 'zh'];
-    return commonLanguages.includes(track.languageCode) ? 'medium' : 'low';
+    const commonLanguages = ['en', 'es', 'fr', 'de', 'ja', 'ko', 'zh']
+    return commonLanguages.includes(track.languageCode) ? 'medium' : 'low'
   }
 
   // ========================================
@@ -180,62 +184,68 @@ export class LinguaTubeSubtitleDiscoveryService implements SubtitleDiscoveryServ
 
   startMonitoring(): void {
     if (this.isMonitoringActive) {
-      console.log('[LinguaTube] Monitoring already active');
-      return;
+      console.log('[LinguaTube] Monitoring already active')
+      return
     }
 
-    console.log('[LinguaTube] Starting subtitle discovery monitoring...');
-    this.isMonitoringActive = true;
+    console.log('[LinguaTube] Starting subtitle discovery monitoring...')
+    this.isMonitoringActive = true
 
     // Set up mutation observer for page changes
-    this.observer = new MutationObserver(this.handleMutations.bind(this));
-    
+    this.observer = new MutationObserver(this.handleMutations.bind(this))
+
     this.observer.observe(document.body, {
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ['href']
-    });
+      attributeFilter: ['href'],
+    })
 
     // Initial discovery
-    this.handleVideoChange();
+    this.handleVideoChange()
   }
 
   stopMonitoring(): void {
     if (!this.isMonitoringActive) {
-      return;
+      return
     }
 
-    console.log('[LinguaTube] Stopping subtitle discovery monitoring...');
-    this.isMonitoringActive = false;
+    console.log('[LinguaTube] Stopping subtitle discovery monitoring...')
+    this.isMonitoringActive = false
 
     if (this.observer) {
-      this.observer.disconnect();
-      this.observer = null;
+      this.observer.disconnect()
+      this.observer = null
     }
   }
 
   isMonitoring(): boolean {
-    return this.isMonitoringActive;
+    return this.isMonitoringActive
   }
 
   // ========================================
   // Event Handling Methods
   // ========================================
 
-  addEventListener(type: SubtitleDiscoveryEvent, listener: (event: SubtitleDiscoveryEventData) => void): void {
+  addEventListener(
+    type: SubtitleDiscoveryEvent,
+    listener: (event: SubtitleDiscoveryEventData) => void,
+  ): void {
     if (!this.eventListeners.has(type)) {
-      this.eventListeners.set(type, []);
+      this.eventListeners.set(type, [])
     }
-    this.eventListeners.get(type)!.push(listener);
+    this.eventListeners.get(type)!.push(listener)
   }
 
-  removeEventListener(type: SubtitleDiscoveryEvent, listener: (event: SubtitleDiscoveryEventData) => void): void {
-    const listeners = this.eventListeners.get(type);
+  removeEventListener(
+    type: SubtitleDiscoveryEvent,
+    listener: (event: SubtitleDiscoveryEventData) => void,
+  ): void {
+    const listeners = this.eventListeners.get(type)
     if (listeners) {
-      const index = listeners.indexOf(listener);
+      const index = listeners.indexOf(listener)
       if (index > -1) {
-        listeners.splice(index, 1);
+        listeners.splice(index, 1)
       }
     }
   }
@@ -245,12 +255,12 @@ export class LinguaTubeSubtitleDiscoveryService implements SubtitleDiscoveryServ
   // ========================================
 
   updateConfig(config: Partial<SubtitleDiscoveryConfig>): void {
-    this.config = { ...this.config, ...config };
-    console.log('[LinguaTube] Configuration updated:', this.config);
+    this.config = { ...this.config, ...config }
+    console.log('[LinguaTube] Configuration updated:', this.config)
   }
 
   getConfig(): SubtitleDiscoveryConfig {
-    return { ...this.config };
+    return { ...this.config }
   }
 
   // ========================================
@@ -258,25 +268,25 @@ export class LinguaTubeSubtitleDiscoveryService implements SubtitleDiscoveryServ
   // ========================================
 
   getCurrentVideoId(): string | null {
-    return this.currentVideoId || YouTubePlayerResponseParser.getCurrentVideoId();
+    return this.currentVideoId || YouTubePlayerResponseParser.getCurrentVideoId()
   }
 
   getCurrentVideoTitle(): string | null {
-    return YouTubePlayerResponseParser.getCurrentVideoTitle();
+    return YouTubePlayerResponseParser.getCurrentVideoTitle()
   }
 
   isVideoPage(): boolean {
-    return YouTubePlayerResponseParser.isValidVideoPage();
+    return YouTubePlayerResponseParser.isValidVideoPage()
   }
 
   async refresh(): Promise<SubtitleDiscoveryResult> {
     // Clear cached data
-    this.currentTracks = [];
-    this.currentVideoId = null;
-    YouTubePlayerResponseParser.clearCache();
-    
+    this.currentTracks = []
+    this.currentVideoId = null
+    YouTubePlayerResponseParser.clearCache()
+
     // Rediscover subtitles
-    return this.discoverSubtitles();
+    return this.discoverSubtitles()
   }
 
   // ========================================
@@ -286,7 +296,7 @@ export class LinguaTubeSubtitleDiscoveryService implements SubtitleDiscoveryServ
   private initializeEventListeners(): void {
     // Initialize all event listener arrays
     for (const eventType of Object.values(SubtitleDiscoveryEvent)) {
-      this.eventListeners.set(eventType, []);
+      this.eventListeners.set(eventType, [])
     }
   }
 
@@ -295,25 +305,25 @@ export class LinguaTubeSubtitleDiscoveryService implements SubtitleDiscoveryServ
       type,
       data,
       videoId: this.currentVideoId || undefined,
-      timestamp: Date.now()
-    };
+      timestamp: Date.now(),
+    }
 
-    const listeners = this.eventListeners.get(type);
+    const listeners = this.eventListeners.get(type)
     if (listeners) {
-      listeners.forEach(listener => {
+      listeners.forEach((listener) => {
         try {
-          listener(eventData);
+          listener(eventData)
         } catch (error) {
-          console.error('[LinguaTube] Event listener error:', error);
+          console.error('[LinguaTube] Event listener error:', error)
         }
-      });
+      })
     }
   }
 
   private createErrorResult(
     error: SubtitleDiscoveryError,
     videoId?: string | null,
-    videoTitle?: string | null
+    videoTitle?: string | null,
   ): SubtitleDiscoveryResult {
     const result: SubtitleDiscoveryResult = {
       success: false,
@@ -322,78 +332,78 @@ export class LinguaTubeSubtitleDiscoveryService implements SubtitleDiscoveryServ
       videoId: videoId || undefined,
       videoTitle: videoTitle || undefined,
       error,
-      timestamp: Date.now()
-    };
+      timestamp: Date.now(),
+    }
 
-    this.emitEvent(SubtitleDiscoveryEvent.DISCOVERY_FAILED, error);
-    return result;
+    this.emitEvent(SubtitleDiscoveryEvent.DISCOVERY_FAILED, error)
+    return result
   }
 
   private applyConfigFilters(tracks: SubtitleTrack[]): SubtitleTrack[] {
     return SubtitleTrackProcessor.filterTracks(tracks, {
       includeAutoGenerated: this.config.includeAutoGenerated,
-      includeTranslatable: this.config.includeTranslatable
-    });
+      includeTranslatable: this.config.includeTranslatable,
+    })
   }
 
   private handleMutations(mutations: MutationRecord[]): void {
-    let shouldCheck = false;
+    let shouldCheck = false
 
     for (const mutation of mutations) {
       // Check for URL changes (YouTube SPA navigation)
       if (mutation.type === 'attributes' && mutation.attributeName === 'href') {
-        shouldCheck = true;
-        break;
+        shouldCheck = true
+        break
       }
 
       // Check for added nodes that might indicate video changes
       if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
         for (const node of mutation.addedNodes) {
           if (node.nodeType === Node.ELEMENT_NODE) {
-            const element = node as Element;
+            const element = node as Element
             if (element.matches('ytd-player, #movie_player, .video-stream')) {
-              shouldCheck = true;
-              break;
+              shouldCheck = true
+              break
             }
           }
         }
-        if (shouldCheck) break;
+        if (shouldCheck) break
       }
     }
 
     if (shouldCheck) {
       // Debounce the check
-      clearTimeout(this.videoChangeTimeout);
+      clearTimeout(this.videoChangeTimeout)
       this.videoChangeTimeout = window.setTimeout(() => {
-        this.handleVideoChange();
-      }, 500);
+        this.handleVideoChange()
+      }, 500)
     }
   }
 
-  private videoChangeTimeout: number | undefined;
+  private videoChangeTimeout: number | undefined
 
   private async handleVideoChange(): Promise<void> {
-    const newVideoId = YouTubePlayerResponseParser.getCurrentVideoId();
-    
+    const newVideoId = YouTubePlayerResponseParser.getCurrentVideoId()
+
     if (newVideoId && newVideoId !== this.currentVideoId) {
-      console.log('[LinguaTube] Video change detected:', newVideoId);
-      this.emitEvent(SubtitleDiscoveryEvent.VIDEO_CHANGED, { videoId: newVideoId });
-      
+      console.log('[LinguaTube] Video change detected:', newVideoId)
+      this.emitEvent(SubtitleDiscoveryEvent.VIDEO_CHANGED, { videoId: newVideoId })
+
       // Clear current state
-      this.currentTracks = [];
-      this.currentVideoId = null;
-      
+      this.currentTracks = []
+      this.currentVideoId = null
+
       // Trigger new discovery (with delay for page to load)
       setTimeout(async () => {
         try {
-          await this.discoverSubtitles();
+          await this.discoverSubtitles()
         } catch (error) {
-          console.error('[LinguaTube] Auto-discovery failed after video change:', error);
+          console.error('[LinguaTube] Auto-discovery failed after video change:', error)
         }
-      }, 1000);
+      }, 1000)
     }
   }
 }
 
 // Export singleton instance
-export const subtitleDiscoveryService = new LinguaTubeSubtitleDiscoveryService(); 
+export const subtitleDiscoveryService = new LinguaTubeSubtitleDiscoveryService()

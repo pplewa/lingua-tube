@@ -693,7 +693,7 @@ export class DualSubtitleComponent {
     const displayCue: SubtitleCueDisplay = {
       id: cue.id,
       targetText: cue.text,
-      nativeText: '', // Will be populated by translation service
+      nativeText: cue.nativeText || '', // Will be populated by translation service
       startTime: cue.startTime,
       endTime: cue.endTime,
       isActive: true,

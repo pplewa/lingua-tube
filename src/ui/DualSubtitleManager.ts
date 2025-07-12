@@ -3,94 +3,94 @@
  * Coordinates the dual subtitle component with translation services, storage, and player interactions
  */
 
-import { DualSubtitleComponent, DualSubtitleConfig, WordClickEvent } from './DualSubtitleComponent';
-import { PlayerInteractionService } from '../youtube/PlayerInteractionService';
-import { StorageService } from '../storage';
-import { TranslationApiService } from '../translation/TranslationApiService';
-import { translationCacheService } from '../translation/TranslationCacheService';
-import { UserSettings } from '../storage/types';
-import { WordLookupPopup } from './WordLookupPopup';
+import { DualSubtitleComponent, DualSubtitleConfig, WordClickEvent } from './DualSubtitleComponent'
+import { PlayerInteractionService } from '../youtube/PlayerInteractionService'
+import { StorageService } from '../storage'
+import { TranslationApiService } from '../translation/TranslationApiService'
+import { translationCacheService } from '../translation/TranslationCacheService'
+import { UserSettings } from '../storage/types'
+import { WordLookupPopup } from './WordLookupPopup'
 
 // ========================================
 // Types and Interfaces
 // ========================================
 
 export interface SubtitleManagerConfig {
-  readonly autoTranslate: boolean;
-  readonly translationDelay: number; // ms to wait before translating
-  readonly cacheTranslations: boolean;
-  readonly vocabularyIntegration: boolean;
-  readonly autoSaveWords: boolean;
-  readonly contextWindow: number; // words around clicked word for context
+  readonly autoTranslate: boolean
+  readonly translationDelay: number // ms to wait before translating
+  readonly cacheTranslations: boolean
+  readonly vocabularyIntegration: boolean
+  readonly autoSaveWords: boolean
+  readonly contextWindow: number // words around clicked word for context
 }
 
 export interface TranslationRequest {
-  readonly text: string;
-  readonly sourceLanguage: string;
-  readonly targetLanguage: string;
-  readonly context?: string;
-  readonly priority: 'high' | 'normal' | 'low';
+  readonly text: string
+  readonly sourceLanguage: string
+  readonly targetLanguage: string
+  readonly context?: string
+  readonly priority: 'high' | 'normal' | 'low'
 }
 
 export interface VocabularyEntry {
-  readonly word: string;
-  readonly translation: string;
-  readonly context: string;
-  readonly sourceLanguage: string;
-  readonly targetLanguage: string;
-  readonly videoId: string;
-  readonly timestamp: number;
+  readonly word: string
+  readonly translation: string
+  readonly context: string
+  readonly sourceLanguage: string
+  readonly targetLanguage: string
+  readonly videoId: string
+  readonly timestamp: number
 }
 
-export type TranslationCallback = (translation: string, cueId: string) => void;
-export type VocabularyCallback = (entry: VocabularyEntry) => void;
+export type TranslationCallback = (translation: string, cueId: string) => void
+export type VocabularyCallback = (entry: VocabularyEntry) => void
 
 // ========================================
 // Main Manager Class
 // ========================================
 
 export class DualSubtitleManager {
-  private subtitleComponent: DualSubtitleComponent | null = null;
-  private playerService: PlayerInteractionService;
-  private storageService: StorageService;
-  private translationService: TranslationApiService;
-  private wordLookupPopup: WordLookupPopup | null = null;
-  
-  private config: SubtitleManagerConfig;
-  private currentVideoId: string | null = null;
-  private sourceLanguage: string = 'en';
-  private targetLanguage: string = 'es';
-  
-  private translationQueue: Map<string, TranslationRequest> = new Map();
-  private pendingTranslations: Set<string> = new Set();
-  private translationTimeouts: Map<string, number> = new Map();
-  
-  private vocabularyCallbacks: Set<VocabularyCallback> = new Set();
-  private translationCallbacks: Set<TranslationCallback> = new Set();
-  
-  private isInitialized: boolean = false;
+  private subtitleComponent: DualSubtitleComponent | null = null
+  private playerService: PlayerInteractionService
+  private storageService: StorageService
+  private translationService: TranslationApiService
+  private wordLookupPopup: WordLookupPopup | null = null
+
+  private config: SubtitleManagerConfig
+  private currentVideoId: string | null = null
+  private sourceLanguage: string = 'en'
+  private targetLanguage: string = 'es'
+
+  private translationQueue: Map<string, TranslationRequest> = new Map()
+  private pendingTranslations: Set<string> = new Set()
+  private translationTimeouts: Map<string, number> = new Map()
+
+  private vocabularyCallbacks: Set<VocabularyCallback> = new Set()
+  private translationCallbacks: Set<TranslationCallback> = new Set()
+
+  private isInitialized: boolean = false
 
   constructor(
     playerService: PlayerInteractionService,
     storageService: StorageService,
     translationService: TranslationApiService,
-    wordLookupPopup?: WordLookupPopup
+    wordLookupPopup?: WordLookupPopup,
   ) {
-    this.playerService = playerService;
-    this.storageService = storageService;
-    this.translationService = translationService;
-    this.wordLookupPopup = wordLookupPopup || null;
-    
+    this.playerService = playerService
+    this.storageService = storageService
+    this.translationService = translationService
+    this.wordLookupPopup = wordLookupPopup || null
+
     this.config = {
       autoTranslate: true,
       translationDelay: 500,
       cacheTranslations: true,
       vocabularyIntegration: true,
       autoSaveWords: false,
-      contextWindow: 3
-    };
-    
-    this.setupEventHandlers();
+      contextWindow: 3,
+    }
+
+    this.setupEventHandlers()
   }
 
   // ========================================
@@ -99,150 +99,150 @@ export class DualSubtitleManager {
 
   private async checkTranslationStatus(): Promise<void> {
     try {
-      const response = await chrome.runtime.sendMessage({ 
-        type: 'GET_TRANSLATION_STATUS' 
-      });
-      
+      const response = await chrome.runtime.sendMessage({
+        type: 'GET_TRANSLATION_STATUS',
+      })
+
       if (response.success && response.status) {
-        const status = response.status;
-        console.log('[DualSubtitleManager] Translation status:', status);
-        
+        const status = response.status
+        console.log('[DualSubtitleManager] Translation status:', status)
+
         if (!status.configured || !status.hasApiKey) {
-          console.warn('[DualSubtitleManager] ⚠️ Translation service not properly configured');
-          console.warn('[DualSubtitleManager] API key configured:', status.hasApiKey);
-          console.warn('[DualSubtitleManager] Service configured:', status.configured);
-          
+          console.warn('[DualSubtitleManager] ⚠️ Translation service not properly configured')
+          console.warn('[DualSubtitleManager] API key configured:', status.hasApiKey)
+          console.warn('[DualSubtitleManager] Service configured:', status.configured)
+
           if (status.lastError) {
-            console.warn('[DualSubtitleManager] Last error:', status.lastError);
+            console.warn('[DualSubtitleManager] Last error:', status.lastError)
           }
         } else {
-          console.log('[DualSubtitleManager] ✅ Translation service is ready');
+          console.log('[DualSubtitleManager] ✅ Translation service is ready')
         }
       } else {
-        console.warn('[DualSubtitleManager] Failed to get translation status from background service');
+        console.warn(
+          '[DualSubtitleManager] Failed to get translation status from background service',
+        )
       }
     } catch (error) {
-      console.warn('[DualSubtitleManager] Error checking translation status:', error);
+      console.warn('[DualSubtitleManager] Error checking translation status:', error)
     }
   }
 
   public async initialize(): Promise<boolean> {
     try {
       if (this.isInitialized) {
-        console.warn('[DualSubtitleManager] Already initialized');
-        return true;
+        console.warn('[DualSubtitleManager] Already initialized')
+        return true
       }
 
-      console.log('[DualSubtitleManager] Starting initialization...');
+      console.log('[DualSubtitleManager] Starting initialization...')
 
       // Check translation service status from background service (non-blocking)
-      this.checkTranslationStatus().catch(error => {
-        console.warn('[DualSubtitleManager] Translation status check failed:', error);
-      });
+      this.checkTranslationStatus().catch((error) => {
+        console.warn('[DualSubtitleManager] Translation status check failed:', error)
+      })
 
       // Load user settings
-      console.log('[DualSubtitleManager] Loading user settings...');
-      await this.loadUserSettings();
-      console.log('[DualSubtitleManager] User settings loaded');
-      
+      console.log('[DualSubtitleManager] Loading user settings...')
+      await this.loadUserSettings()
+      console.log('[DualSubtitleManager] User settings loaded')
+
       // Initialize subtitle component
-      console.log('[DualSubtitleManager] Creating subtitle component...');
+      console.log('[DualSubtitleManager] Creating subtitle component...')
       this.subtitleComponent = new DualSubtitleComponent(
         this.playerService,
         this.storageService,
-        await this.createSubtitleConfig()
-      );
-      console.log('[DualSubtitleManager] Subtitle component created');
+        await this.createSubtitleConfig(),
+      )
+      console.log('[DualSubtitleManager] Subtitle component created')
 
-      console.log('[DualSubtitleManager] Initializing subtitle component...');
-      const initSuccess = await this.subtitleComponent.initialize();
+      console.log('[DualSubtitleManager] Initializing subtitle component...')
+      const initSuccess = await this.subtitleComponent.initialize()
       if (!initSuccess) {
-        console.error('[DualSubtitleManager] Failed to initialize subtitle component');
-        return false;
+        console.error('[DualSubtitleManager] Failed to initialize subtitle component')
+        return false
       }
-      console.log('[DualSubtitleManager] Subtitle component initialized');
+      console.log('[DualSubtitleManager] Subtitle component initialized')
 
       // Set up subtitle component event handlers
-      console.log('[DualSubtitleManager] Setting up event handlers...');
-      this.setupSubtitleEventHandlers();
-      console.log('[DualSubtitleManager] Event handlers set up');
-      
-      // Get current video ID
-      this.currentVideoId = this.extractVideoId(window.location.href);
-      
-      this.isInitialized = true;
-      console.log('[DualSubtitleManager] Initialized successfully');
-      return true;
+      console.log('[DualSubtitleManager] Setting up event handlers...')
+      this.setupSubtitleEventHandlers()
+      console.log('[DualSubtitleManager] Event handlers set up')
 
+      // Get current video ID
+      this.currentVideoId = this.extractVideoId(window.location.href)
+
+      this.isInitialized = true
+      console.log('[DualSubtitleManager] Initialized successfully')
+      return true
     } catch (error) {
-      console.error('[DualSubtitleManager] Initialization failed:', error);
-      return false;
+      console.error('[DualSubtitleManager] Initialization failed:', error)
+      return false
     }
   }
 
   public async destroy(): Promise<void> {
     try {
       // Clear all timeouts
-      this.translationTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
-      this.translationTimeouts.clear();
-      
+      this.translationTimeouts.forEach((timeoutId) => clearTimeout(timeoutId))
+      this.translationTimeouts.clear()
+
       // Clear queues
-      this.translationQueue.clear();
-      this.pendingTranslations.clear();
-      
+      this.translationQueue.clear()
+      this.pendingTranslations.clear()
+
       // Destroy subtitle component
       if (this.subtitleComponent) {
-        this.subtitleComponent.destroy();
-        this.subtitleComponent = null;
+        this.subtitleComponent.destroy()
+        this.subtitleComponent = null
       }
-      
-      // Clear callbacks
-      this.vocabularyCallbacks.clear();
-      this.translationCallbacks.clear();
-      
-      this.isInitialized = false;
-      console.log('[DualSubtitleManager] Destroyed successfully');
 
+      // Clear callbacks
+      this.vocabularyCallbacks.clear()
+      this.translationCallbacks.clear()
+
+      this.isInitialized = false
+      console.log('[DualSubtitleManager] Destroyed successfully')
     } catch (error) {
-      console.error('[DualSubtitleManager] Destroy failed:', error);
+      console.error('[DualSubtitleManager] Destroy failed:', error)
     }
   }
 
   private async loadUserSettings(): Promise<void> {
     try {
-      const result = await this.storageService.getSettings();
+      const result = await this.storageService.getSettings()
       if (result.success && result.data) {
-        const settings = result.data;
-        
+        const settings = result.data
+
         // Update languages
-        this.sourceLanguage = settings.languages.sourceLanguage;
-        this.targetLanguage = settings.languages.nativeLanguage;
-        
+        this.sourceLanguage = settings.languages.sourceLanguage
+        this.targetLanguage = settings.languages.nativeLanguage
+
         // Update WordLookupPopup with user's language preferences
         if (this.wordLookupPopup) {
-          this.wordLookupPopup.setDefaultLanguages(this.sourceLanguage, this.targetLanguage);
+          this.wordLookupPopup.setDefaultLanguages(this.sourceLanguage, this.targetLanguage)
         }
-        
+
         // Update manager config
         this.config = {
           ...this.config,
           autoTranslate: true, // Could be from settings
           cacheTranslations: settings.privacy.cacheTranslations,
           vocabularyIntegration: true,
-          autoSaveWords: settings.vocabulary.autoSave
-        };
+          autoSaveWords: settings.vocabulary.autoSave,
+        }
       }
     } catch (error) {
-      console.warn('[DualSubtitleManager] Failed to load user settings:', error);
+      console.warn('[DualSubtitleManager] Failed to load user settings:', error)
     }
   }
 
   private async createSubtitleConfig(): Promise<Partial<DualSubtitleConfig>> {
     try {
-      const result = await this.storageService.getSettings();
+      const result = await this.storageService.getSettings()
       if (result.success && result.data) {
-        const { subtitle, ui } = result.data;
-        
+        const { subtitle, ui } = result.data
+
         return {
           showTargetLanguage: subtitle.showSource,
           showNativeLanguage: subtitle.showNative,
@@ -252,14 +252,14 @@ export class DualSubtitleManager {
           opacity: subtitle.opacity,
           animationEnabled: ui.animationsEnabled,
           clickableWords: true, // Always enable for vocabulary features
-          autoHideNative: false
-        };
+          autoHideNative: false,
+        }
       }
     } catch (error) {
-      console.warn('[DualSubtitleManager] Failed to create subtitle config from settings:', error);
+      console.warn('[DualSubtitleManager] Failed to create subtitle config from settings:', error)
     }
-    
-    return {};
+
+    return {}
   }
 
   // ========================================
@@ -269,67 +269,71 @@ export class DualSubtitleManager {
   private setupEventHandlers(): void {
     // Listen for video changes
     if (typeof window !== 'undefined') {
-      let lastUrl = window.location.href;
-      
+      let lastUrl = window.location.href
+
       const checkForVideoChange = () => {
-        const currentUrl = window.location.href;
+        const currentUrl = window.location.href
         if (currentUrl !== lastUrl) {
-          lastUrl = currentUrl;
-          this.handleVideoChange(this.extractVideoId(currentUrl));
+          lastUrl = currentUrl
+          this.handleVideoChange(this.extractVideoId(currentUrl))
         }
-      };
-      
+      }
+
       // Use MutationObserver to detect navigation
-      const observer = new MutationObserver(checkForVideoChange);
-      observer.observe(document.body, { 
-        childList: true, 
-        subtree: true 
-      });
-      
+      const observer = new MutationObserver(checkForVideoChange)
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+      })
+
       // Also check periodically as fallback
-      setInterval(checkForVideoChange, 2000);
+      setInterval(checkForVideoChange, 2000)
     }
   }
 
   private setupSubtitleEventHandlers(): void {
-    if (!this.subtitleComponent) return;
+    if (!this.subtitleComponent) return
 
     // Handle word clicks for vocabulary and translation
-    this.subtitleComponent.addWordClickListener(this.handleWordClick.bind(this));
-    
+    this.subtitleComponent.addWordClickListener(this.handleWordClick.bind(this))
+
     // Handle visibility changes
     this.subtitleComponent.addVisibilityListener((visible, cueCount) => {
       if (visible && this.config.autoTranslate) {
-        console.log(`[DualSubtitleManager] Processing visible cues`);
-        this.processVisibleCues();
+        console.log(`[DualSubtitleManager] Processing visible cues`)
+        this.processVisibleCues()
       }
-    });
+    })
   }
 
   private handleVideoChange(videoId: string | null): void {
     if (this.currentVideoId !== videoId) {
-      this.currentVideoId = videoId;
-      this.clearTranslationQueue();
-      
-      console.log('[DualSubtitleManager] Video changed:', videoId);
+      this.currentVideoId = videoId
+      this.clearTranslationQueue()
+
+      console.log('[DualSubtitleManager] Video changed:', videoId)
     }
   }
 
   private async handleWordClick(event: WordClickEvent): Promise<void> {
     try {
-      console.log(`[DualSubtitleManager] Handling word click for: "${event.word}"`);
-      console.log(`[DualSubtitleManager] Current languages - Source: ${this.sourceLanguage}, Target: ${this.targetLanguage}`);
-      
-      const { word, cueId, context, position } = event;
-      
+      console.log(`[DualSubtitleManager] Handling word click for: "${event.word}"`)
+      console.log(
+        `[DualSubtitleManager] Current languages - Source: ${this.sourceLanguage}, Target: ${this.targetLanguage}`,
+      )
+
+      const { word, cueId, context, position } = event
+
       // Get translation for the word
-      console.log(`[DualSubtitleManager] Getting translation for word: "${word}" with context: "${context}"`);
-      const translation = await this.getWordTranslation(word, context);
-      console.log(`[DualSubtitleManager] Translation result: "${translation}"`);
-      
+      console.log(
+        `[DualSubtitleManager] Getting translation for word: "${word}" with context: "${context}"`,
+      )
+      const translation = await this.getWordTranslation(word, context)
+      console.log(`[DualSubtitleManager] Translation result: "${translation}"`)
+
       // Show translation tooltip with context
-      this.showTranslationTooltip(word, translation, position);
-      
+      this.showTranslationTooltip(word, translation, position)
+
       // Create vocabulary entry if auto-save is enabled
       if (this.config.autoSaveWords && this.currentVideoId) {
         const vocabularyEntry: VocabularyEntry = {
@@ -339,23 +343,22 @@ export class DualSubtitleManager {
           sourceLanguage: this.sourceLanguage,
           targetLanguage: this.targetLanguage,
           videoId: this.currentVideoId,
-          timestamp: Date.now()
-        };
-        
-        await this.saveVocabularyItem(vocabularyEntry);
-        
+          timestamp: Date.now(),
+        }
+
+        await this.saveVocabularyItem(vocabularyEntry)
+
         // Notify vocabulary callbacks
-        this.vocabularyCallbacks.forEach(callback => {
+        this.vocabularyCallbacks.forEach((callback) => {
           try {
-            callback(vocabularyEntry);
+            callback(vocabularyEntry)
           } catch (error) {
-            console.error('[DualSubtitleManager] Vocabulary callback error:', error);
+            console.error('[DualSubtitleManager] Vocabulary callback error:', error)
           }
-        });
+        })
       }
-      
     } catch (error) {
-      console.error('[DualSubtitleManager] Word click handling failed:', error);
+      console.error('[DualSubtitleManager] Word click handling failed:', error)
     }
   }
 
@@ -364,13 +367,13 @@ export class DualSubtitleManager {
   // ========================================
 
   private async processVisibleCues(): Promise<void> {
-    if (!this.subtitleComponent) return;
+    if (!this.subtitleComponent) return
 
-    const visibleCues = this.subtitleComponent.getCurrentCues();
-    
+    const visibleCues = this.subtitleComponent.getCurrentCues()
+
     for (const cue of visibleCues) {
       if (cue.targetText && !cue.nativeText) {
-        await this.requestCueTranslation(cue.id, cue.targetText);
+        await this.requestCueTranslation(cue.id, cue.targetText)
       }
     }
   }
@@ -378,19 +381,23 @@ export class DualSubtitleManager {
   private async requestCueTranslation(cueId: string, text: string): Promise<void> {
     // Skip if already pending or in queue
     if (this.pendingTranslations.has(cueId) || this.translationQueue.has(cueId)) {
-      return;
+      return
     }
 
     // Check cache first if enabled
     if (this.config.cacheTranslations) {
       try {
-        const cached = await translationCacheService.get(text, this.sourceLanguage, this.targetLanguage);
+        const cached = await translationCacheService.get(
+          text,
+          this.sourceLanguage,
+          this.targetLanguage,
+        )
         if (cached) {
-          this.deliverTranslation(cueId, cached);
-          return;
+          this.deliverTranslation(cueId, cached)
+          return
         }
       } catch (error) {
-        console.warn('[DualSubtitleManager] Cache lookup failed:', error);
+        console.warn('[DualSubtitleManager] Cache lookup failed:', error)
       }
     }
 
@@ -399,28 +406,28 @@ export class DualSubtitleManager {
       text,
       sourceLanguage: this.sourceLanguage,
       targetLanguage: this.targetLanguage,
-      priority: 'normal'
-    };
+      priority: 'normal',
+    }
 
-    this.translationQueue.set(cueId, request);
+    this.translationQueue.set(cueId, request)
 
     // Set up delayed execution
     const timeoutId = setTimeout(() => {
-      this.executeTranslation(cueId, request);
-    }, this.config.translationDelay) as any;
+      this.executeTranslation(cueId, request)
+    }, this.config.translationDelay) as any
 
-    this.translationTimeouts.set(cueId, timeoutId);
+    this.translationTimeouts.set(cueId, timeoutId)
   }
 
   private async executeTranslation(cueId: string, request: TranslationRequest): Promise<void> {
     try {
-      this.pendingTranslations.add(cueId);
-      
+      this.pendingTranslations.add(cueId)
+
       const translation = await this.translationService.translateText({
         text: request.text,
         fromLanguage: request.sourceLanguage,
-        toLanguage: request.targetLanguage
-      });
+        toLanguage: request.targetLanguage,
+      })
 
       // Cache the translation
       if (this.config.cacheTranslations) {
@@ -428,135 +435,156 @@ export class DualSubtitleManager {
           request.text,
           translation,
           request.sourceLanguage,
-          request.targetLanguage
-        );
+          request.targetLanguage,
+        )
       }
 
       // Deliver translation
-      this.deliverTranslation(cueId, translation);
-      
+      this.deliverTranslation(cueId, translation)
     } catch (error) {
-      console.error('[DualSubtitleManager] Translation failed:', error);
+      console.error('[DualSubtitleManager] Translation failed:', error)
     } finally {
-      this.pendingTranslations.delete(cueId);
-      this.translationQueue.delete(cueId);
+      this.pendingTranslations.delete(cueId)
+      this.translationQueue.delete(cueId)
     }
   }
 
   private deliverTranslation(cueId: string, translation: string): void {
     // Update subtitle component
     if (this.subtitleComponent) {
-      this.subtitleComponent.setNativeTranslation(cueId, translation);
+      this.subtitleComponent.setNativeTranslation(cueId, translation)
     }
 
     // Notify translation callbacks
-    this.translationCallbacks.forEach(callback => {
+    this.translationCallbacks.forEach((callback) => {
       try {
-        callback(translation, cueId);
+        callback(translation, cueId)
       } catch (error) {
-        console.error('[DualSubtitleManager] Translation callback error:', error);
+        console.error('[DualSubtitleManager] Translation callback error:', error)
       }
-    });
+    })
   }
 
   private async getWordTranslation(word: string, context: string): Promise<string> {
     try {
-      console.log(`[DualSubtitleManager] Getting translation for word: "${word}"`);
-      console.log(`[DualSubtitleManager] Translation params - From: ${this.sourceLanguage}, To: ${this.targetLanguage}`);
-      
+      console.log(`[DualSubtitleManager] Getting translation for word: "${word}"`)
+      console.log(
+        `[DualSubtitleManager] Translation params - From: ${this.sourceLanguage}, To: ${this.targetLanguage}`,
+      )
+
       // Check cache first
       if (this.config.cacheTranslations) {
-        const cached = await translationCacheService.get(word, this.sourceLanguage, this.targetLanguage);
+        const cached = await translationCacheService.get(
+          word,
+          this.sourceLanguage,
+          this.targetLanguage,
+        )
         if (cached) {
-          console.log(`[DualSubtitleManager] Found cached translation: "${cached}"`);
-          return cached;
+          console.log(`[DualSubtitleManager] Found cached translation: "${cached}"`)
+          return cached
         }
       }
 
       // Request translation with context
-      const contextWords = this.extractContext(context, word);
-      const textToTranslate = contextWords.length > 1 ? contextWords.join(' ') : word;
-      
-      console.log(`[DualSubtitleManager] Text to translate: "${textToTranslate}"`);
-      
+      const contextWords = this.extractContext(context, word)
+      const textToTranslate = contextWords.length > 1 ? contextWords.join(' ') : word
+
+      console.log(`[DualSubtitleManager] Text to translate: "${textToTranslate}"`)
+
       const translation = await this.translationService.translateText({
         text: textToTranslate,
         fromLanguage: this.sourceLanguage,
-        toLanguage: this.targetLanguage
-      });
+        toLanguage: this.targetLanguage,
+      })
 
-      console.log(`[DualSubtitleManager] Raw translation result: "${translation}"`);
+      console.log(`[DualSubtitleManager] Raw translation result: "${translation}"`)
 
       // If we translated with context, extract just the word translation
-      const wordTranslation = contextWords.length > 1 ? 
-        this.extractWordFromTranslation(translation, word, contextWords) : 
-        translation;
+      const wordTranslation =
+        contextWords.length > 1
+          ? this.extractWordFromTranslation(translation, word, contextWords)
+          : translation
 
-      console.log(`[DualSubtitleManager] Final word translation: "${wordTranslation}"`);
+      console.log(`[DualSubtitleManager] Final word translation: "${wordTranslation}"`)
 
       // Cache the word translation
       if (this.config.cacheTranslations) {
-        await translationCacheService.set(word, wordTranslation, this.sourceLanguage, this.targetLanguage);
+        await translationCacheService.set(
+          word,
+          wordTranslation,
+          this.sourceLanguage,
+          this.targetLanguage,
+        )
       }
 
-      return wordTranslation;
-
+      return wordTranslation
     } catch (error) {
-      console.error('[DualSubtitleManager] Word translation failed:', error);
-      
+      console.error('[DualSubtitleManager] Word translation failed:', error)
+
       // Provide specific error feedback for authentication issues
       if (error && typeof error === 'object' && 'code' in error) {
-        const translationError = error as { code: string; message: string };
-        
-        if (translationError.code === 'UNAUTHORIZED' || translationError.code === 'SERVICE_NOT_CONFIGURED') {
-          console.warn('[DualSubtitleManager] Translation service authentication failed');
+        const translationError = error as { code: string; message: string }
+
+        if (
+          translationError.code === 'UNAUTHORIZED' ||
+          translationError.code === 'SERVICE_NOT_CONFIGURED'
+        ) {
+          console.warn('[DualSubtitleManager] Translation service authentication failed')
           // Show user-friendly error message in console for debugging
-          console.log('Translation Error: Please configure your Microsoft Translator API key in the .env file');
-          return `[Translation Error: API key needed]`;
+          console.log(
+            'Translation Error: Please configure your Microsoft Translator API key in the .env file',
+          )
+          return `[Translation Error: API key needed]`
         } else if (translationError.code === 'MISSING_API_KEY') {
-          console.warn('[DualSubtitleManager] Translation API key missing');
-          return `[No API key configured]`;
+          console.warn('[DualSubtitleManager] Translation API key missing')
+          return `[No API key configured]`
         }
       }
-      
-      return word; // Fallback to original word for other errors
+
+      return word // Fallback to original word for other errors
     }
   }
 
   private extractContext(fullContext: string, targetWord: string): string[] {
-    const words = fullContext.split(/\s+/);
-    const targetIndex = words.findIndex(w => 
-      w.toLowerCase().replace(/[^\w]/g, '') === targetWord.toLowerCase().replace(/[^\w]/g, '')
-    );
-    
-    if (targetIndex === -1) return [targetWord];
-    
-    const start = Math.max(0, targetIndex - this.config.contextWindow);
-    const end = Math.min(words.length, targetIndex + this.config.contextWindow + 1);
-    
-    return words.slice(start, end);
+    const words = fullContext.split(/\s+/)
+    const targetIndex = words.findIndex(
+      (w) =>
+        w.toLowerCase().replace(/[^\w]/g, '') === targetWord.toLowerCase().replace(/[^\w]/g, ''),
+    )
+
+    if (targetIndex === -1) return [targetWord]
+
+    const start = Math.max(0, targetIndex - this.config.contextWindow)
+    const end = Math.min(words.length, targetIndex + this.config.contextWindow + 1)
+
+    return words.slice(start, end)
   }
 
-  private extractWordFromTranslation(translation: string, originalWord: string, contextWords: string[]): string {
+  private extractWordFromTranslation(
+    translation: string,
+    originalWord: string,
+    contextWords: string[],
+  ): string {
     // Simple heuristic: if translation is much longer than original word,
     // try to extract the corresponding part
-    const translationWords = translation.split(/\s+/);
-    const originalIndex = contextWords.findIndex(w => 
-      w.toLowerCase().replace(/[^\w]/g, '') === originalWord.toLowerCase().replace(/[^\w]/g, '')
-    );
-    
+    const translationWords = translation.split(/\s+/)
+    const originalIndex = contextWords.findIndex(
+      (w) =>
+        w.toLowerCase().replace(/[^\w]/g, '') === originalWord.toLowerCase().replace(/[^\w]/g, ''),
+    )
+
     if (originalIndex !== -1 && originalIndex < translationWords.length) {
-      return translationWords[originalIndex] || translation;
+      return translationWords[originalIndex] || translation
     }
-    
-    return translation;
+
+    return translation
   }
 
   private clearTranslationQueue(): void {
-    this.translationTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
-    this.translationTimeouts.clear();
-    this.translationQueue.clear();
-    this.pendingTranslations.clear();
+    this.translationTimeouts.forEach((timeoutId) => clearTimeout(timeoutId))
+    this.translationTimeouts.clear()
+    this.translationQueue.clear()
+    this.pendingTranslations.clear()
   }
 
   // ========================================
@@ -575,48 +603,53 @@ export class DualSubtitleManager {
         videoTitle: await this.getVideoTitle(),
         timestamp: entry.timestamp,
         reviewCount: 0,
-        difficulty: 'medium' as const
-      };
-
-      const result = await this.storageService.saveWord(vocabularyItem);
-      
-      if (result.success) {
-        console.log('[DualSubtitleManager] Vocabulary item saved:', entry.word);
-      } else {
-        console.error('[DualSubtitleManager] Failed to save vocabulary item:', result.error);
+        difficulty: 'medium' as const,
       }
 
+      const result = await this.storageService.saveWord(vocabularyItem)
+
+      if (result.success) {
+        console.log('[DualSubtitleManager] Vocabulary item saved:', entry.word)
+      } else {
+        console.error('[DualSubtitleManager] Failed to save vocabulary item:', result.error)
+      }
     } catch (error) {
-      console.error('[DualSubtitleManager] Vocabulary save error:', error);
+      console.error('[DualSubtitleManager] Vocabulary save error:', error)
     }
   }
 
   private async getVideoTitle(): Promise<string> {
     try {
-      const titleElement = document.querySelector('h1.title yt-formatted-string, h1[class*="title"]');
-      return titleElement?.textContent?.trim() || 'Unknown Video';
+      const titleElement = document.querySelector(
+        'h1.title yt-formatted-string, h1[class*="title"]',
+      )
+      return titleElement?.textContent?.trim() || 'Unknown Video'
     } catch (error) {
-      return 'Unknown Video';
+      return 'Unknown Video'
     }
   }
 
-  private showTranslationTooltip(word: string, translation: string, position: { x: number; y: number }): void {
-    console.log(`[DualSubtitleManager] Showing translation tooltip for word: "${word}"`);
-    console.log(`[DualSubtitleManager] Translation: "${translation}"`);
-    console.log(`[DualSubtitleManager] Position:`, position);
-    console.log(`[DualSubtitleManager] Word lookup popup available:`, !!this.wordLookupPopup);
-    
+  private showTranslationTooltip(
+    word: string,
+    translation: string,
+    position: { x: number; y: number },
+  ): void {
+    console.log(`[DualSubtitleManager] Showing translation tooltip for word: "${word}"`)
+    console.log(`[DualSubtitleManager] Translation: "${translation}"`)
+    console.log(`[DualSubtitleManager] Position:`, position)
+    console.log(`[DualSubtitleManager] Word lookup popup available:`, !!this.wordLookupPopup)
+
     if (this.wordLookupPopup) {
       this.wordLookupPopup.show({
         word,
         position,
         sourceLanguage: this.sourceLanguage,
         targetLanguage: this.targetLanguage,
-        context: '' // Could be enhanced to pass subtitle context
-      });
+        context: '', // Could be enhanced to pass subtitle context
+      })
     } else {
       // Fallback to console log if popup is not available
-      console.log(`[DualSubtitleManager] Translation for "${word}": ${translation}`);
+      console.log(`[DualSubtitleManager] Translation for "${word}": ${translation}`)
     }
   }
 
@@ -625,8 +658,8 @@ export class DualSubtitleManager {
   // ========================================
 
   private extractVideoId(url: string): string | null {
-    const match = url.match(/[?&]v=([^&]+)/);
-    return match ? match[1] : null;
+    const match = url.match(/[?&]v=([^&]+)/)
+    return match ? match[1] : null
   }
 
   // ========================================
@@ -634,55 +667,55 @@ export class DualSubtitleManager {
   // ========================================
 
   public isReady(): boolean {
-    return this.isInitialized && this.subtitleComponent?.isReady() === true;
+    return this.isInitialized && this.subtitleComponent?.isReady() === true
   }
 
   public updateConfig(newConfig: Partial<SubtitleManagerConfig>): void {
-    this.config = { ...this.config, ...newConfig };
-    
+    this.config = { ...this.config, ...newConfig }
+
     if (newConfig.autoTranslate !== undefined && this.subtitleComponent) {
       // Process visible cues if auto-translate was enabled
       if (newConfig.autoTranslate) {
-        this.processVisibleCues();
+        this.processVisibleCues()
       }
     }
   }
 
   public getConfig(): SubtitleManagerConfig {
-    return { ...this.config };
+    return { ...this.config }
   }
 
   public setLanguages(sourceLanguage: string, targetLanguage: string): void {
-    this.sourceLanguage = sourceLanguage;
-    this.targetLanguage = targetLanguage;
-    
+    this.sourceLanguage = sourceLanguage
+    this.targetLanguage = targetLanguage
+
     // Update WordLookupPopup with new language settings
     if (this.wordLookupPopup) {
-      this.wordLookupPopup.setDefaultLanguages(sourceLanguage, targetLanguage);
+      this.wordLookupPopup.setDefaultLanguages(sourceLanguage, targetLanguage)
     }
-    
+
     // Clear caches and queues since language changed
-    this.clearTranslationQueue();
+    this.clearTranslationQueue()
   }
 
   public getSubtitleComponent(): DualSubtitleComponent | null {
-    return this.subtitleComponent;
+    return this.subtitleComponent
   }
 
   public addVocabularyCallback(callback: VocabularyCallback): void {
-    this.vocabularyCallbacks.add(callback);
+    this.vocabularyCallbacks.add(callback)
   }
 
   public removeVocabularyCallback(callback: VocabularyCallback): void {
-    this.vocabularyCallbacks.delete(callback);
+    this.vocabularyCallbacks.delete(callback)
   }
 
   public addTranslationCallback(callback: TranslationCallback): void {
-    this.translationCallbacks.add(callback);
+    this.translationCallbacks.add(callback)
   }
 
   public removeTranslationCallback(callback: TranslationCallback): void {
-    this.translationCallbacks.delete(callback);
+    this.translationCallbacks.delete(callback)
   }
 
   public async forceTranslateCue(cueId: string, text: string): Promise<void> {
@@ -690,17 +723,17 @@ export class DualSubtitleManager {
       text,
       sourceLanguage: this.sourceLanguage,
       targetLanguage: this.targetLanguage,
-      priority: 'high'
-    };
+      priority: 'high',
+    }
 
-    await this.executeTranslation(cueId, request);
+    await this.executeTranslation(cueId, request)
   }
 
   public highlightVocabularyWords(words: string[]): void {
-    if (!this.subtitleComponent) return;
+    if (!this.subtitleComponent) return
 
-    words.forEach(word => {
-      this.subtitleComponent!.highlightWord(word, true);
-    });
+    words.forEach((word) => {
+      this.subtitleComponent!.highlightWord(word, true)
+    })
   }
-} 
+}

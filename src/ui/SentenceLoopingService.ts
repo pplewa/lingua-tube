@@ -4,60 +4,69 @@
  * integrating with subtitle timing data and enhanced playback controls.
  */
 
-import { PlayerInteractionService, SubtitleSyncEvent, ActiveSubtitleCue } from '../youtube/PlayerInteractionService';
-import { StorageService } from '../storage';
-import { UserSettings } from '../storage/types';
-import { SubtitleSegment } from '../subtitles/types';
+import {
+  PlayerInteractionService,
+  SubtitleSyncEvent,
+  ActiveSubtitleCue,
+} from '../youtube/PlayerInteractionService'
+import { StorageService } from '../storage'
+import { UserSettings } from '../storage/types'
+import { SubtitleSegment } from '../subtitles/types'
 
 // ========================================
 // Types and Interfaces
 // ========================================
 
 export interface SentenceLoopConfig {
-  readonly enabled: boolean;
-  readonly autoLoop: boolean;
-  readonly loopCount: number; // 0 = infinite
-  readonly pauseBetweenLoops: number; // milliseconds
-  readonly showVisualIndicator: boolean;
-  readonly highlightCurrentSentence: boolean;
-  readonly seekBackOffset: number; // seconds to seek back before sentence start
-  readonly seekForwardOffset: number; // seconds to seek forward after sentence end
-  readonly minLoopDuration: number; // minimum loop duration in seconds
-  readonly maxLoopDuration: number; // maximum loop duration in seconds
-  readonly fadeInDuration: number; // fade in duration after seek
-  readonly fadeOutDuration: number; // fade out duration before seek
+  readonly enabled: boolean
+  readonly autoLoop: boolean
+  readonly loopCount: number // 0 = infinite
+  readonly pauseBetweenLoops: number // milliseconds
+  readonly showVisualIndicator: boolean
+  readonly highlightCurrentSentence: boolean
+  readonly seekBackOffset: number // seconds to seek back before sentence start
+  readonly seekForwardOffset: number // seconds to seek forward after sentence end
+  readonly minLoopDuration: number // minimum loop duration in seconds
+  readonly maxLoopDuration: number // maximum loop duration in seconds
+  readonly fadeInDuration: number // fade in duration after seek
+  readonly fadeOutDuration: number // fade out duration before seek
 }
 
 export interface SentenceLoop {
-  readonly id: string;
-  readonly startTime: number;
-  readonly endTime: number;
-  readonly text: string;
-  readonly subtitleId?: string;
-  readonly isActive: boolean;
-  readonly currentIteration: number;
-  readonly maxIterations: number;
-  readonly createdAt: number;
-  readonly lastActivated: number;
+  readonly id: string
+  readonly startTime: number
+  readonly endTime: number
+  readonly text: string
+  readonly subtitleId?: string
+  readonly isActive: boolean
+  readonly currentIteration: number
+  readonly maxIterations: number
+  readonly createdAt: number
+  readonly lastActivated: number
 }
 
 export interface SentenceSelection {
-  readonly startIndex: number;
-  readonly endIndex: number;
-  readonly segments: SubtitleSegment[];
-  readonly combinedText: string;
-  readonly totalDuration: number;
+  readonly startIndex: number
+  readonly endIndex: number
+  readonly segments: SubtitleSegment[]
+  readonly combinedText: string
+  readonly totalDuration: number
 }
 
 export interface LoopEvent {
-  readonly type: 'loop_created' | 'loop_started' | 'loop_iteration' | 'loop_completed' | 'loop_cancelled';
-  readonly loop: SentenceLoop;
-  readonly timestamp: number;
-  readonly iteration?: number;
-  readonly totalIterations?: number;
+  readonly type:
+    | 'loop_created'
+    | 'loop_started'
+    | 'loop_iteration'
+    | 'loop_completed'
+    | 'loop_cancelled'
+  readonly loop: SentenceLoop
+  readonly timestamp: number
+  readonly iteration?: number
+  readonly totalIterations?: number
 }
 
-export type LoopEventCallback = (event: LoopEvent) => void;
+export type LoopEventCallback = (event: LoopEvent) => void
 
 // ========================================
 // Constants and Configuration
@@ -75,105 +84,118 @@ const DEFAULT_CONFIG: SentenceLoopConfig = {
   minLoopDuration: 1.0,
   maxLoopDuration: 30.0,
   fadeInDuration: 0.2,
-  fadeOutDuration: 0.1
-};
+  fadeOutDuration: 0.1,
+}
 
 // ========================================
 // Sentence Detection Utilities
 // ========================================
 
 class SentenceDetector {
-  private static readonly SENTENCE_ENDINGS = /[.!?]+\s*$/;
-  private static readonly SENTENCE_STARTERS = /^[A-Z]/;
-  private static readonly PAUSE_INDICATORS = /[,;:]\s*$/;
-  
+  private static readonly SENTENCE_ENDINGS = /[.!?]+\s*$/
+  private static readonly SENTENCE_STARTERS = /^[A-Z]/
+  private static readonly PAUSE_INDICATORS = /[,;:]\s*$/
+
   /**
    * Detect sentence boundaries in subtitle segments
    */
   static detectSentences(segments: SubtitleSegment[]): SentenceSelection[] {
-    const sentences: SentenceSelection[] = [];
-    let currentSentence: SubtitleSegment[] = [];
-    let startIndex = 0;
-    
+    const sentences: SentenceSelection[] = []
+    let currentSentence: SubtitleSegment[] = []
+    let startIndex = 0
+
     for (let i = 0; i < segments.length; i++) {
-      const segment = segments[i];
-      currentSentence.push(segment);
-      
+      const segment = segments[i]
+      currentSentence.push(segment)
+
       // Check if this segment ends a sentence
       if (this.isSegmentSentenceEnd(segment, segments[i + 1])) {
-        sentences.push(this.createSentenceSelection(startIndex, i, currentSentence));
-        currentSentence = [];
-        startIndex = i + 1;
+        sentences.push(this.createSentenceSelection(startIndex, i, currentSentence))
+        currentSentence = []
+        startIndex = i + 1
       }
     }
-    
+
     // Handle remaining segments
     if (currentSentence.length > 0) {
-      sentences.push(this.createSentenceSelection(startIndex, segments.length - 1, currentSentence));
+      sentences.push(this.createSentenceSelection(startIndex, segments.length - 1, currentSentence))
     }
-    
-    return sentences;
+
+    return sentences
   }
-  
+
   private static isSegmentSentenceEnd(current: SubtitleSegment, next?: SubtitleSegment): boolean {
-    const text = current.text.trim();
-    
+    const text = current.text.trim()
+
     // Check for sentence ending punctuation
     if (this.SENTENCE_ENDINGS.test(text)) {
-      return true;
+      return true
     }
-    
+
     // Check for significant pause (gap between segments)
     if (next) {
-      const gap = next.startTime - current.endTime;
-      if (gap > 1.0) { // 1 second gap suggests sentence boundary
-        return true;
+      const gap = next.startTime - current.endTime
+      if (gap > 1.0) {
+        // 1 second gap suggests sentence boundary
+        return true
       }
     }
-    
+
     // Check for capitalization change
     if (next && this.SENTENCE_STARTERS.test(next.text.trim())) {
-      return true;
+      return true
     }
-    
-    return false;
+
+    return false
   }
-  
+
   private static createSentenceSelection(
     startIndex: number,
     endIndex: number,
-    segments: SubtitleSegment[]
+    segments: SubtitleSegment[],
   ): SentenceSelection {
-    const combinedText = segments.map(s => s.text).join(' ').trim();
-    const totalDuration = segments[segments.length - 1].endTime - segments[0].startTime;
-    
+    const combinedText = segments
+      .map((s) => s.text)
+      .join(' ')
+      .trim()
+    const totalDuration = segments[segments.length - 1].endTime - segments[0].startTime
+
     return {
       startIndex,
       endIndex,
       segments: [...segments],
       combinedText,
-      totalDuration
-    };
+      totalDuration,
+    }
   }
-  
+
   /**
    * Find sentence containing a specific time
    */
-  static findSentenceAtTime(sentences: SentenceSelection[], time: number): SentenceSelection | null {
-    return sentences.find(sentence => {
-      const startTime = sentence.segments[0].startTime;
-      const endTime = sentence.segments[sentence.segments.length - 1].endTime;
-      return time >= startTime && time <= endTime;
-    }) || null;
+  static findSentenceAtTime(
+    sentences: SentenceSelection[],
+    time: number,
+  ): SentenceSelection | null {
+    return (
+      sentences.find((sentence) => {
+        const startTime = sentence.segments[0].startTime
+        const endTime = sentence.segments[sentence.segments.length - 1].endTime
+        return time >= startTime && time <= endTime
+      }) || null
+    )
   }
-  
+
   /**
    * Find sentence containing a specific subtitle segment
    */
-  static findSentenceBySegment(sentences: SentenceSelection[], segmentId: string): SentenceSelection | null {
-    return sentences.find(sentence => 
-      sentence.segments.some(segment => segment.id === segmentId)
-    ) || null;
+  static findSentenceBySegment(
+    sentences: SentenceSelection[],
+    segmentId: string,
+  ): SentenceSelection | null {
+    return (
+      sentences.find((sentence) => sentence.segments.some((segment) => segment.id === segmentId)) ||
+      null
+    )
   }
 }
 
@@ -182,39 +204,39 @@ class SentenceDetector {
 // ========================================
 
 export class SentenceLoopingService {
-  private playerService: PlayerInteractionService;
-  private storageService: StorageService;
-  
-  private config: SentenceLoopConfig = { ...DEFAULT_CONFIG };
-  private currentLoop: SentenceLoop | null = null;
-  private availableSentences: SentenceSelection[] = [];
-  private subtitleSegments: SubtitleSegment[] = [];
-  
-  private loopMonitorInterval: number | null = null;
-  private pauseTimeout: number | null = null;
-  private fadeTimeout: number | null = null;
-  
-  private eventListeners: Set<LoopEventCallback> = new Set();
-  private subtitleSyncHandler: (event: SubtitleSyncEvent) => void;
-  
-  private isInitialized: boolean = false;
-  private isLooping: boolean = false;
-  private originalVolume: number = 1.0;
+  private playerService: PlayerInteractionService
+  private storageService: StorageService
+
+  private config: SentenceLoopConfig = { ...DEFAULT_CONFIG }
+  private currentLoop: SentenceLoop | null = null
+  private availableSentences: SentenceSelection[] = []
+  private subtitleSegments: SubtitleSegment[] = []
+
+  private loopMonitorInterval: number | null = null
+  private pauseTimeout: number | null = null
+  private fadeTimeout: number | null = null
+
+  private eventListeners: Set<LoopEventCallback> = new Set()
+  private subtitleSyncHandler: (event: SubtitleSyncEvent) => void
+
+  private isInitialized: boolean = false
+  private isLooping: boolean = false
+  private originalVolume: number = 1.0
 
   constructor(
     playerService: PlayerInteractionService,
     storageService: StorageService,
-    initialConfig?: Partial<SentenceLoopConfig>
+    initialConfig?: Partial<SentenceLoopConfig>,
   ) {
-    this.playerService = playerService;
-    this.storageService = storageService;
-    
+    this.playerService = playerService
+    this.storageService = storageService
+
     if (initialConfig) {
-      this.config = { ...this.config, ...initialConfig };
+      this.config = { ...this.config, ...initialConfig }
     }
-    
-    this.subtitleSyncHandler = this.handleSubtitleSync.bind(this);
-    this.loadConfigFromStorage();
+
+    this.subtitleSyncHandler = this.handleSubtitleSync.bind(this)
+    this.loadConfigFromStorage()
   }
 
   // ========================================
@@ -224,46 +246,44 @@ export class SentenceLoopingService {
   public async initialize(): Promise<boolean> {
     try {
       if (this.isInitialized) {
-        console.warn('[SentenceLoopingService] Already initialized');
-        return true;
+        console.warn('[SentenceLoopingService] Already initialized')
+        return true
       }
 
       // Set up subtitle sync listener
-      this.playerService.addSubtitleSyncListener(this.subtitleSyncHandler);
-      
-      // Load initial subtitle data
-      await this.refreshSubtitleData();
-      
-      this.isInitialized = true;
-      console.log('[SentenceLoopingService] Initialized successfully');
-      return true;
+      this.playerService.addSubtitleSyncListener(this.subtitleSyncHandler)
 
+      // Load initial subtitle data
+      await this.refreshSubtitleData()
+
+      this.isInitialized = true
+      console.log('[SentenceLoopingService] Initialized successfully')
+      return true
     } catch (error) {
-      console.error('[SentenceLoopingService] Initialization failed:', error);
-      return false;
+      console.error('[SentenceLoopingService] Initialization failed:', error)
+      return false
     }
   }
 
   public destroy(): void {
     try {
       // Stop any active loops
-      this.stopCurrentLoop();
-      
-      // Remove event listeners
-      this.playerService.removeSubtitleSyncListener(this.subtitleSyncHandler);
-      
-      // Clear intervals and timeouts
-      this.clearLoopMonitoring();
-      this.clearTimeouts();
-      
-      // Clear listeners
-      this.eventListeners.clear();
-      
-      this.isInitialized = false;
-      console.log('[SentenceLoopingService] Destroyed successfully');
+      this.stopCurrentLoop()
 
+      // Remove event listeners
+      this.playerService.removeSubtitleSyncListener(this.subtitleSyncHandler)
+
+      // Clear intervals and timeouts
+      this.clearLoopMonitoring()
+      this.clearTimeouts()
+
+      // Clear listeners
+      this.eventListeners.clear()
+
+      this.isInitialized = false
+      console.log('[SentenceLoopingService] Destroyed successfully')
     } catch (error) {
-      console.error('[SentenceLoopingService] Destroy failed:', error);
+      console.error('[SentenceLoopingService] Destroy failed:', error)
     }
   }
 
@@ -273,12 +293,12 @@ export class SentenceLoopingService {
 
   private async loadConfigFromStorage(): Promise<void> {
     try {
-      const result = await this.storageService.getSettings();
+      const result = await this.storageService.getSettings()
       if (result.success && result.data) {
-        this.updateConfigFromSettings(result.data);
+        this.updateConfigFromSettings(result.data)
       }
     } catch (error) {
-      console.warn('[SentenceLoopingService] Failed to load config from storage:', error);
+      console.warn('[SentenceLoopingService] Failed to load config from storage:', error)
     }
   }
 
@@ -290,16 +310,16 @@ export class SentenceLoopingService {
       autoLoop: settings.playback.enableAutoReplay,
       pauseBetweenLoops: 500, // Could be added to settings
       showVisualIndicator: settings.ui.animationsEnabled,
-      highlightCurrentSentence: true // Could be added to settings
-    };
+      highlightCurrentSentence: true, // Could be added to settings
+    }
   }
 
   public updateConfig(newConfig: Partial<SentenceLoopConfig>): void {
-    this.config = { ...this.config, ...newConfig };
-    
+    this.config = { ...this.config, ...newConfig }
+
     // Apply immediate changes if needed
     if (!newConfig.enabled && this.isLooping) {
-      this.stopCurrentLoop();
+      this.stopCurrentLoop()
     }
   }
 
@@ -310,59 +330,64 @@ export class SentenceLoopingService {
   private handleSubtitleSync(event: SubtitleSyncEvent): void {
     switch (event.type) {
       case 'track_change':
-        this.refreshSubtitleData();
-        break;
+        this.refreshSubtitleData()
+        break
       case 'cue_start':
         if (this.config.autoLoop && !this.isLooping) {
-          this.handleAutomaticLooping(event.cue);
+          this.handleAutomaticLooping(event.cue)
         }
-        break;
+        break
     }
   }
 
   private async refreshSubtitleData(): Promise<void> {
     try {
       // Get current subtitle segments from player service
-      const currentTrack = this.playerService.getCurrentSubtitleTrack();
+      const currentTrack = this.playerService.getCurrentSubtitleTrack()
       if (!currentTrack || !currentTrack.cues) {
-        this.subtitleSegments = [];
-        this.availableSentences = [];
-        return;
+        this.subtitleSegments = []
+        this.availableSentences = []
+        return
       }
 
       // Convert SubtitleCue to SubtitleSegment format
-      this.subtitleSegments = currentTrack.cues.map(cue => ({
+      this.subtitleSegments = currentTrack.cues.map((cue) => ({
         id: cue.id,
         startTime: cue.startTime,
         endTime: cue.endTime,
         text: cue.text,
-        styling: cue.styling ? {
-          color: cue.styling.color,
-          backgroundColor: cue.styling.backgroundColor,
-          fontSize: cue.styling.fontSize,
-          fontFamily: cue.styling.fontFamily,
-          fontWeight: cue.styling.fontWeight,
-          textDecoration: cue.styling.textDecoration
-        } : undefined,
-        position: cue.position ? {
-          line: cue.position.line,
-          position: cue.position.position,
-          align: cue.position.align === 'center' ? 'middle' : cue.position.align,
-          vertical: cue.position.vertical
-        } : undefined,
+        styling: cue.styling
+          ? {
+              color: cue.styling.color,
+              backgroundColor: cue.styling.backgroundColor,
+              fontSize: cue.styling.fontSize,
+              fontFamily: cue.styling.fontFamily,
+              fontWeight: cue.styling.fontWeight,
+              textDecoration: cue.styling.textDecoration,
+            }
+          : undefined,
+        position: cue.position
+          ? {
+              line: cue.position.line,
+              position: cue.position.position,
+              align: cue.position.align === 'center' ? 'middle' : cue.position.align,
+              vertical: cue.position.vertical,
+            }
+          : undefined,
         metadata: {
           language: cue.language,
-          confidence: cue.confidence
-        }
-      }));
-      this.availableSentences = SentenceDetector.detectSentences(this.subtitleSegments);
-      
-      console.log(`[SentenceLoopingService] Detected ${this.availableSentences.length} sentences from ${this.subtitleSegments.length} segments`);
+          confidence: cue.confidence,
+        },
+      }))
+      this.availableSentences = SentenceDetector.detectSentences(this.subtitleSegments)
 
+      console.log(
+        `[SentenceLoopingService] Detected ${this.availableSentences.length} sentences from ${this.subtitleSegments.length} segments`,
+      )
     } catch (error) {
-      console.error('[SentenceLoopingService] Failed to refresh subtitle data:', error);
-      this.subtitleSegments = [];
-      this.availableSentences = [];
+      console.error('[SentenceLoopingService] Failed to refresh subtitle data:', error)
+      this.subtitleSegments = []
+      this.availableSentences = []
     }
   }
 
@@ -372,48 +397,49 @@ export class SentenceLoopingService {
 
   public createLoopFromCurrentTime(): SentenceLoop | null {
     if (!this.config.enabled) {
-      console.warn('[SentenceLoopingService] Service is disabled');
-      return null;
+      console.warn('[SentenceLoopingService] Service is disabled')
+      return null
     }
 
-    const currentTime = this.playerService.getCurrentTime();
-    return this.createLoopAtTime(currentTime);
+    const currentTime = this.playerService.getCurrentTime()
+    return this.createLoopAtTime(currentTime)
   }
 
   public createLoopAtTime(time: number): SentenceLoop | null {
-    const sentence = SentenceDetector.findSentenceAtTime(this.availableSentences, time);
+    const sentence = SentenceDetector.findSentenceAtTime(this.availableSentences, time)
     if (!sentence) {
-      console.warn('[SentenceLoopingService] No sentence found at time:', time);
-      return null;
+      console.warn('[SentenceLoopingService] No sentence found at time:', time)
+      return null
     }
 
-    return this.createLoopFromSentence(sentence);
+    return this.createLoopFromSentence(sentence)
   }
 
   public createLoopFromSubtitleId(subtitleId: string): SentenceLoop | null {
-    const sentence = SentenceDetector.findSentenceBySegment(this.availableSentences, subtitleId);
+    const sentence = SentenceDetector.findSentenceBySegment(this.availableSentences, subtitleId)
     if (!sentence) {
-      console.warn('[SentenceLoopingService] No sentence found for subtitle ID:', subtitleId);
-      return null;
+      console.warn('[SentenceLoopingService] No sentence found for subtitle ID:', subtitleId)
+      return null
     }
 
-    return this.createLoopFromSentence(sentence);
+    return this.createLoopFromSentence(sentence)
   }
 
   private createLoopFromSentence(sentence: SentenceSelection): SentenceLoop | null {
-    const startTime = sentence.segments[0].startTime - this.config.seekBackOffset;
-    const endTime = sentence.segments[sentence.segments.length - 1].endTime + this.config.seekForwardOffset;
-    const duration = endTime - startTime;
+    const startTime = sentence.segments[0].startTime - this.config.seekBackOffset
+    const endTime =
+      sentence.segments[sentence.segments.length - 1].endTime + this.config.seekForwardOffset
+    const duration = endTime - startTime
 
     // Validate loop duration
     if (duration < this.config.minLoopDuration) {
-      console.warn('[SentenceLoopingService] Loop duration too short:', duration);
-      return null;
+      console.warn('[SentenceLoopingService] Loop duration too short:', duration)
+      return null
     }
 
     if (duration > this.config.maxLoopDuration) {
-      console.warn('[SentenceLoopingService] Loop duration too long:', duration);
-      return null;
+      console.warn('[SentenceLoopingService] Loop duration too long:', duration)
+      return null
     }
 
     const loop: SentenceLoop = {
@@ -426,36 +452,36 @@ export class SentenceLoopingService {
       currentIteration: 0,
       maxIterations: this.config.loopCount,
       createdAt: Date.now(),
-      lastActivated: 0
-    };
+      lastActivated: 0,
+    }
 
-    console.log('[SentenceLoopingService] Created loop:', loop);
-    this.emitEvent({ type: 'loop_created', loop, timestamp: Date.now() });
-    
-    return loop;
+    console.log('[SentenceLoopingService] Created loop:', loop)
+    this.emitEvent({ type: 'loop_created', loop, timestamp: Date.now() })
+
+    return loop
   }
 
   public activateLoop(loop: SentenceLoop): boolean {
     if (!this.config.enabled) {
-      console.warn('[SentenceLoopingService] Service is disabled');
-      return false;
+      console.warn('[SentenceLoopingService] Service is disabled')
+      return false
     }
 
     // Stop any existing loop
-    this.stopCurrentLoop();
+    this.stopCurrentLoop()
 
     // Set new current loop
     this.currentLoop = {
       ...loop,
       isActive: true,
       currentIteration: 0,
-      lastActivated: Date.now()
-    };
+      lastActivated: Date.now(),
+    }
 
     // Start looping
-    this.startLooping();
-    
-    return true;
+    this.startLooping()
+
+    return true
   }
 
   // ========================================
@@ -463,161 +489,165 @@ export class SentenceLoopingService {
   // ========================================
 
   private startLooping(): void {
-    if (!this.currentLoop) return;
+    if (!this.currentLoop) return
 
-    this.isLooping = true;
-    this.originalVolume = this.playerService.getVolume();
-    
+    this.isLooping = true
+    this.originalVolume = this.playerService.getVolume()
+
     // Seek to loop start
-    this.seekToLoopStart();
-    
+    this.seekToLoopStart()
+
     // Start monitoring
-    this.setupLoopMonitoring();
-    
+    this.setupLoopMonitoring()
+
     this.emitEvent({
       type: 'loop_started',
       loop: this.currentLoop,
-      timestamp: Date.now()
-    });
+      timestamp: Date.now(),
+    })
 
-    console.log('[SentenceLoopingService] Started looping:', this.currentLoop);
+    console.log('[SentenceLoopingService] Started looping:', this.currentLoop)
   }
 
   private seekToLoopStart(): void {
-    if (!this.currentLoop) return;
+    if (!this.currentLoop) return
 
     try {
-      this.playerService.seek(this.currentLoop.startTime);
-      
+      this.playerService.seek(this.currentLoop.startTime)
+
       // Apply fade in if configured
       if (this.config.fadeInDuration > 0) {
-        this.applyFadeIn();
+        this.applyFadeIn()
       }
     } catch (error) {
-      console.error('[SentenceLoopingService] Failed to seek to loop start:', error);
+      console.error('[SentenceLoopingService] Failed to seek to loop start:', error)
     }
   }
 
   private setupLoopMonitoring(): void {
-    this.clearLoopMonitoring();
-    
+    this.clearLoopMonitoring()
+
     this.loopMonitorInterval = window.setInterval(() => {
-      this.checkLoopProgress();
-    }, 100); // Check every 100ms
+      this.checkLoopProgress()
+    }, 100) // Check every 100ms
   }
 
   private checkLoopProgress(): void {
     if (!this.currentLoop || !this.isLooping) {
-      this.clearLoopMonitoring();
-      return;
+      this.clearLoopMonitoring()
+      return
     }
 
-    const currentTime = this.playerService.getCurrentTime();
-    
+    const currentTime = this.playerService.getCurrentTime()
+
     // Check if we've reached the end of the loop
     if (currentTime >= this.currentLoop.endTime) {
-      this.handleLoopIteration();
+      this.handleLoopIteration()
     }
-    
+
     // Check if user has seeked outside the loop
-    if (currentTime < this.currentLoop.startTime - 1.0 || 
-        currentTime > this.currentLoop.endTime + 1.0) {
-      console.log('[SentenceLoopingService] User seeked outside loop, stopping');
-      this.stopCurrentLoop();
+    if (
+      currentTime < this.currentLoop.startTime - 1.0 ||
+      currentTime > this.currentLoop.endTime + 1.0
+    ) {
+      console.log('[SentenceLoopingService] User seeked outside loop, stopping')
+      this.stopCurrentLoop()
     }
   }
 
   private handleLoopIteration(): void {
-    if (!this.currentLoop) return;
+    if (!this.currentLoop) return
 
     this.currentLoop = {
       ...this.currentLoop,
-      currentIteration: this.currentLoop.currentIteration + 1
-    };
+      currentIteration: this.currentLoop.currentIteration + 1,
+    }
 
     this.emitEvent({
       type: 'loop_iteration',
       loop: this.currentLoop,
       timestamp: Date.now(),
       iteration: this.currentLoop.currentIteration,
-      totalIterations: this.currentLoop.maxIterations
-    });
+      totalIterations: this.currentLoop.maxIterations,
+    })
 
     // Check if we've completed all iterations
-    if (this.currentLoop.maxIterations > 0 && 
-        this.currentLoop.currentIteration >= this.currentLoop.maxIterations) {
-      this.completeLoop();
-      return;
+    if (
+      this.currentLoop.maxIterations > 0 &&
+      this.currentLoop.currentIteration >= this.currentLoop.maxIterations
+    ) {
+      this.completeLoop()
+      return
     }
 
     // Continue looping
     if (this.config.pauseBetweenLoops > 0) {
-      this.pauseBeforeNextIteration();
+      this.pauseBeforeNextIteration()
     } else {
-      this.seekToLoopStart();
+      this.seekToLoopStart()
     }
   }
 
   private pauseBeforeNextIteration(): void {
-    if (!this.currentLoop) return;
+    if (!this.currentLoop) return
 
     // Pause playback
-    this.playerService.pause();
-    
+    this.playerService.pause()
+
     // Apply fade out if configured
     if (this.config.fadeOutDuration > 0) {
-      this.applyFadeOut();
+      this.applyFadeOut()
     }
 
     // Resume after pause duration
     this.pauseTimeout = window.setTimeout(() => {
       if (this.isLooping && this.currentLoop) {
-        this.playerService.play();
-        this.seekToLoopStart();
+        this.playerService.play()
+        this.seekToLoopStart()
       }
-    }, this.config.pauseBetweenLoops);
+    }, this.config.pauseBetweenLoops)
   }
 
   private completeLoop(): void {
-    if (!this.currentLoop) return;
+    if (!this.currentLoop) return
 
-    const completedLoop = this.currentLoop;
-    
+    const completedLoop = this.currentLoop
+
     this.emitEvent({
       type: 'loop_completed',
       loop: completedLoop,
       timestamp: Date.now(),
       iteration: completedLoop.currentIteration,
-      totalIterations: completedLoop.maxIterations
-    });
+      totalIterations: completedLoop.maxIterations,
+    })
 
-    this.stopCurrentLoop();
-    console.log('[SentenceLoopingService] Loop completed:', completedLoop);
+    this.stopCurrentLoop()
+    console.log('[SentenceLoopingService] Loop completed:', completedLoop)
   }
 
   public stopCurrentLoop(): void {
-    if (!this.isLooping || !this.currentLoop) return;
+    if (!this.isLooping || !this.currentLoop) return
 
-    const stoppedLoop = this.currentLoop;
-    
+    const stoppedLoop = this.currentLoop
+
     // Clear monitoring and timeouts
-    this.clearLoopMonitoring();
-    this.clearTimeouts();
-    
+    this.clearLoopMonitoring()
+    this.clearTimeouts()
+
     // Reset state
-    this.isLooping = false;
-    this.currentLoop = null;
-    
+    this.isLooping = false
+    this.currentLoop = null
+
     // Restore original volume
-    this.playerService.setVolume(this.originalVolume);
-    
+    this.playerService.setVolume(this.originalVolume)
+
     this.emitEvent({
       type: 'loop_cancelled',
       loop: stoppedLoop,
-      timestamp: Date.now()
-    });
+      timestamp: Date.now(),
+    })
 
-    console.log('[SentenceLoopingService] Stopped loop:', stoppedLoop);
+    console.log('[SentenceLoopingService] Stopped loop:', stoppedLoop)
   }
 
   // ========================================
@@ -625,44 +655,44 @@ export class SentenceLoopingService {
   // ========================================
 
   private applyFadeIn(): void {
-    if (!this.config.fadeInDuration) return;
+    if (!this.config.fadeInDuration) return
 
-    const steps = 10;
-    const stepDuration = (this.config.fadeInDuration * 1000) / steps;
-    const volumeStep = this.originalVolume / steps;
-    
-    let currentStep = 0;
-    this.playerService.setVolume(0);
-    
+    const steps = 10
+    const stepDuration = (this.config.fadeInDuration * 1000) / steps
+    const volumeStep = this.originalVolume / steps
+
+    let currentStep = 0
+    this.playerService.setVolume(0)
+
     const fadeInterval = setInterval(() => {
-      currentStep++;
-      const newVolume = Math.min(this.originalVolume, currentStep * volumeStep);
-      this.playerService.setVolume(newVolume);
-      
+      currentStep++
+      const newVolume = Math.min(this.originalVolume, currentStep * volumeStep)
+      this.playerService.setVolume(newVolume)
+
       if (currentStep >= steps) {
-        clearInterval(fadeInterval);
+        clearInterval(fadeInterval)
       }
-    }, stepDuration);
+    }, stepDuration)
   }
 
   private applyFadeOut(): void {
-    if (!this.config.fadeOutDuration) return;
+    if (!this.config.fadeOutDuration) return
 
-    const steps = 5;
-    const stepDuration = (this.config.fadeOutDuration * 1000) / steps;
-    const volumeStep = this.originalVolume / steps;
-    
-    let currentStep = 0;
-    
+    const steps = 5
+    const stepDuration = (this.config.fadeOutDuration * 1000) / steps
+    const volumeStep = this.originalVolume / steps
+
+    let currentStep = 0
+
     const fadeInterval = setInterval(() => {
-      currentStep++;
-      const newVolume = Math.max(0, this.originalVolume - (currentStep * volumeStep));
-      this.playerService.setVolume(newVolume);
-      
+      currentStep++
+      const newVolume = Math.max(0, this.originalVolume - currentStep * volumeStep)
+      this.playerService.setVolume(newVolume)
+
       if (currentStep >= steps) {
-        clearInterval(fadeInterval);
+        clearInterval(fadeInterval)
       }
-    }, stepDuration);
+    }, stepDuration)
   }
 
   // ========================================
@@ -670,12 +700,12 @@ export class SentenceLoopingService {
   // ========================================
 
   private handleAutomaticLooping(cue?: ActiveSubtitleCue): void {
-    if (!this.config.autoLoop || !cue) return;
+    if (!this.config.autoLoop || !cue) return
 
     // Create loop from current subtitle cue
-    const loop = this.createLoopFromSubtitleId(cue.id);
+    const loop = this.createLoopFromSubtitleId(cue.id)
     if (loop) {
-      this.activateLoop(loop);
+      this.activateLoop(loop)
     }
   }
 
@@ -684,27 +714,27 @@ export class SentenceLoopingService {
   // ========================================
 
   public getCurrentLoop(): SentenceLoop | null {
-    return this.currentLoop;
+    return this.currentLoop
   }
 
   public isCurrentlyLooping(): boolean {
-    return this.isLooping;
+    return this.isLooping
   }
 
   public getAvailableSentences(): SentenceSelection[] {
-    return [...this.availableSentences];
+    return [...this.availableSentences]
   }
 
   public getSentenceAtTime(time: number): SentenceSelection | null {
-    return SentenceDetector.findSentenceAtTime(this.availableSentences, time);
+    return SentenceDetector.findSentenceAtTime(this.availableSentences, time)
   }
 
   public addEventListener(callback: LoopEventCallback): void {
-    this.eventListeners.add(callback);
+    this.eventListeners.add(callback)
   }
 
   public removeEventListener(callback: LoopEventCallback): void {
-    this.eventListeners.delete(callback);
+    this.eventListeners.delete(callback)
   }
 
   // ========================================
@@ -713,34 +743,34 @@ export class SentenceLoopingService {
 
   private clearLoopMonitoring(): void {
     if (this.loopMonitorInterval) {
-      clearInterval(this.loopMonitorInterval);
-      this.loopMonitorInterval = null;
+      clearInterval(this.loopMonitorInterval)
+      this.loopMonitorInterval = null
     }
   }
 
   private clearTimeouts(): void {
     if (this.pauseTimeout) {
-      clearTimeout(this.pauseTimeout);
-      this.pauseTimeout = null;
+      clearTimeout(this.pauseTimeout)
+      this.pauseTimeout = null
     }
-    
+
     if (this.fadeTimeout) {
-      clearTimeout(this.fadeTimeout);
-      this.fadeTimeout = null;
+      clearTimeout(this.fadeTimeout)
+      this.fadeTimeout = null
     }
   }
 
   private generateLoopId(): string {
-    return `loop_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    return `loop_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
   }
 
   private emitEvent(event: LoopEvent): void {
-    this.eventListeners.forEach(listener => {
+    this.eventListeners.forEach((listener) => {
       try {
-        listener(event);
+        listener(event)
       } catch (error) {
-        console.error('[SentenceLoopingService] Event listener error:', error);
+        console.error('[SentenceLoopingService] Event listener error:', error)
       }
-    });
+    })
   }
-} 
+}

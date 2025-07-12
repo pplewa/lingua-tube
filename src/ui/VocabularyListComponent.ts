@@ -3,53 +3,53 @@
  * Provides a comprehensive UI for displaying, searching, and managing vocabulary words
  */
 
-import { VocabularyManager } from '../vocabulary/VocabularyManager';
-import { VocabularyObserver, VocabularyEventType } from '../vocabulary/VocabularyObserver';
-import { VocabularyItem } from '../storage/types';
+import { VocabularyManager } from '../vocabulary/VocabularyManager'
+import { VocabularyObserver, VocabularyEventType } from '../vocabulary/VocabularyObserver'
+import { VocabularyItem } from '../storage/types'
 
 // ========================================
 // Types and Interfaces
 // ========================================
 
 export interface VocabularyListConfig {
-  readonly maxHeight: number;
-  readonly itemHeight: number;
-  readonly bufferSize: number;
-  readonly searchDebounceMs: number;
-  readonly animationDuration: number;
-  readonly enableVirtualScrolling: boolean;
-  readonly enableSearch: boolean;
-  readonly enableFilters: boolean;
-  readonly enableSorting: boolean;
-  readonly enableBulkActions: boolean;
-  readonly enableImport: boolean;
-  readonly enableExport: boolean;
-  readonly showWordCount: boolean;
-  readonly showProgress: boolean;
-  readonly pageSize: number;
+  readonly maxHeight: number
+  readonly itemHeight: number
+  readonly bufferSize: number
+  readonly searchDebounceMs: number
+  readonly animationDuration: number
+  readonly enableVirtualScrolling: boolean
+  readonly enableSearch: boolean
+  readonly enableFilters: boolean
+  readonly enableSorting: boolean
+  readonly enableBulkActions: boolean
+  readonly enableImport: boolean
+  readonly enableExport: boolean
+  readonly showWordCount: boolean
+  readonly showProgress: boolean
+  readonly pageSize: number
 }
 
 export interface VocabularyListEvents {
-  onWordSelect: (word: VocabularyItem) => void;
-  onWordEdit: (word: VocabularyItem) => void;
-  onWordDelete: (word: VocabularyItem) => void;
-  onBulkAction: (action: string, words: VocabularyItem[]) => void;
-  onSearchChange: (query: string) => void;
-  onFilterChange: (filters: any) => void;
-  onImportRequest: (format: 'json' | 'csv' | 'anki') => void;
-  onExportRequest: (format: 'json' | 'csv' | 'anki') => void;
+  onWordSelect: (word: VocabularyItem) => void
+  onWordEdit: (word: VocabularyItem) => void
+  onWordDelete: (word: VocabularyItem) => void
+  onBulkAction: (action: string, words: VocabularyItem[]) => void
+  onSearchChange: (query: string) => void
+  onFilterChange: (filters: any) => void
+  onImportRequest: (format: 'json' | 'csv' | 'anki') => void
+  onExportRequest: (format: 'json' | 'csv' | 'anki') => void
 }
 
 export interface ListState {
-  readonly words: VocabularyItem[];
-  readonly filteredWords: VocabularyItem[];
-  readonly selectedWords: Set<string>;
-  readonly searchQuery: string;
-  readonly sortBy: string;
-  readonly sortOrder: 'asc' | 'desc';
-  readonly currentPage: number;
-  readonly isLoading: boolean;
-  readonly error: string | null;
+  readonly words: VocabularyItem[]
+  readonly filteredWords: VocabularyItem[]
+  readonly selectedWords: Set<string>
+  readonly searchQuery: string
+  readonly sortBy: string
+  readonly sortOrder: 'asc' | 'desc'
+  readonly currentPage: number
+  readonly isLoading: boolean
+  readonly error: string | null
 }
 
 // ========================================
@@ -72,7 +72,7 @@ export const DEFAULT_LIST_CONFIG: VocabularyListConfig = {
   showWordCount: true,
   showProgress: true,
   pageSize: 50,
-};
+}
 
 // ========================================
 // CSS Styles
@@ -404,22 +404,22 @@ const VOCABULARY_LIST_STYLES = `
       gap: 4px;
     }
   }
-`;
+`
 
 // ========================================
 // Vocabulary List Component
 // ========================================
 
 export class VocabularyListComponent {
-  private container: HTMLElement | null = null;
-  private shadowRoot: ShadowRoot | null = null;
-  
-  private vocabularyManager: VocabularyManager;
-  private vocabularyObserver: VocabularyObserver;
-  
-  private config: VocabularyListConfig;
-  private events: { [K in keyof VocabularyListEvents]?: VocabularyListEvents[K] } = {};
-  
+  private container: HTMLElement | null = null
+  private shadowRoot: ShadowRoot | null = null
+
+  private vocabularyManager: VocabularyManager
+  private vocabularyObserver: VocabularyObserver
+
+  private config: VocabularyListConfig
+  private events: { [K in keyof VocabularyListEvents]?: VocabularyListEvents[K] } = {}
+
   private state: ListState = {
     words: [],
     filteredWords: [],
@@ -430,18 +430,18 @@ export class VocabularyListComponent {
     currentPage: 0,
     isLoading: false,
     error: null,
-  };
+  }
 
-  private searchTimeout: ReturnType<typeof setTimeout> | null = null;
-  private virtualScrollOffset = 0;
-  private visibleRange = { start: 0, end: 0 };
+  private searchTimeout: ReturnType<typeof setTimeout> | null = null
+  private virtualScrollOffset = 0
+  private visibleRange = { start: 0, end: 0 }
 
   constructor(config: Partial<VocabularyListConfig> = {}) {
-    this.config = { ...DEFAULT_LIST_CONFIG, ...config };
-    this.vocabularyManager = VocabularyManager.getInstance();
-    this.vocabularyObserver = VocabularyObserver.getInstance();
-    
-    this.setupEventListeners();
+    this.config = { ...DEFAULT_LIST_CONFIG, ...config }
+    this.vocabularyManager = VocabularyManager.getInstance()
+    this.vocabularyObserver = VocabularyObserver.getInstance()
+
+    this.setupEventListeners()
   }
 
   // ========================================
@@ -449,71 +449,71 @@ export class VocabularyListComponent {
   // ========================================
 
   public async initialize(container: HTMLElement): Promise<void> {
-    this.container = container;
-    this.createShadowDOM();
-    this.render();
-    await this.loadVocabulary();
+    this.container = container
+    this.createShadowDOM()
+    this.render()
+    await this.loadVocabulary()
   }
 
   public async refresh(): Promise<void> {
-    await this.loadVocabulary();
+    await this.loadVocabulary()
   }
 
   public destroy(): void {
     if (this.searchTimeout) {
-      clearTimeout(this.searchTimeout);
+      clearTimeout(this.searchTimeout)
     }
-    
+
     // Remove event listeners
-    this.vocabularyObserver.off(VocabularyEventType.WORD_ADDED);
-    this.vocabularyObserver.off(VocabularyEventType.WORD_REMOVED);
-    this.vocabularyObserver.off(VocabularyEventType.WORD_UPDATED);
-    this.vocabularyObserver.off(VocabularyEventType.VOCABULARY_CLEARED);
-    
+    this.vocabularyObserver.off(VocabularyEventType.WORD_ADDED)
+    this.vocabularyObserver.off(VocabularyEventType.WORD_REMOVED)
+    this.vocabularyObserver.off(VocabularyEventType.WORD_UPDATED)
+    this.vocabularyObserver.off(VocabularyEventType.VOCABULARY_CLEARED)
+
     if (this.container && this.shadowRoot) {
-      this.container.removeChild(this.shadowRoot.host);
+      this.container.removeChild(this.shadowRoot.host)
     }
   }
 
   public on<K extends keyof VocabularyListEvents>(
     event: K,
-    callback: VocabularyListEvents[K]
+    callback: VocabularyListEvents[K],
   ): void {
-    this.events[event] = callback;
+    this.events[event] = callback
   }
 
   public off<K extends keyof VocabularyListEvents>(event: K): void {
-    delete this.events[event];
+    delete this.events[event]
   }
 
   public getSelectedWords(): VocabularyItem[] {
-    return this.state.words.filter(word => this.state.selectedWords.has(word.id));
+    return this.state.words.filter((word) => this.state.selectedWords.has(word.id))
   }
 
   public clearSelection(): void {
-    this.updateState({ selectedWords: new Set() });
+    this.updateState({ selectedWords: new Set() })
   }
 
   public selectAll(): void {
-    const allIds = new Set(this.state.filteredWords.map(word => word.id));
-    this.updateState({ selectedWords: allIds });
+    const allIds = new Set(this.state.filteredWords.map((word) => word.id))
+    this.updateState({ selectedWords: allIds })
   }
 
   public search(query: string): void {
     if (this.searchTimeout) {
-      clearTimeout(this.searchTimeout);
+      clearTimeout(this.searchTimeout)
     }
-    
+
     this.searchTimeout = setTimeout(() => {
-      this.updateState({ searchQuery: query, currentPage: 0 });
-      this.filterAndSort();
-      this.events.onSearchChange?.(query);
-    }, this.config.searchDebounceMs);
+      this.updateState({ searchQuery: query, currentPage: 0 })
+      this.filterAndSort()
+      this.events.onSearchChange?.(query)
+    }, this.config.searchDebounceMs)
   }
 
   public sort(sortBy: string, sortOrder: 'asc' | 'desc' = 'asc'): void {
-    this.updateState({ sortBy, sortOrder });
-    this.filterAndSort();
+    this.updateState({ sortBy, sortOrder })
+    this.filterAndSort()
   }
 
   // ========================================
@@ -522,128 +522,129 @@ export class VocabularyListComponent {
 
   private setupEventListeners(): void {
     this.vocabularyObserver.on(VocabularyEventType.WORD_ADDED, () => {
-      this.loadVocabulary();
-    });
+      this.loadVocabulary()
+    })
 
     this.vocabularyObserver.on(VocabularyEventType.WORD_REMOVED, () => {
-      this.loadVocabulary();
-    });
+      this.loadVocabulary()
+    })
 
     this.vocabularyObserver.on(VocabularyEventType.WORD_UPDATED, () => {
-      this.loadVocabulary();
-    });
+      this.loadVocabulary()
+    })
 
     this.vocabularyObserver.on(VocabularyEventType.VOCABULARY_CLEARED, () => {
-      this.updateState({ words: [], filteredWords: [] });
-    });
+      this.updateState({ words: [], filteredWords: [] })
+    })
   }
 
   private createShadowDOM(): void {
-    if (!this.container) return;
+    if (!this.container) return
 
-    const host = document.createElement('div');
-    host.className = 'vocabulary-list-host';
-    this.shadowRoot = host.attachShadow({ mode: 'closed' });
-    
+    const host = document.createElement('div')
+    host.className = 'vocabulary-list-host'
+    this.shadowRoot = host.attachShadow({ mode: 'closed' })
+
     // Add styles
-    const style = document.createElement('style');
-    style.textContent = VOCABULARY_LIST_STYLES;
-    this.shadowRoot.appendChild(style);
-    
-    this.container.appendChild(host);
+    const style = document.createElement('style')
+    style.textContent = VOCABULARY_LIST_STYLES
+    this.shadowRoot.appendChild(style)
+
+    this.container.appendChild(host)
   }
 
   private async loadVocabulary(): Promise<void> {
-    this.updateState({ isLoading: true, error: null });
-    
+    this.updateState({ isLoading: true, error: null })
+
     try {
-      const result = await this.vocabularyManager.getVocabulary();
+      const result = await this.vocabularyManager.getVocabulary()
       if (result.success && result.data) {
-        this.updateState({ 
-          words: result.data, 
-          isLoading: false 
-        });
-        this.filterAndSort();
+        this.updateState({
+          words: result.data,
+          isLoading: false,
+        })
+        this.filterAndSort()
       } else {
-        this.updateState({ 
+        this.updateState({
           error: result.error?.message || 'Failed to load vocabulary',
-          isLoading: false 
-        });
+          isLoading: false,
+        })
       }
     } catch (error) {
-      this.updateState({ 
+      this.updateState({
         error: error instanceof Error ? error.message : 'Unknown error',
-        isLoading: false 
-      });
+        isLoading: false,
+      })
     }
   }
 
   private filterAndSort(): void {
-    let filtered = [...this.state.words];
-    
+    let filtered = [...this.state.words]
+
     // Apply search filter
     if (this.state.searchQuery) {
-      const query = this.state.searchQuery.toLowerCase();
-      filtered = filtered.filter(word => 
-        word.word.toLowerCase().includes(query) ||
-        word.translation.toLowerCase().includes(query) ||
-        word.context?.toLowerCase().includes(query)
-      );
+      const query = this.state.searchQuery.toLowerCase()
+      filtered = filtered.filter(
+        (word) =>
+          word.word.toLowerCase().includes(query) ||
+          word.translation.toLowerCase().includes(query) ||
+          word.context?.toLowerCase().includes(query),
+      )
     }
-    
+
     // Apply sorting
     filtered.sort((a, b) => {
-      let aValue: any, bValue: any;
-      
+      let aValue: any, bValue: any
+
       switch (this.state.sortBy) {
         case 'word':
-          aValue = a.word.toLowerCase();
-          bValue = b.word.toLowerCase();
-          break;
+          aValue = a.word.toLowerCase()
+          bValue = b.word.toLowerCase()
+          break
         case 'translation':
-          aValue = a.translation.toLowerCase();
-          bValue = b.translation.toLowerCase();
-          break;
+          aValue = a.translation.toLowerCase()
+          bValue = b.translation.toLowerCase()
+          break
         case 'dateAdded':
-          aValue = a.createdAt;
-          bValue = b.createdAt;
-          break;
+          aValue = a.createdAt
+          bValue = b.createdAt
+          break
         case 'reviewCount':
-          aValue = a.reviewCount || 0;
-          bValue = b.reviewCount || 0;
-          break;
+          aValue = a.reviewCount || 0
+          bValue = b.reviewCount || 0
+          break
         default:
-          return 0;
+          return 0
       }
-      
-      if (aValue < bValue) return this.state.sortOrder === 'asc' ? -1 : 1;
-      if (aValue > bValue) return this.state.sortOrder === 'asc' ? 1 : -1;
-      return 0;
-    });
-    
-    this.updateState({ filteredWords: filtered });
-    this.render();
+
+      if (aValue < bValue) return this.state.sortOrder === 'asc' ? -1 : 1
+      if (aValue > bValue) return this.state.sortOrder === 'asc' ? 1 : -1
+      return 0
+    })
+
+    this.updateState({ filteredWords: filtered })
+    this.render()
   }
 
   private updateState(updates: Partial<ListState>): void {
-    this.state = { ...this.state, ...updates };
+    this.state = { ...this.state, ...updates }
   }
 
   private render(): void {
-    if (!this.shadowRoot) return;
-    
-    const container = this.shadowRoot.querySelector('.vocabulary-list-container') as HTMLElement;
+    if (!this.shadowRoot) return
+
+    const container = this.shadowRoot.querySelector('.vocabulary-list-container') as HTMLElement
     if (container) {
-      container.innerHTML = this.renderContent();
-      this.attachEventHandlers();
+      container.innerHTML = this.renderContent()
+      this.attachEventHandlers()
     } else {
       this.shadowRoot.innerHTML = `
         <style>${VOCABULARY_LIST_STYLES}</style>
         <div class="vocabulary-list-container">
           ${this.renderContent()}
         </div>
-      `;
-      this.attachEventHandlers();
+      `
+      this.attachEventHandlers()
     }
   }
 
@@ -653,14 +654,14 @@ export class VocabularyListComponent {
       ${this.renderControls()}
       ${this.renderList()}
       ${this.renderBulkActions()}
-    `;
+    `
   }
 
   private renderHeader(): string {
-    const totalWords = this.state.words.length;
-    const filteredWords = this.state.filteredWords.length;
-    const selectedCount = this.state.selectedWords.size;
-    
+    const totalWords = this.state.words.length
+    const filteredWords = this.state.filteredWords.length
+    const selectedCount = this.state.selectedWords.size
+
     return `
       <div class="vocabulary-header">
         <h3 class="vocabulary-title">
@@ -672,34 +673,39 @@ export class VocabularyListComponent {
         </h3>
         ${this.config.showProgress ? this.renderProgress() : ''}
       </div>
-    `;
+    `
   }
 
   private renderProgress(): string {
-    const reviewedWords = this.state.words.filter(w => (w.reviewCount || 0) > 0).length;
-    const totalWords = this.state.words.length;
-    const percentage = totalWords > 0 ? (reviewedWords / totalWords) * 100 : 0;
-    
+    const reviewedWords = this.state.words.filter((w) => (w.reviewCount || 0) > 0).length
+    const totalWords = this.state.words.length
+    const percentage = totalWords > 0 ? (reviewedWords / totalWords) * 100 : 0
+
     return `
       <div class="progress-bar">
         <div class="progress-fill" style="width: ${percentage}%"></div>
       </div>
-    `;
+    `
   }
 
   private renderControls(): string {
-    if (!this.config.enableSearch && !this.config.enableFilters && !this.config.enableSorting && 
-        !this.config.enableImport && !this.config.enableExport) {
-      return '';
+    if (
+      !this.config.enableSearch &&
+      !this.config.enableFilters &&
+      !this.config.enableSorting &&
+      !this.config.enableImport &&
+      !this.config.enableExport
+    ) {
+      return ''
     }
-    
+
     return `
       <div class="vocabulary-controls">
         ${this.config.enableSearch ? this.renderSearch() : ''}
         ${this.config.enableSorting ? this.renderSortControls() : ''}
-        ${(this.config.enableImport || this.config.enableExport) ? this.renderImportExport() : ''}
+        ${this.config.enableImport || this.config.enableExport ? this.renderImportExport() : ''}
       </div>
-    `;
+    `
   }
 
   private renderSearch(): string {
@@ -713,7 +719,7 @@ export class VocabularyListComponent {
         >
         <span class="search-icon">🔍</span>
       </div>
-    `;
+    `
   }
 
   private renderSortControls(): string {
@@ -722,26 +728,32 @@ export class VocabularyListComponent {
       { value: 'word', label: 'Word' },
       { value: 'translation', label: 'Translation' },
       { value: 'reviewCount', label: 'Review Count' },
-    ];
-    
+    ]
+
     return `
       <select class="filter-select sort-select">
-        ${sortOptions.map(option => `
+        ${sortOptions
+          .map(
+            (option) => `
           <option value="${option.value}" ${option.value === this.state.sortBy ? 'selected' : ''}>
             ${option.label}
           </option>
-        `).join('')}
+        `,
+          )
+          .join('')}
       </select>
       <button class="sort-button" data-action="toggle-sort-order">
         ${this.state.sortOrder === 'asc' ? '↑' : '↓'}
       </button>
-    `;
+    `
   }
 
   private renderImportExport(): string {
     return `
       <div class="import-export-container">
-        ${this.config.enableImport ? `
+        ${
+          this.config.enableImport
+            ? `
           <div class="format-dropdown">
             <button class="import-button" data-action="show-import-menu">
               📥 Import
@@ -753,8 +765,12 @@ export class VocabularyListComponent {
             </div>
             <input type="file" class="file-input" id="import-file-input" accept=".json,.csv,.txt">
           </div>
-        ` : ''}
-        ${this.config.enableExport ? `
+        `
+            : ''
+        }
+        ${
+          this.config.enableExport
+            ? `
           <div class="format-dropdown">
             <button class="export-button" data-action="show-export-menu">
               📤 Export
@@ -765,56 +781,62 @@ export class VocabularyListComponent {
               <div class="format-option" data-action="export" data-format="anki">Anki</div>
             </div>
           </div>
-        ` : ''}
+        `
+            : ''
+        }
       </div>
-    `;
+    `
   }
 
   private renderList(): string {
     if (this.state.isLoading) {
-      return '<div class="loading-state">Loading vocabulary...</div>';
+      return '<div class="loading-state">Loading vocabulary...</div>'
     }
-    
+
     if (this.state.error) {
-      return `<div class="error-state">${this.state.error}</div>`;
+      return `<div class="error-state">${this.state.error}</div>`
     }
-    
+
     if (this.state.filteredWords.length === 0) {
       return `
         <div class="empty-state">
           ${this.state.searchQuery ? 'No words match your search.' : 'No vocabulary words yet.'}
         </div>
-      `;
+      `
     }
-    
-    const startIndex = this.config.enableVirtualScrolling ? this.visibleRange.start : 0;
-    const endIndex = this.config.enableVirtualScrolling ? 
-      Math.min(this.visibleRange.end, this.state.filteredWords.length) : 
-      this.state.filteredWords.length;
-    
-    const visibleWords = this.state.filteredWords.slice(startIndex, endIndex);
-    
+
+    const startIndex = this.config.enableVirtualScrolling ? this.visibleRange.start : 0
+    const endIndex = this.config.enableVirtualScrolling
+      ? Math.min(this.visibleRange.end, this.state.filteredWords.length)
+      : this.state.filteredWords.length
+
+    const visibleWords = this.state.filteredWords.slice(startIndex, endIndex)
+
     return `
       <div class="vocabulary-list" style="height: ${this.config.maxHeight}px">
         ${visibleWords.map((word, index) => this.renderListItem(word, startIndex + index)).join('')}
       </div>
-    `;
+    `
   }
 
   private renderListItem(word: VocabularyItem, index: number): string {
-    const isSelected = this.state.selectedWords.has(word.id);
-    const dateAdded = new Date(word.createdAt).toLocaleDateString();
-    
+    const isSelected = this.state.selectedWords.has(word.id)
+    const dateAdded = new Date(word.createdAt).toLocaleDateString()
+
     return `
       <div class="list-item ${isSelected ? 'selected' : ''}" data-word-id="${word.id}">
-        ${this.config.enableBulkActions ? `
+        ${
+          this.config.enableBulkActions
+            ? `
           <input 
             type="checkbox" 
             class="item-checkbox" 
             ${isSelected ? 'checked' : ''}
             data-word-id="${word.id}"
           >
-        ` : ''}
+        `
+            : ''
+        }
         <div class="item-content">
           <div class="item-word">${this.escapeHtml(word.word)}</div>
           <div class="item-translation">${this.escapeHtml(word.translation)}</div>
@@ -833,14 +855,14 @@ export class VocabularyListComponent {
           </button>
         </div>
       </div>
-    `;
+    `
   }
 
   private renderBulkActions(): string {
     if (!this.config.enableBulkActions || this.state.selectedWords.size === 0) {
-      return '<div class="bulk-actions"></div>';
+      return '<div class="bulk-actions"></div>'
     }
-    
+
     return `
       <div class="bulk-actions visible">
         <span>${this.state.selectedWords.size} words selected</span>
@@ -848,176 +870,176 @@ export class VocabularyListComponent {
         <button class="action-button" data-action="bulk-export">Export Selected</button>
         <button class="action-button" data-action="clear-selection">Clear Selection</button>
       </div>
-    `;
+    `
   }
 
   private attachEventHandlers(): void {
-    if (!this.shadowRoot) return;
-    
+    if (!this.shadowRoot) return
+
     // Search input
-    const searchInput = this.shadowRoot.querySelector('.search-input') as HTMLInputElement;
+    const searchInput = this.shadowRoot.querySelector('.search-input') as HTMLInputElement
     if (searchInput) {
       searchInput.addEventListener('input', (e) => {
-        this.search((e.target as HTMLInputElement).value);
-      });
+        this.search((e.target as HTMLInputElement).value)
+      })
     }
-    
+
     // Sort controls
-    const sortSelect = this.shadowRoot.querySelector('.sort-select') as HTMLSelectElement;
+    const sortSelect = this.shadowRoot.querySelector('.sort-select') as HTMLSelectElement
     if (sortSelect) {
       sortSelect.addEventListener('change', (e) => {
-        this.sort((e.target as HTMLSelectElement).value, this.state.sortOrder);
-      });
+        this.sort((e.target as HTMLSelectElement).value, this.state.sortOrder)
+      })
     }
-    
+
     // Action buttons
     this.shadowRoot.addEventListener('click', (e) => {
-      const target = e.target as HTMLElement;
-      const action = target.getAttribute('data-action');
-      const wordId = target.getAttribute('data-word-id');
-      const format = target.getAttribute('data-format') as 'json' | 'csv' | 'anki';
-      
+      const target = e.target as HTMLElement
+      const action = target.getAttribute('data-action')
+      const wordId = target.getAttribute('data-word-id')
+      const format = target.getAttribute('data-format') as 'json' | 'csv' | 'anki'
+
       if (action && wordId) {
-        this.handleAction(action, wordId);
+        this.handleAction(action, wordId)
       } else if (action === 'import' && format) {
-        this.handleImport(format);
+        this.handleImport(format)
       } else if (action === 'export' && format) {
-        this.handleExport(format);
+        this.handleExport(format)
       } else if (action === 'show-import-menu') {
-        this.toggleMenu('import-menu');
+        this.toggleMenu('import-menu')
       } else if (action === 'show-export-menu') {
-        this.toggleMenu('export-menu');
+        this.toggleMenu('export-menu')
       } else if (action) {
-        this.handleBulkAction(action);
+        this.handleBulkAction(action)
       }
-    });
-    
+    })
+
     // Checkbox selection
     this.shadowRoot.addEventListener('change', (e) => {
-      const target = e.target as HTMLInputElement;
+      const target = e.target as HTMLInputElement
       if (target.type === 'checkbox' && target.classList.contains('item-checkbox')) {
-        const wordId = target.getAttribute('data-word-id');
+        const wordId = target.getAttribute('data-word-id')
         if (wordId) {
-          this.toggleSelection(wordId, target.checked);
+          this.toggleSelection(wordId, target.checked)
         }
       }
-    });
+    })
   }
 
   private handleAction(action: string, wordId: string): void {
-    const word = this.state.words.find(w => w.id === wordId);
-    if (!word) return;
-    
+    const word = this.state.words.find((w) => w.id === wordId)
+    if (!word) return
+
     switch (action) {
       case 'edit':
-        this.events.onWordEdit?.(word);
-        break;
+        this.events.onWordEdit?.(word)
+        break
       case 'delete':
-        this.events.onWordDelete?.(word);
-        break;
+        this.events.onWordDelete?.(word)
+        break
       case 'toggle-sort-order':
-        this.sort(this.state.sortBy, this.state.sortOrder === 'asc' ? 'desc' : 'asc');
-        break;
+        this.sort(this.state.sortBy, this.state.sortOrder === 'asc' ? 'desc' : 'asc')
+        break
     }
   }
 
   private handleBulkAction(action: string): void {
-    const selectedWords = this.getSelectedWords();
-    
+    const selectedWords = this.getSelectedWords()
+
     switch (action) {
       case 'bulk-delete':
       case 'bulk-export':
-        this.events.onBulkAction?.(action, selectedWords);
-        break;
+        this.events.onBulkAction?.(action, selectedWords)
+        break
       case 'clear-selection':
-        this.clearSelection();
-        this.render();
-        break;
+        this.clearSelection()
+        this.render()
+        break
     }
   }
 
   private toggleSelection(wordId: string, selected: boolean): void {
-    const newSelection = new Set(this.state.selectedWords);
+    const newSelection = new Set(this.state.selectedWords)
     if (selected) {
-      newSelection.add(wordId);
+      newSelection.add(wordId)
     } else {
-      newSelection.delete(wordId);
+      newSelection.delete(wordId)
     }
-    this.updateState({ selectedWords: newSelection });
-    this.render();
+    this.updateState({ selectedWords: newSelection })
+    this.render()
   }
 
   private escapeHtml(text: string): string {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    const div = document.createElement('div')
+    div.textContent = text
+    return div.innerHTML
   }
 
   private toggleMenu(menuId: string): void {
-    if (!this.shadowRoot) return;
-    
+    if (!this.shadowRoot) return
+
     // Close all menus first
-    const allMenus = this.shadowRoot.querySelectorAll('.format-menu');
-    allMenus.forEach(menu => menu.classList.remove('show'));
-    
+    const allMenus = this.shadowRoot.querySelectorAll('.format-menu')
+    allMenus.forEach((menu) => menu.classList.remove('show'))
+
     // Open the requested menu
-    const menu = this.shadowRoot.getElementById(menuId);
+    const menu = this.shadowRoot.getElementById(menuId)
     if (menu) {
-      menu.classList.add('show');
+      menu.classList.add('show')
     }
-    
+
     // Close menu when clicking outside
     const closeMenus = (e: Event) => {
-      const target = e.target as HTMLElement;
+      const target = e.target as HTMLElement
       if (!target.closest('.format-dropdown')) {
-        allMenus.forEach(menu => menu.classList.remove('show'));
-        document.removeEventListener('click', closeMenus);
+        allMenus.forEach((menu) => menu.classList.remove('show'))
+        document.removeEventListener('click', closeMenus)
       }
-    };
-    
+    }
+
     setTimeout(() => {
-      document.addEventListener('click', closeMenus);
-    }, 0);
+      document.addEventListener('click', closeMenus)
+    }, 0)
   }
 
   private handleImport(format: 'json' | 'csv' | 'anki'): void {
-    if (!this.shadowRoot) return;
-    
-    const fileInput = this.shadowRoot.getElementById('import-file-input') as HTMLInputElement;
-    if (!fileInput) return;
-    
+    if (!this.shadowRoot) return
+
+    const fileInput = this.shadowRoot.getElementById('import-file-input') as HTMLInputElement
+    if (!fileInput) return
+
     fileInput.onchange = async (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) return;
-      
+      const file = (e.target as HTMLInputElement).files?.[0]
+      if (!file) return
+
       try {
-        const text = await file.text();
-        const result = await this.vocabularyManager.importVocabulary(text, format);
-        
+        const text = await file.text()
+        const result = await this.vocabularyManager.importVocabulary(text, format)
+
         if (result.successful.length > 0) {
-          console.log(`Successfully imported ${result.successful.length} words`);
-          await this.refresh();
+          console.log(`Successfully imported ${result.successful.length} words`)
+          await this.refresh()
         }
-        
+
         if (result.failed.length > 0) {
-          console.warn(`Failed to import ${result.failed.length} words:`, result.failed);
+          console.warn(`Failed to import ${result.failed.length} words:`, result.failed)
         }
-        
+
         // Trigger event for external handling
-        this.events.onImportRequest?.(format);
+        this.events.onImportRequest?.(format)
       } catch (error) {
-        console.error('Import error:', error);
+        console.error('Import error:', error)
       }
-      
+
       // Reset file input
-      fileInput.value = '';
-    };
-    
-    fileInput.click();
+      fileInput.value = ''
+    }
+
+    fileInput.click()
   }
 
   private handleExport(format: 'json' | 'csv' | 'anki'): void {
     // Trigger event for external handling
-    this.events.onExportRequest?.(format);
+    this.events.onExportRequest?.(format)
   }
-} 
+}

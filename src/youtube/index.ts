@@ -4,14 +4,17 @@
  */
 
 // Export all types and interfaces
-export * from './types';
+export * from './types'
 
 // Export parser components
-export { YouTubePlayerResponseParser } from './PlayerResponseParser';
-export { SubtitleTrackProcessor } from './SubtitleTrackProcessor';
+export { YouTubePlayerResponseParser } from './PlayerResponseParser'
+export { SubtitleTrackProcessor } from './SubtitleTrackProcessor'
 
 // Export main service
-export { LinguaTubeSubtitleDiscoveryService, subtitleDiscoveryService } from './SubtitleDiscoveryService';
+export {
+  LinguaTubeSubtitleDiscoveryService,
+  subtitleDiscoveryService,
+} from './SubtitleDiscoveryService'
 
 // Re-export singleton as default
-export { subtitleDiscoveryService as default } from './SubtitleDiscoveryService'; 
+export { subtitleDiscoveryService as default } from './SubtitleDiscoveryService'

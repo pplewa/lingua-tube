@@ -1,0 +1,9 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# Code quality
+
+- Format componnents with current prettier rules specified in [.prettierrc](.prettierrc) 
