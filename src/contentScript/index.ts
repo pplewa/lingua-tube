@@ -476,8 +476,8 @@ class LinguaTubeContentScript {
           if (text) {
             cues.push({
               id: `cue_${index}`,
-              startTime: start,
-              endTime: start + dur,
+              startTime: start / 1000,
+              endTime: (start + dur) / 1000,
               text: text,
               nativeText: nativeText,
               language: track.languageCode || 'unknown',

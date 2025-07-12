@@ -223,6 +223,8 @@ export class DualSubtitleManager {
           this.wordLookupPopup.setDefaultLanguages(this.sourceLanguage, this.targetLanguage)
         }
 
+        console.log('[DualSubtitleManager] User settings loaded', settings)
+
         // Update manager config
         this.config = {
           ...this.config,

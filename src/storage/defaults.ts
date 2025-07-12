@@ -34,8 +34,8 @@ export const DEFAULT_LANGUAGE_SETTINGS: LanguageSettings = {
 export const DEFAULT_SUBTITLE_SETTINGS: SubtitleSettings = {
   showSource: true,
   showNative: true,
-  fontSize: 16,
-  fontFamily: 'Arial, sans-serif',
+  fontSize: 24,
+  fontFamily: '"YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif',
   position: 'bottom',
   backgroundColor: 'rgba(0, 0, 0, 0.8)',
   textColor: '#ffffff',

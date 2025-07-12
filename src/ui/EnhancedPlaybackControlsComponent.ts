@@ -266,7 +266,7 @@ const CONTROLS_STYLES = `
     left: 50%;
     transform: translateX(-50%);
     z-index: 2147483646; /* Just below subtitles */
-    font-family: 'YouTube Sans', 'Roboto', Arial, sans-serif;
+    font-family: 'YouTube Sans', 'Roboto', ns-serif;
     font-size: 14px;
     pointer-events: none;
   }

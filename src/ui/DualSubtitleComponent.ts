@@ -87,8 +87,8 @@ export type SubtitleVisibilityCallback = (visible: boolean, cueCount: number) =>
 const DEFAULT_CONFIG: DualSubtitleConfig = {
   showTargetLanguage: true,
   showNativeLanguage: true,
-  fontSize: 16,
-  fontFamily: 'Arial, sans-serif',
+  fontSize: 24,
+  fontFamily: '"YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif',
   targetLanguageColor: '#ffffff',
   nativeLanguageColor: '#cccccc',
   backgroundColor: 'rgba(0, 0, 0, 0.8)',
@@ -112,8 +112,8 @@ const DEFAULT_CONFIG: DualSubtitleConfig = {
 const SUBTITLE_CONTAINER_STYLES = `
   :host {
     /* CSS Custom Properties for theming */
-    --subtitle-font-size: 16px;
-    --subtitle-font-family: Arial, sans-serif;
+    --subtitle-font-size: 24px;
+    --subtitle-font-family: "YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif;
     --subtitle-target-color: #ffffff;
     --subtitle-native-color: #cccccc;
     --subtitle-bg-color: rgba(0, 0, 0, 0.8);
@@ -992,7 +992,7 @@ export class DualSubtitleComponent {
 
     // Calculate vertical position based on offset percentage
     const verticalPixels = (this.config.verticalOffset / 100) * height
-    const bottomPosition = Math.max(50, height * 0.1 + Math.abs(verticalPixels))
+    const bottomPosition = Math.max(50,  Math.abs(verticalPixels)- height * 0.1)
 
     // Calculate horizontal position based on alignment
     let leftPosition = '50%' // Center by default

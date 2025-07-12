@@ -3078,8 +3078,6 @@ export class PlayerInteractionService {
     const currentTime = this.getCurrentTime()
     const adjustedTime = currentTime + this.subtitleSyncConfig.timeOffset
 
-    console.log('[PlayerInteractionService] Updating subtitle sync', currentTime, adjustedTime)
-
     // Skip if time hasn't changed significantly
     if (Math.abs(currentTime - this.lastSyncTime) < 0.02) {
       // 20ms threshold
