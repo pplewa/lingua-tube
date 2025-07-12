@@ -749,14 +749,14 @@ export class DualSubtitleComponent {
    * Thai word segmentation using linguistic rules
    */
   private segmentThaiText(text: string): WordSegment[] {
-    const segmenter = new Intl.Segmenter('th', { granularity: 'word' })
-
-    const words = Array.from(segmenter.segment(text)[Symbol.iterator]()).map((word) => word.segment)
+    // const segmenter = new Intl.Segmenter('th', { granularity: 'word' })
+    const segmenter = new Intl.Segmenter('th', { granularity: 'sentence' })
+    const words = Array.from(segmenter.segment(text)).map((word) => word.segment.split(/\s+/g)).flat();
 
     const segments = words.map((word, index) => ({
       text: word,
       index,
-      isClickable: word.length > 0,
+      isClickable: word.length > 1,
       translation: undefined,
       partOfSpeech: undefined,
     }))

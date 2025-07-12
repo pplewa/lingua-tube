@@ -471,7 +471,7 @@ class LinguaTubeContentScript {
           const start = element.tStartMs
           const dur = element.dDurationMs
           const text = element.segs?.[0]?.utf8?.trim() || ''
-          const nativeText = nativeTextElements[index]?.segs?.[0]?.utf8?.trim() || ''
+          const nativeText = nativeTextElements.find(e => e.tStartMs === start)?.segs?.[0]?.utf8?.trim() || ''
 
           if (text) {
             cues.push({

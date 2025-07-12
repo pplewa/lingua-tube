@@ -3046,7 +3046,7 @@ export class PlayerInteractionService {
     // Start sync update loop
     this.syncUpdateIntervalId = window.setInterval(() => {
       this.updateSubtitleSync()
-    }, 50) // 20 FPS update rate
+    }, 100) // 20 FPS update rate
 
     console.log('[PlayerInteractionService] Subtitle synchronization started')
   }
