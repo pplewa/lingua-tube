@@ -258,7 +258,6 @@ export class ConsoleLoggingService {
       this.outputToConsole(entry)
       this.updateStats(entry, startTime)
       this.sessionLogCount++
-
     } catch (error) {
       // Fallback to basic console output if formatting fails
       this.originalConsole.error('[ConsoleLoggingService] Failed to process log entry:', error)
@@ -285,9 +284,9 @@ export class ConsoleLoggingService {
    * Get performance statistics
    */
   public getStats(): ConsolePerformanceStats {
-    return { 
+    return {
       ...this.stats,
-      rateLimit: { ...this.stats.rateLimit }
+      rateLimit: { ...this.stats.rateLimit },
     }
   }
 
@@ -389,7 +388,7 @@ export class ConsoleLoggingService {
     const header = `Console Logs Export - ${new Date().toISOString()}\n${'='.repeat(50)}\n`
     const statsSection = this.formatStatsForExport()
     const configSection = this.formatConfigForExport()
-    
+
     return `${header}\n${statsSection}\n${configSection}`
   }
 
@@ -421,10 +420,13 @@ export class ConsoleLoggingService {
         [LogLevel.ERROR]: 0,
         [LogLevel.CRITICAL]: 0,
       },
-      logsByComponent: Object.values(ComponentType).reduce((acc, component) => {
-        acc[component] = 0
-        return acc
-      }, {} as Record<ComponentType, number>),
+      logsByComponent: Object.values(ComponentType).reduce(
+        (acc, component) => {
+          acc[component] = 0
+          return acc
+        },
+        {} as Record<ComponentType, number>,
+      ),
       avgProcessingTime: 0,
       maxProcessingTime: 0,
       totalProcessingTime: 0,
@@ -439,17 +441,22 @@ export class ConsoleLoggingService {
   /**
    * Merge configuration objects
    */
-  private mergeConfig(base: ConsoleLoggingConfig, override: Partial<ConsoleLoggingConfig>): ConsoleLoggingConfig {
+  private mergeConfig(
+    base: ConsoleLoggingConfig,
+    override: Partial<ConsoleLoggingConfig>,
+  ): ConsoleLoggingConfig {
     const merged = { ...base }
-    
+
     if (override.enabled !== undefined) merged.enabled = override.enabled
     if (override.filtering) merged.filtering = { ...merged.filtering, ...override.filtering }
     if (override.formatting) merged.formatting = { ...merged.formatting, ...override.formatting }
     if (override.grouping) merged.grouping = { ...merged.grouping, ...override.grouping }
-    if (override.performance) merged.performance = { ...merged.performance, ...override.performance }
-    if (override.development) merged.development = { ...merged.development, ...override.development }
+    if (override.performance)
+      merged.performance = { ...merged.performance, ...override.performance }
+    if (override.development)
+      merged.development = { ...merged.development, ...override.development }
     if (override.production) merged.production = { ...merged.production, ...override.production }
-    
+
     return merged
   }
 
@@ -459,7 +466,7 @@ export class ConsoleLoggingService {
   private setupRateTracking(): void {
     setInterval(() => {
       const now = Date.now()
-      this.rateTracker = this.rateTracker.filter(time => now - time < 1000)
+      this.rateTracker = this.rateTracker.filter((time) => now - time < 1000)
       this.stats.rateLimit.hitsPerSecond = this.rateTracker.length
     }, 100)
   }
@@ -473,7 +480,7 @@ export class ConsoleLoggingService {
     }
 
     // Add global console controls
-    (window as any).linguaTubeConsole = {
+    ;(window as any).linguaTubeConsole = {
       enable: () => this.setEnabled(true),
       disable: () => this.setEnabled(false),
       setLevel: (levels: LogLevel[]) => this.setEnabledLevels(levels),
@@ -516,15 +523,20 @@ export class ConsoleLoggingService {
       if (this.config.production.suppressInfoLogs && entry.level === LogLevel.INFO) {
         return false
       }
-      if (this.config.production.onlyShowErrors && 
-          ![LogLevel.ERROR, LogLevel.CRITICAL].includes(entry.level)) {
+      if (
+        this.config.production.onlyShowErrors &&
+        ![LogLevel.ERROR, LogLevel.CRITICAL].includes(entry.level)
+      ) {
         return false
       }
     }
 
     // Check error severity
-    if (entry.errorContext && 
-        this.getSeverityPriority(entry.errorContext.severity) < this.getSeverityPriority(this.config.filtering.minSeverity)) {
+    if (
+      entry.errorContext &&
+      this.getSeverityPriority(entry.errorContext.severity) <
+        this.getSeverityPriority(this.config.filtering.minSeverity)
+    ) {
       return false
     }
 
@@ -537,10 +549,10 @@ export class ConsoleLoggingService {
   private checkRateLimit(): boolean {
     const now = Date.now()
     this.rateTracker.push(now)
-    
+
     // Clean old entries
-    this.rateTracker = this.rateTracker.filter(time => now - time < 1000)
-    
+    this.rateTracker = this.rateTracker.filter((time) => now - time < 1000)
+
     return this.rateTracker.length <= this.config.filtering.maxOutputRate
   }
 
@@ -549,7 +561,7 @@ export class ConsoleLoggingService {
    */
   private checkProductionLimits(): boolean {
     if (!isProduction()) return true
-    
+
     return this.sessionLogCount < this.config.production.maxLogsPerSession
   }
 
@@ -559,11 +571,11 @@ export class ConsoleLoggingService {
   private outputToConsole(entry: LogEntry): void {
     // Handle grouping
     this.handleGrouping(entry)
-    
+
     // Format message
     const formattedMessage = this.formatMessage(entry)
     const formattedContext = this.formatContext(entry)
-    
+
     // Output based on level
     switch (entry.level) {
       case LogLevel.DEBUG:
@@ -592,10 +604,10 @@ export class ConsoleLoggingService {
    */
   private handleGrouping(entry: LogEntry): void {
     if (!this.config.grouping.enabled) return
-    
+
     const groupKey = this.getGroupKey(entry)
     const currentDepth = this.activeGroups.get(groupKey) || 0
-    
+
     if (currentDepth === 0 && this.activeGroups.size < this.config.grouping.maxGroupDepth) {
       const groupLabel = this.getGroupLabel(entry)
       console.group(groupLabel)
@@ -608,20 +620,20 @@ export class ConsoleLoggingService {
    */
   private getGroupKey(entry: LogEntry): string {
     const parts: string[] = []
-    
+
     if (this.config.grouping.groupByComponent) {
       parts.push(entry.context.component)
     }
-    
+
     if (this.config.grouping.groupByLevel) {
       parts.push(entry.level)
     }
-    
+
     if (this.config.grouping.groupByTime) {
       const timeWindow = Math.floor(Date.now() / 60000) // 1-minute windows
       parts.push(timeWindow.toString())
     }
-    
+
     return parts.join('-')
   }
 
@@ -630,19 +642,19 @@ export class ConsoleLoggingService {
    */
   private getGroupLabel(entry: LogEntry): string {
     const parts: string[] = []
-    
+
     if (this.config.grouping.groupByComponent) {
       parts.push(`Component: ${entry.context.component}`)
     }
-    
+
     if (this.config.grouping.groupByLevel) {
       parts.push(`Level: ${entry.level.toUpperCase()}`)
     }
-    
+
     if (this.config.grouping.groupByTime) {
       parts.push(`Time: ${new Date().toLocaleTimeString()}`)
     }
-    
+
     return parts.join(' | ')
   }
 
@@ -650,22 +662,21 @@ export class ConsoleLoggingService {
    * Format log message
    */
   private formatMessage(entry: LogEntry): string {
-    const timestamp = this.config.formatting.showTimestamp ? 
-      `[${new Date(entry.timestamp).toLocaleTimeString()}] ` : ''
-    
-    const level = this.config.formatting.showLevel ? 
-      `[${entry.level.toUpperCase()}] ` : ''
-    
-    const component = this.config.formatting.showComponent ? 
-      `[${entry.context.component}] ` : ''
-    
+    const timestamp = this.config.formatting.showTimestamp
+      ? `[${new Date(entry.timestamp).toLocaleTimeString()}] `
+      : ''
+
+    const level = this.config.formatting.showLevel ? `[${entry.level.toUpperCase()}] ` : ''
+
+    const component = this.config.formatting.showComponent ? `[${entry.context.component}] ` : ''
+
     let message = entry.message
     if (message.length > this.config.formatting.maxMessageLength) {
       message = message.substring(0, this.config.formatting.maxMessageLength) + '...'
     }
-    
+
     const baseMessage = `${timestamp}${level}${component}${message}`
-    
+
     // Apply coloring
     return this.applyColoring(baseMessage, entry.level)
   }
@@ -675,14 +686,14 @@ export class ConsoleLoggingService {
    */
   private formatContext(entry: LogEntry): any {
     if (!this.config.formatting.showContext) return undefined
-    
+
     const context: any = {}
-    
+
     if (entry.context.action) context.action = entry.context.action
     if (entry.context.url) context.url = entry.context.url
     if (entry.context.metadata) context.metadata = entry.context.metadata
     if (entry.tags) context.tags = entry.tags
-    
+
     return Object.keys(context).length > 0 ? context : undefined
   }
 
@@ -693,13 +704,13 @@ export class ConsoleLoggingService {
     if (this.config.formatting.colorScheme === ConsoleColorScheme.NONE) {
       return message
     }
-    
+
     const color = this.config.formatting.customColors[level] || this.getDefaultColor(level)
-    
+
     if (this.config.formatting.colorScheme === ConsoleColorScheme.BASIC) {
       return message
     }
-    
+
     return `%c${message}`
   }
 
@@ -708,12 +719,18 @@ export class ConsoleLoggingService {
    */
   private getDefaultColor(level: LogLevel): string {
     switch (level) {
-      case LogLevel.DEBUG: return '#888888'
-      case LogLevel.INFO: return '#2196F3'
-      case LogLevel.WARN: return '#FF9800'
-      case LogLevel.ERROR: return '#F44336'
-      case LogLevel.CRITICAL: return '#E91E63'
-      default: return '#000000'
+      case LogLevel.DEBUG:
+        return '#888888'
+      case LogLevel.INFO:
+        return '#2196F3'
+      case LogLevel.WARN:
+        return '#FF9800'
+      case LogLevel.ERROR:
+        return '#F44336'
+      case LogLevel.CRITICAL:
+        return '#E91E63'
+      default:
+        return '#000000'
     }
   }
 
@@ -722,7 +739,7 @@ export class ConsoleLoggingService {
    */
   private fallbackOutput(entry: LogEntry): void {
     const message = `[${entry.context.component}] ${entry.message}`
-    
+
     switch (entry.level) {
       case LogLevel.DEBUG:
         this.originalConsole.debug(message)
@@ -745,21 +762,25 @@ export class ConsoleLoggingService {
    */
   private updateStats(entry: LogEntry, startTime: number): void {
     const processingTime = performance.now() - startTime
-    
+
     this.stats.totalLogsOutput++
     this.stats.logsByLevel[entry.level]++
     this.stats.logsByComponent[entry.context.component]++
     this.stats.totalProcessingTime += processingTime
     this.stats.avgProcessingTime = this.stats.totalProcessingTime / this.stats.totalLogsOutput
-    
+
     if (processingTime > this.stats.maxProcessingTime) {
       this.stats.maxProcessingTime = processingTime
     }
-    
+
     // Warn if processing is slow
-    if (this.config.performance.warnOnSlowOutput && 
-        processingTime > this.config.performance.maxProcessingTime) {
-      this.originalConsole.warn(`[ConsoleLoggingService] Slow log processing: ${processingTime.toFixed(2)}ms`)
+    if (
+      this.config.performance.warnOnSlowOutput &&
+      processingTime > this.config.performance.maxProcessingTime
+    ) {
+      this.originalConsole.warn(
+        `[ConsoleLoggingService] Slow log processing: ${processingTime.toFixed(2)}ms`,
+      )
     }
   }
 
@@ -782,7 +803,7 @@ export class ConsoleLoggingService {
   private formatStatsForExport(): string {
     const stats = this.stats
     const uptime = Date.now() - this.startTime
-    
+
     return `
 Performance Statistics:
 - Total logs output: ${stats.totalLogsOutput}
@@ -793,10 +814,14 @@ Performance Statistics:
 - Rate limit hits/sec: ${stats.rateLimit.hitsPerSecond}
 
 Logs by Level:
-${Object.entries(stats.logsByLevel).map(([level, count]) => `- ${level}: ${count}`).join('\n')}
+${Object.entries(stats.logsByLevel)
+  .map(([level, count]) => `- ${level}: ${count}`)
+  .join('\n')}
 
 Logs by Component:
-${Object.entries(stats.logsByComponent).map(([component, count]) => `- ${component}: ${count}`).join('\n')}
+${Object.entries(stats.logsByComponent)
+  .map(([component, count]) => `- ${component}: ${count}`)
+  .join('\n')}
 `
   }
 
@@ -805,7 +830,7 @@ ${Object.entries(stats.logsByComponent).map(([component, count]) => `- ${compone
    */
   private formatConfigForExport(): string {
     const config = this.config
-    
+
     return `
 Configuration:
 - Enabled: ${config.enabled}
@@ -822,6 +847,8 @@ Configuration:
 /**
  * Factory function to create console logging service
  */
-export function createConsoleLoggingService(config?: Partial<ConsoleLoggingConfig>): ConsoleLoggingService | null {
+export function createConsoleLoggingService(
+  config?: Partial<ConsoleLoggingConfig>,
+): ConsoleLoggingService | null {
   return ConsoleLoggingService.getInstance(config)
-} 
+}

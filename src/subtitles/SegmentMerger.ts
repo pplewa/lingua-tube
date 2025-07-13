@@ -82,8 +82,8 @@ export class SegmentMerger {
       metadata: {
         segmentCount: subtitleFile.segments.length,
         mergeStrategy: this.config.mergeStrategy,
-        maxGap: this.config.maxGap
-      }
+        maxGap: this.config.maxGap,
+      },
     })
 
     const result = await this.mergeSegments(subtitleFile.segments)
@@ -94,11 +94,13 @@ export class SegmentMerger {
       metadata: {
         originalCount: result.originalCount,
         mergedCount: result.mergedCount,
-        reductionPercent: Math.round(((result.originalCount - result.mergedCount) / result.originalCount) * 100),
+        reductionPercent: Math.round(
+          ((result.originalCount - result.mergedCount) / result.originalCount) * 100,
+        ),
         processingTime,
         operationsCount: result.operations.length,
-        warningsCount: result.warnings.length
-      }
+        warningsCount: result.warnings.length,
+      },
     })
 
     return result

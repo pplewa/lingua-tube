@@ -25,14 +25,14 @@ export class SubtitleTrackProcessor {
     const logger = Logger?.getInstance()
     try {
       logger?.info('Processing subtitle tracks', {
-        component: ComponentType.YOUTUBE_INTEGRATION
+        component: ComponentType.YOUTUBE_INTEGRATION,
       })
 
       const rawTracks = captionsData.playerCaptionsTracklistRenderer?.captionTracks
 
       if (!rawTracks || rawTracks.length === 0) {
         logger?.warn('No caption tracks found', {
-          component: ComponentType.YOUTUBE_INTEGRATION
+          component: ComponentType.YOUTUBE_INTEGRATION,
         })
         return []
       }
@@ -50,22 +50,22 @@ export class SubtitleTrackProcessor {
             component: ComponentType.YOUTUBE_INTEGRATION,
             metadata: {
               rawTrack,
-              error: error instanceof Error ? error.message : String(error)
-            }
+              error: error instanceof Error ? error.message : String(error),
+            },
           })
         }
       }
 
       logger?.info(`Processed ${processedTracks.length} subtitle tracks`, {
-        component: ComponentType.YOUTUBE_INTEGRATION
+        component: ComponentType.YOUTUBE_INTEGRATION,
       })
       return SubtitleTrackProcessor.sortAndDeduplicate(processedTracks)
     } catch (error) {
       logger?.error('Subtitle track processing failed', {
         component: ComponentType.YOUTUBE_INTEGRATION,
         metadata: {
-          error: error instanceof Error ? error.message : String(error)
-        }
+          error: error instanceof Error ? error.message : String(error),
+        },
       })
       return []
     }

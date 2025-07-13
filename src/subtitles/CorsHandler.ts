@@ -77,7 +77,7 @@ export class CorsHandler {
     this.logger?.info('Fetching with CORS handling', {
       component: ComponentType.SUBTITLE_MANAGER,
       url,
-      metadata: { strategies: this.config.strategies }
+      metadata: { strategies: this.config.strategies },
     })
 
     for (const strategy of this.config.strategies) {
@@ -85,7 +85,7 @@ export class CorsHandler {
         this.logger?.debug('Trying CORS strategy', {
           component: ComponentType.SUBTITLE_MANAGER,
           url,
-          metadata: { strategy }
+          metadata: { strategy },
         })
 
         const result = await this.executeStrategy(strategy, url, options)
@@ -99,8 +99,8 @@ export class CorsHandler {
               strategy,
               duration,
               statusCode: result.statusCode,
-              dataLength: result.data?.length
-            }
+              dataLength: result.data?.length,
+            },
           })
           return result
         }
@@ -113,8 +113,8 @@ export class CorsHandler {
             strategy,
             errorCode: result.error?.code,
             errorMessage: result.error?.message,
-            retryable: result.error?.retryable
-          }
+            retryable: result.error?.retryable,
+          },
         })
 
         // If this was a CORS error and we should retry, continue
@@ -130,8 +130,8 @@ export class CorsHandler {
             metadata: {
               strategy,
               errorCode: result.error.code,
-              errorMessage: result.error.message
-            }
+              errorMessage: result.error.message,
+            },
           })
           return result
         }
@@ -141,8 +141,8 @@ export class CorsHandler {
           url,
           metadata: {
             strategy,
-            error: error instanceof Error ? error.message : String(error)
-          }
+            error: error instanceof Error ? error.message : String(error),
+          },
         })
 
         // Continue to next strategy
@@ -158,8 +158,8 @@ export class CorsHandler {
       metadata: {
         totalDuration,
         strategiesAttempted: this.config.strategies.length,
-        strategies: this.config.strategies
-      }
+        strategies: this.config.strategies,
+      },
     })
 
     return {

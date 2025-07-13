@@ -1024,8 +1024,8 @@ export class VocabularyListComponent {
             component: ComponentType.WORD_LOOKUP,
             metadata: {
               importedCount: result.successful.length,
-              format: format
-            }
+              format: format,
+            },
           })
           await this.refresh()
         }
@@ -1036,8 +1036,8 @@ export class VocabularyListComponent {
             metadata: {
               failedCount: result.failed.length,
               format: format,
-              failedEntries: result.failed
-            }
+              failedEntries: result.failed,
+            },
           })
         }
 
@@ -1048,8 +1048,8 @@ export class VocabularyListComponent {
           component: ComponentType.WORD_LOOKUP,
           metadata: {
             error: error instanceof Error ? error.message : String(error),
-            format: format
-          }
+            format: format,
+          },
         })
       }
 

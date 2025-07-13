@@ -68,17 +68,17 @@ export class RetryService {
 
     for (let attempt = 1; attempt <= config.maxAttempts; attempt++) {
       try {
-        this.logger?.debug('Retry attempt', { 
+        this.logger?.debug('Retry attempt', {
           component: ComponentType.SUBTITLE_MANAGER,
-          metadata: { attempt, maxAttempts: config.maxAttempts }
+          metadata: { attempt, maxAttempts: config.maxAttempts },
         })
 
         const result = await operation()
 
         const totalTime = Date.now() - startTime
-        this.logger?.info('Operation succeeded', { 
+        this.logger?.info('Operation succeeded', {
           component: ComponentType.SUBTITLE_MANAGER,
-          metadata: { attempt, totalTime }
+          metadata: { attempt, totalTime },
         })
 
         return {
@@ -102,24 +102,24 @@ export class RetryService {
 
         attempts.push(attemptInfo)
 
-        this.logger?.warn('Attempt failed', { 
+        this.logger?.warn('Attempt failed', {
           component: ComponentType.SUBTITLE_MANAGER,
-          metadata: { attempt, error: fetchError.message, errorCode: fetchError.code }
+          metadata: { attempt, error: fetchError.message, errorCode: fetchError.code },
         })
 
         // Check if we should retry
         if (attempt >= config.maxAttempts) {
-          this.logger?.error('All retry attempts failed', { 
+          this.logger?.error('All retry attempts failed', {
             component: ComponentType.SUBTITLE_MANAGER,
-            metadata: { maxAttempts: config.maxAttempts }
+            metadata: { maxAttempts: config.maxAttempts },
           })
           break
         }
 
         if (!this.shouldRetry(fetchError, attempt, config)) {
-          this.logger?.info('Not retrying due to error type', { 
+          this.logger?.info('Not retrying due to error type', {
             component: ComponentType.SUBTITLE_MANAGER,
-            metadata: { errorCode: fetchError.code, attempt }
+            metadata: { errorCode: fetchError.code, attempt },
           })
           break
         }
@@ -127,9 +127,9 @@ export class RetryService {
         // Calculate delay and wait
         const delay = this.calculateDelay(attempt, config)
 
-        this.logger?.debug('Waiting before retry', { 
+        this.logger?.debug('Waiting before retry', {
           component: ComponentType.SUBTITLE_MANAGER,
-          metadata: { delay, attempt }
+          metadata: { delay, attempt },
         })
         await this.sleep(delay)
 

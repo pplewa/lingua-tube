@@ -106,9 +106,9 @@ export class TTSService implements ITTSService {
    */
   private async initializeVoices(): Promise<void> {
     if (!this.isSupported()) {
-              this.logger?.warn('Speech synthesis not supported in this browser', {
-          component: ComponentType.TTS_SERVICE
-        })
+      this.logger?.warn('Speech synthesis not supported in this browser', {
+        component: ComponentType.TTS_SERVICE,
+      })
       return
     }
 
@@ -140,8 +140,8 @@ export class TTSService implements ITTSService {
     this.logger?.info(`TTS Service: Loaded ${this.voices.length} voices`, {
       component: ComponentType.TTS_SERVICE,
       metadata: {
-        voiceCount: this.voices.length
-      }
+        voiceCount: this.voices.length,
+      },
     })
   }
 
@@ -427,8 +427,8 @@ export class TTSService implements ITTSService {
       metadata: {
         error: errorForLog.message,
         errorType: errorForLog.name,
-        stack: errorForLog.stack
-      }
+        stack: errorForLog.stack,
+      },
     })
 
     // Try fallback to audio URL if enabled
@@ -443,8 +443,8 @@ export class TTSService implements ITTSService {
           component: ComponentType.TTS_SERVICE,
           metadata: {
             error: fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
-            errorType: fallbackError instanceof Error ? fallbackError.name : 'Unknown'
-          }
+            errorType: fallbackError instanceof Error ? fallbackError.name : 'Unknown',
+          },
         })
       }
     }

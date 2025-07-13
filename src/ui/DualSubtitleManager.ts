@@ -113,8 +113,8 @@ export class DualSubtitleManager {
           metadata: {
             configured: status.configured,
             hasApiKey: status.hasApiKey,
-            lastError: status.lastError
-          }
+            lastError: status.lastError,
+          },
         })
 
         if (!status.configured || !status.hasApiKey) {
@@ -123,12 +123,12 @@ export class DualSubtitleManager {
             metadata: {
               hasApiKey: status.hasApiKey,
               configured: status.configured,
-              lastError: status.lastError
-            }
+              lastError: status.lastError,
+            },
           })
         } else {
           this.logger?.info('Translation service is ready', {
-            component: ComponentType.SUBTITLE_MANAGER
+            component: ComponentType.SUBTITLE_MANAGER,
           })
         }
       } else {
@@ -136,16 +136,16 @@ export class DualSubtitleManager {
           component: ComponentType.SUBTITLE_MANAGER,
           metadata: {
             responseSuccess: response?.success,
-            hasStatus: !!response?.status
-          }
+            hasStatus: !!response?.status,
+          },
         })
       }
     } catch (error) {
       this.logger?.warn('Error checking translation status', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
-          error: error instanceof Error ? error.message : String(error)
-        }
+          error: error instanceof Error ? error.message : String(error),
+        },
       })
     }
   }
@@ -154,13 +154,13 @@ export class DualSubtitleManager {
     try {
       if (this.isInitialized) {
         this.logger?.warn('Already initialized', {
-          component: ComponentType.SUBTITLE_MANAGER
+          component: ComponentType.SUBTITLE_MANAGER,
         })
         return true
       }
 
       this.logger?.info('Starting initialization', {
-        component: ComponentType.SUBTITLE_MANAGER
+        component: ComponentType.SUBTITLE_MANAGER,
       })
 
       // Check translation service status from background service (non-blocking)
@@ -168,23 +168,23 @@ export class DualSubtitleManager {
         this.logger?.warn('Translation status check failed', {
           component: ComponentType.SUBTITLE_MANAGER,
           metadata: {
-            error: error instanceof Error ? error.message : String(error)
-          }
+            error: error instanceof Error ? error.message : String(error),
+          },
         })
       })
 
       // Load user settings
       this.logger?.info('Loading user settings', {
-        component: ComponentType.SUBTITLE_MANAGER
+        component: ComponentType.SUBTITLE_MANAGER,
       })
       await this.loadUserSettings()
       this.logger?.info('User settings loaded', {
-        component: ComponentType.SUBTITLE_MANAGER
+        component: ComponentType.SUBTITLE_MANAGER,
       })
 
       // Initialize subtitle component
       this.logger?.info('Creating subtitle component', {
-        component: ComponentType.SUBTITLE_MANAGER
+        component: ComponentType.SUBTITLE_MANAGER,
       })
       this.subtitleComponent = new DualSubtitleComponent(
         this.playerService,
@@ -192,30 +192,30 @@ export class DualSubtitleManager {
         await this.createSubtitleConfig(),
       )
       this.logger?.info('Subtitle component created', {
-        component: ComponentType.SUBTITLE_MANAGER
+        component: ComponentType.SUBTITLE_MANAGER,
       })
 
       this.logger?.info('Initializing subtitle component', {
-        component: ComponentType.SUBTITLE_MANAGER
+        component: ComponentType.SUBTITLE_MANAGER,
       })
       const initSuccess = await this.subtitleComponent.initialize()
       if (!initSuccess) {
         this.logger?.error('Failed to initialize subtitle component', {
-          component: ComponentType.SUBTITLE_MANAGER
+          component: ComponentType.SUBTITLE_MANAGER,
         })
         return false
       }
       this.logger?.info('Subtitle component initialized', {
-        component: ComponentType.SUBTITLE_MANAGER
+        component: ComponentType.SUBTITLE_MANAGER,
       })
 
       // Set up subtitle component event handlers
       this.logger?.info('Setting up event handlers', {
-        component: ComponentType.SUBTITLE_MANAGER
+        component: ComponentType.SUBTITLE_MANAGER,
       })
       this.setupSubtitleEventHandlers()
       this.logger?.info('Event handlers set up', {
-        component: ComponentType.SUBTITLE_MANAGER
+        component: ComponentType.SUBTITLE_MANAGER,
       })
 
       // Get current video ID
@@ -225,16 +225,16 @@ export class DualSubtitleManager {
       this.logger?.info('Initialized successfully', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
-          currentVideoId: this.currentVideoId
-        }
+          currentVideoId: this.currentVideoId,
+        },
       })
       return true
     } catch (error) {
       this.logger?.error('Initialization failed', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
-          error: error instanceof Error ? error.message : String(error)
-        }
+          error: error instanceof Error ? error.message : String(error),
+        },
       })
       return false
     }
@@ -262,14 +262,14 @@ export class DualSubtitleManager {
 
       this.isInitialized = false
       this.logger?.info('Destroyed successfully', {
-        component: ComponentType.SUBTITLE_MANAGER
+        component: ComponentType.SUBTITLE_MANAGER,
       })
     } catch (error) {
       this.logger?.error('Destroy failed', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
-          error: error instanceof Error ? error.message : String(error)
-        }
+          error: error instanceof Error ? error.message : String(error),
+        },
       })
     }
   }
@@ -295,8 +295,8 @@ export class DualSubtitleManager {
             sourceLanguage: this.sourceLanguage,
             targetLanguage: this.targetLanguage,
             cacheTranslations: settings.privacy.cacheTranslations,
-            autoSaveWords: settings.vocabulary.autoSave
-          }
+            autoSaveWords: settings.vocabulary.autoSave,
+          },
         })
 
         // Update manager config
@@ -312,8 +312,8 @@ export class DualSubtitleManager {
       this.logger?.warn('Failed to load user settings', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
-          error: error instanceof Error ? error.message : String(error)
-        }
+          error: error instanceof Error ? error.message : String(error),
+        },
       })
     }
   }
@@ -340,8 +340,8 @@ export class DualSubtitleManager {
       this.logger?.warn('Failed to create subtitle config from settings', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
-          error: error instanceof Error ? error.message : String(error)
-        }
+          error: error instanceof Error ? error.message : String(error),
+        },
       })
     }
 
@@ -390,8 +390,8 @@ export class DualSubtitleManager {
           component: ComponentType.SUBTITLE_MANAGER,
           metadata: {
             cueCount,
-            autoTranslate: this.config.autoTranslate
-          }
+            autoTranslate: this.config.autoTranslate,
+          },
         })
         this.processVisibleCues()
       }
@@ -407,8 +407,8 @@ export class DualSubtitleManager {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           previousVideoId: this.currentVideoId,
-          newVideoId: videoId
-        }
+          newVideoId: videoId,
+        },
       })
     }
   }
@@ -421,8 +421,8 @@ export class DualSubtitleManager {
           word: event.word,
           sourceLanguage: this.sourceLanguage,
           targetLanguage: this.targetLanguage,
-          cueId: event.cueId
-        }
+          cueId: event.cueId,
+        },
       })
 
       const { word, cueId, context, position } = event
@@ -434,8 +434,8 @@ export class DualSubtitleManager {
           word,
           context: context.substring(0, 100), // Limit context length for logging
           sourceLanguage: this.sourceLanguage,
-          targetLanguage: this.targetLanguage
-        }
+          targetLanguage: this.targetLanguage,
+        },
       })
       const translation = await this.getWordTranslation(word, context)
       this.logger?.debug('Word translation completed', {
@@ -443,8 +443,8 @@ export class DualSubtitleManager {
         metadata: {
           word,
           translation,
-          translationLength: translation.length
-        }
+          translationLength: translation.length,
+        },
       })
 
       // Show translation tooltip with context
@@ -473,8 +473,8 @@ export class DualSubtitleManager {
               component: ComponentType.SUBTITLE_MANAGER,
               metadata: {
                 word,
-                error: error instanceof Error ? error.message : String(error)
-              }
+                error: error instanceof Error ? error.message : String(error),
+              },
             })
           }
         })
@@ -484,8 +484,8 @@ export class DualSubtitleManager {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           word: event.word,
-          error: error instanceof Error ? error.message : String(error)
-        }
+          error: error instanceof Error ? error.message : String(error),
+        },
       })
     }
   }
@@ -530,8 +530,8 @@ export class DualSubtitleManager {
           metadata: {
             cueId,
             text: text.substring(0, 50),
-            error: error instanceof Error ? error.message : String(error)
-          }
+            error: error instanceof Error ? error.message : String(error),
+          },
         })
       }
     }
@@ -584,8 +584,8 @@ export class DualSubtitleManager {
           text: request.text.substring(0, 50),
           sourceLanguage: request.sourceLanguage,
           targetLanguage: request.targetLanguage,
-          error: error instanceof Error ? error.message : String(error)
-        }
+          error: error instanceof Error ? error.message : String(error),
+        },
       })
     } finally {
       this.pendingTranslations.delete(cueId)
@@ -609,8 +609,8 @@ export class DualSubtitleManager {
           metadata: {
             cueId,
             translation: translation.substring(0, 50),
-            error: error instanceof Error ? error.message : String(error)
-          }
+            error: error instanceof Error ? error.message : String(error),
+          },
         })
       }
     })
@@ -624,8 +624,8 @@ export class DualSubtitleManager {
           word,
           sourceLanguage: this.sourceLanguage,
           targetLanguage: this.targetLanguage,
-          contextLength: context.length
-        }
+          contextLength: context.length,
+        },
       })
 
       // Check cache first
@@ -642,8 +642,8 @@ export class DualSubtitleManager {
               word,
               cachedTranslation: cached,
               sourceLanguage: this.sourceLanguage,
-              targetLanguage: this.targetLanguage
-            }
+              targetLanguage: this.targetLanguage,
+            },
           })
           return cached
         }
@@ -660,8 +660,8 @@ export class DualSubtitleManager {
           textToTranslate,
           contextWordsCount: contextWords.length,
           sourceLanguage: this.sourceLanguage,
-          targetLanguage: this.targetLanguage
-        }
+          targetLanguage: this.targetLanguage,
+        },
       })
 
       const translation = await this.translationService.translateText({
@@ -675,8 +675,8 @@ export class DualSubtitleManager {
         metadata: {
           word,
           rawTranslation: translation,
-          translationLength: translation.length
-        }
+          translationLength: translation.length,
+        },
       })
 
       // If we translated with context, extract just the word translation
@@ -690,8 +690,8 @@ export class DualSubtitleManager {
         metadata: {
           word,
           finalTranslation: wordTranslation,
-          usedContextExtraction: contextWords.length > 1
-        }
+          usedContextExtraction: contextWords.length > 1,
+        },
       })
 
       // Cache the word translation
@@ -712,8 +712,8 @@ export class DualSubtitleManager {
           word,
           sourceLanguage: this.sourceLanguage,
           targetLanguage: this.targetLanguage,
-          error: error instanceof Error ? error.message : String(error)
-        }
+          error: error instanceof Error ? error.message : String(error),
+        },
       })
 
       // Provide specific error feedback for authentication issues
@@ -729,8 +729,8 @@ export class DualSubtitleManager {
             metadata: {
               word,
               errorCode: translationError.code,
-              message: 'Please configure your Microsoft Translator API key'
-            }
+              message: 'Please configure your Microsoft Translator API key',
+            },
           })
           return `[Translation Error: API key needed]`
         } else if (translationError.code === 'MISSING_API_KEY') {
@@ -739,8 +739,8 @@ export class DualSubtitleManager {
             metadata: {
               word,
               errorCode: translationError.code,
-              message: 'No API key configured'
-            }
+              message: 'No API key configured',
+            },
           })
           return `[No API key configured]`
         }
@@ -821,16 +821,16 @@ export class DualSubtitleManager {
             translation: entry.translation,
             videoId: entry.videoId,
             sourceLanguage: entry.sourceLanguage,
-            targetLanguage: entry.targetLanguage
-          }
+            targetLanguage: entry.targetLanguage,
+          },
         })
       } else {
         this.logger?.error('Failed to save vocabulary item', {
           component: ComponentType.SUBTITLE_MANAGER,
           metadata: {
             word: entry.word,
-            error: result.error || 'Unknown error'
-          }
+            error: result.error || 'Unknown error',
+          },
         })
       }
     } catch (error) {
@@ -838,8 +838,8 @@ export class DualSubtitleManager {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           word: entry.word,
-          error: error instanceof Error ? error.message : String(error)
-        }
+          error: error instanceof Error ? error.message : String(error),
+        },
       })
     }
   }
@@ -868,8 +868,8 @@ export class DualSubtitleManager {
         position,
         hasWordLookupPopup: !!this.wordLookupPopup,
         sourceLanguage: this.sourceLanguage,
-        targetLanguage: this.targetLanguage
-      }
+        targetLanguage: this.targetLanguage,
+      },
     })
 
     if (this.wordLookupPopup) {
@@ -887,8 +887,8 @@ export class DualSubtitleManager {
         metadata: {
           word,
           translation,
-          reason: 'No word lookup popup available'
-        }
+          reason: 'No word lookup popup available',
+        },
       })
     }
   }

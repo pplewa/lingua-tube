@@ -27,7 +27,7 @@ export class YouTubePlayerResponseParser {
   static async parsePlayerResponse(): Promise<PlayerResponseParseResult> {
     try {
       this.logger?.info('Starting YouTube player response parsing...', {
-        component: ComponentType.YOUTUBE_INTEGRATION
+        component: ComponentType.YOUTUBE_INTEGRATION,
       })
 
       // Verify we're on a YouTube video page
@@ -58,7 +58,7 @@ export class YouTubePlayerResponseParser {
           videoId: parseResult.videoDetails?.videoId,
           captionTracks:
             parseResult.captions?.playerCaptionsTracklistRenderer?.captionTracks?.length || 0,
-        }
+        },
       })
 
       return parseResult
@@ -66,8 +66,8 @@ export class YouTubePlayerResponseParser {
       this.logger?.error('Player response parsing failed', {
         component: ComponentType.YOUTUBE_INTEGRATION,
         metadata: {
-          error: error instanceof Error ? error.message : String(error)
-        }
+          error: error instanceof Error ? error.message : String(error),
+        },
       })
       return {
         success: false,
@@ -83,7 +83,7 @@ export class YouTubePlayerResponseParser {
   private static async extractPlayerResponseWithRetry(): Promise<any> {
     for (let attempt = 1; attempt <= this.RETRY_ATTEMPTS; attempt++) {
       this.logger?.info(`Player response extraction attempt ${attempt}/${this.RETRY_ATTEMPTS}`, {
-        component: ComponentType.YOUTUBE_INTEGRATION
+        component: ComponentType.YOUTUBE_INTEGRATION,
       })
 
       // Try different extraction methods
@@ -92,7 +92,7 @@ export class YouTubePlayerResponseParser {
 
       if (playerResponse) {
         this.logger?.info('Player response extracted successfully', {
-          component: ComponentType.YOUTUBE_INTEGRATION
+          component: ComponentType.YOUTUBE_INTEGRATION,
         })
         return playerResponse
       }
@@ -114,7 +114,7 @@ export class YouTubePlayerResponseParser {
       // @ts-ignore - YouTube's global variable
       if (window.ytInitialPlayerResponse) {
         this.logger?.info('Found ytInitialPlayerResponse on window object', {
-          component: ComponentType.YOUTUBE_INTEGRATION
+          component: ComponentType.YOUTUBE_INTEGRATION,
         })
         // @ts-ignore
         return window.ytInitialPlayerResponse
@@ -123,8 +123,8 @@ export class YouTubePlayerResponseParser {
       this.logger?.error('Window extraction failed', {
         component: ComponentType.YOUTUBE_INTEGRATION,
         metadata: {
-          error: error instanceof Error ? error.message : String(error)
-        }
+          error: error instanceof Error ? error.message : String(error),
+        },
       })
     }
     return null
@@ -144,7 +144,7 @@ export class YouTubePlayerResponseParser {
         const match = content.match(/var\s+ytInitialPlayerResponse\s*=\s*({.+?});/)
         if (match) {
           this.logger?.info('Found ytInitialPlayerResponse in script tag', {
-            component: ComponentType.YOUTUBE_INTEGRATION
+            component: ComponentType.YOUTUBE_INTEGRATION,
           })
           return JSON.parse(match[1])
         }
@@ -153,7 +153,7 @@ export class YouTubePlayerResponseParser {
         const match2 = content.match(/ytInitialPlayerResponse\s*=\s*({.+?});/)
         if (match2) {
           this.logger?.info('Found ytInitialPlayerResponse (alternative pattern)', {
-            component: ComponentType.YOUTUBE_INTEGRATION
+            component: ComponentType.YOUTUBE_INTEGRATION,
           })
           return JSON.parse(match2[1])
         }
@@ -162,7 +162,7 @@ export class YouTubePlayerResponseParser {
         const match3 = content.match(/"ytInitialPlayerResponse":\s*({.+?})(?:,"webPageType")/)
         if (match3) {
           this.logger?.info('Found ytInitialPlayerResponse (JSON pattern)', {
-            component: ComponentType.YOUTUBE_INTEGRATION
+            component: ComponentType.YOUTUBE_INTEGRATION,
           })
           return JSON.parse(match3[1])
         }
@@ -171,8 +171,8 @@ export class YouTubePlayerResponseParser {
       this.logger?.error('Script extraction failed', {
         component: ComponentType.YOUTUBE_INTEGRATION,
         metadata: {
-          error: error instanceof Error ? error.message : String(error)
-        }
+          error: error instanceof Error ? error.message : String(error),
+        },
       })
     }
     return null
@@ -235,23 +235,23 @@ export class YouTubePlayerResponseParser {
       for (const captions of possiblePaths) {
         if (captions?.playerCaptionsTracklistRenderer) {
           this.logger?.info('Found captions data', {
-            component: ComponentType.YOUTUBE_INTEGRATION
+            component: ComponentType.YOUTUBE_INTEGRATION,
           })
           return captions as YTPlayerCaptions
         }
       }
 
       this.logger?.info('No captions data found in player response', {
-        component: ComponentType.YOUTUBE_INTEGRATION
+        component: ComponentType.YOUTUBE_INTEGRATION,
       })
       return undefined
     } catch (error) {
       this.logger?.error('Captions extraction failed', {
         component: ComponentType.YOUTUBE_INTEGRATION,
         metadata: {
-          error: error instanceof Error ? error.message : String(error)
-        }
-      });
+          error: error instanceof Error ? error.message : String(error),
+        },
+      })
       return undefined
     }
   }
@@ -265,7 +265,7 @@ export class YouTubePlayerResponseParser {
 
       if (!videoDetails) {
         this.logger?.info('No video details found in player response', {
-          component: ComponentType.YOUTUBE_INTEGRATION
+          component: ComponentType.YOUTUBE_INTEGRATION,
         })
         return undefined
       }
@@ -282,8 +282,8 @@ export class YouTubePlayerResponseParser {
       this.logger?.error('Video details extraction failed', {
         component: ComponentType.YOUTUBE_INTEGRATION,
         metadata: {
-          error: error instanceof Error ? error.message : String(error)
-        }
+          error: error instanceof Error ? error.message : String(error),
+        },
       })
       return undefined
     }
@@ -417,7 +417,7 @@ export class YouTubePlayerResponseParser {
   static clearCache(): void {
     // Clear any internal caches if needed
     this.logger?.info('Player response parser cache cleared', {
-      component: ComponentType.YOUTUBE_INTEGRATION
+      component: ComponentType.YOUTUBE_INTEGRATION,
     })
   }
 }

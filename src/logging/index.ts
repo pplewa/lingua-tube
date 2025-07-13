@@ -7,13 +7,18 @@ export { Logger } from './Logger'
 export * from './StackTraceProcessor'
 export { PerformanceMonitor } from './PerformanceMonitor'
 export { ErrorNotificationService, NotificationType } from './ErrorNotificationService'
-export type { NotificationConfig, ErrorMessage, NotificationAction, EnhancedNotification } from './ErrorNotificationService'
+export type {
+  NotificationConfig,
+  ErrorMessage,
+  NotificationAction,
+  EnhancedNotification,
+} from './ErrorNotificationService'
 export { RateLimitingService, createRateLimitingServiceFromConfig } from './RateLimitingService'
-export type { 
-  RateLimitConfig, 
-  DeduplicationConfig, 
-  RateLimitStats, 
-  DeduplicationStats 
+export type {
+  RateLimitConfig,
+  DeduplicationConfig,
+  RateLimitStats,
+  DeduplicationStats,
 } from './RateLimitingService'
 export { DebugModeService, createDebugModeService } from './DebugModeService'
 export type {
@@ -22,7 +27,7 @@ export type {
   MemorySnapshot,
   NetworkRequestInfo,
   ConsoleEntry,
-  ErrorPattern
+  ErrorPattern,
 } from './DebugModeService'
 export { GracefulDegradationService } from './GracefulDegradationService'
 export type {
@@ -35,7 +40,7 @@ export type {
   HealthCheckResult,
   SystemHealth,
   DegradationEvent,
-  UserNotificationConfig
+  UserNotificationConfig,
 } from './GracefulDegradationService'
 export { ErrorRecoveryService } from './ErrorRecoveryService'
 export type {
@@ -44,15 +49,21 @@ export type {
   RecoveryAttempt,
   RecoveryContext,
   RecoveryStats,
-  RecoveryConfig
+  RecoveryConfig,
 } from './ErrorRecoveryService'
-export { ConsoleLoggingService, createConsoleLoggingService, ConsoleFormat, ConsoleColorScheme, DEFAULT_CONSOLE_LOGGING_CONFIG } from './ConsoleLoggingService'
+export {
+  ConsoleLoggingService,
+  createConsoleLoggingService,
+  ConsoleFormat,
+  ConsoleColorScheme,
+  DEFAULT_CONSOLE_LOGGING_CONFIG,
+} from './ConsoleLoggingService'
 export type {
   ConsoleLoggingConfig,
   ConsoleGrouping,
   ConsoleFiltering,
   ConsoleFormatting,
-  ConsolePerformanceStats
+  ConsolePerformanceStats,
 } from './ConsoleLoggingService'
 
 import { Logger } from './Logger'

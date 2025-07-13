@@ -61,8 +61,8 @@ export class MultiFormatSubtitleParser {
           contentLength: content.length,
           encoding: config.encoding,
           strict: config.strict,
-          mergeSegments: config.mergeSegments
-        }
+          mergeSegments: config.mergeSegments,
+        },
       })
 
       // Validate input
@@ -82,8 +82,8 @@ export class MultiFormatSubtitleParser {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           format,
-          contentLength: content.length
-        }
+          contentLength: content.length,
+        },
       })
 
       // Build complete parser config
@@ -128,9 +128,9 @@ export class MultiFormatSubtitleParser {
           parseTime: parseTime.toFixed(2),
           format,
           success: result.success,
-          segmentCount: result.success ? (result.segments?.length || 0) : 0,
-          errorCount: result.errors?.length || 0
-        }
+          segmentCount: result.success ? result.segments?.length || 0 : 0,
+          errorCount: result.errors?.length || 0,
+        },
       })
 
       // Add format information to result
@@ -145,8 +145,8 @@ export class MultiFormatSubtitleParser {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           contentLength: content.length,
-          error: error instanceof Error ? error.message : String(error)
-        }
+          error: error instanceof Error ? error.message : String(error),
+        },
       })
 
       return this.createErrorResult([
@@ -247,8 +247,8 @@ export class MultiFormatSubtitleParser {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           contentLength: content.length,
-          preserveFormatting: config.preserveFormatting
-        }
+          preserveFormatting: config.preserveFormatting,
+        },
       })
 
       const lines = content.split(/\r?\n/)
@@ -343,8 +343,8 @@ export class MultiFormatSubtitleParser {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           segmentCount: segments.length,
-          errorCount: errors.length
-        }
+          errorCount: errors.length,
+        },
       })
 
       return {
@@ -366,8 +366,8 @@ export class MultiFormatSubtitleParser {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           contentLength: content.length,
-          error: error instanceof Error ? error.message : String(error)
-        }
+          error: error instanceof Error ? error.message : String(error),
+        },
       })
 
       errors.push({
@@ -480,8 +480,8 @@ export class MultiFormatSubtitleParser {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           contentLength: content.length,
-          preserveFormatting: config.preserveFormatting
-        }
+          preserveFormatting: config.preserveFormatting,
+        },
       })
 
       // Split into entries (separated by double newlines)
@@ -508,8 +508,8 @@ export class MultiFormatSubtitleParser {
         metadata: {
           segmentCount: segments.length,
           errorCount: errors.length,
-          entriesProcessed: entries.length
-        }
+          entriesProcessed: entries.length,
+        },
       })
 
       return {
@@ -531,8 +531,8 @@ export class MultiFormatSubtitleParser {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           contentLength: content.length,
-          error: error instanceof Error ? error.message : String(error)
-        }
+          error: error instanceof Error ? error.message : String(error),
+        },
       })
 
       errors.push({
@@ -635,8 +635,8 @@ export class MultiFormatSubtitleParser {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           contentLength: content.length,
-          preserveFormatting: config.preserveFormatting
-        }
+          preserveFormatting: config.preserveFormatting,
+        },
       })
 
       // Split into lines and group into segments
@@ -662,8 +662,8 @@ export class MultiFormatSubtitleParser {
         metadata: {
           segmentCount: segments.length,
           errorCount: errors.length,
-          linesProcessed: lines.length
-        }
+          linesProcessed: lines.length,
+        },
       })
 
       return {
@@ -685,8 +685,8 @@ export class MultiFormatSubtitleParser {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           contentLength: content.length,
-          error: error instanceof Error ? error.message : String(error)
-        }
+          error: error instanceof Error ? error.message : String(error),
+        },
       })
 
       errors.push({

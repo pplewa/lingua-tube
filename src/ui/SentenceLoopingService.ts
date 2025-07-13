@@ -250,7 +250,7 @@ export class SentenceLoopingService {
     try {
       if (this.isInitialized) {
         this.logger?.warn('Already initialized', {
-          component: ComponentType.SUBTITLE_MANAGER
+          component: ComponentType.SUBTITLE_MANAGER,
         })
         return true
       }
@@ -267,16 +267,16 @@ export class SentenceLoopingService {
         metadata: {
           configEnabled: this.config.enabled,
           autoLoop: this.config.autoLoop,
-          loopCount: this.config.loopCount
-        }
+          loopCount: this.config.loopCount,
+        },
       })
       return true
     } catch (error) {
       this.logger?.error('Initialization failed', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
-          error: error instanceof Error ? error.message : String(error)
-        }
+          error: error instanceof Error ? error.message : String(error),
+        },
       })
       return false
     }
@@ -299,14 +299,14 @@ export class SentenceLoopingService {
 
       this.isInitialized = false
       this.logger?.info('Destroyed successfully', {
-        component: ComponentType.SUBTITLE_MANAGER
+        component: ComponentType.SUBTITLE_MANAGER,
       })
     } catch (error) {
       this.logger?.error('Destroy failed', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
-          error: error instanceof Error ? error.message : String(error)
-        }
+          error: error instanceof Error ? error.message : String(error),
+        },
       })
     }
   }
@@ -325,8 +325,8 @@ export class SentenceLoopingService {
       this.logger?.warn('Failed to load config from storage', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
-          error: error instanceof Error ? error.message : String(error)
-        }
+          error: error instanceof Error ? error.message : String(error),
+        },
       })
     }
   }
@@ -415,15 +415,15 @@ export class SentenceLoopingService {
         metadata: {
           sentenceCount: this.availableSentences.length,
           segmentCount: this.subtitleSegments.length,
-          hasCurrentTrack: !!currentTrack
-        }
+          hasCurrentTrack: !!currentTrack,
+        },
       })
     } catch (error) {
       this.logger?.error('Failed to refresh subtitle data', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
-          error: error instanceof Error ? error.message : String(error)
-        }
+          error: error instanceof Error ? error.message : String(error),
+        },
       })
       this.subtitleSegments = []
       this.availableSentences = []
@@ -439,8 +439,8 @@ export class SentenceLoopingService {
       this.logger?.warn('Service is disabled', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
-          action: 'createLoopFromCurrentTime'
-        }
+          action: 'createLoopFromCurrentTime',
+        },
       })
       return null
     }
@@ -456,8 +456,8 @@ export class SentenceLoopingService {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           time,
-          availableSentencesCount: this.availableSentences.length
-        }
+          availableSentencesCount: this.availableSentences.length,
+        },
       })
       return null
     }
@@ -472,8 +472,8 @@ export class SentenceLoopingService {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           subtitleId,
-          availableSentencesCount: this.availableSentences.length
-        }
+          availableSentencesCount: this.availableSentences.length,
+        },
       })
       return null
     }
@@ -494,8 +494,8 @@ export class SentenceLoopingService {
         metadata: {
           duration,
           minDuration: this.config.minLoopDuration,
-          sentenceText: sentence.combinedText.substring(0, 50)
-        }
+          sentenceText: sentence.combinedText.substring(0, 50),
+        },
       })
       return null
     }
@@ -506,8 +506,8 @@ export class SentenceLoopingService {
         metadata: {
           duration,
           maxDuration: this.config.maxLoopDuration,
-          sentenceText: sentence.combinedText.substring(0, 50)
-        }
+          sentenceText: sentence.combinedText.substring(0, 50),
+        },
       })
       return null
     }
@@ -533,8 +533,8 @@ export class SentenceLoopingService {
         endTime: loop.endTime,
         duration: loop.endTime - loop.startTime,
         maxIterations: loop.maxIterations,
-        text: loop.text.substring(0, 50)
-      }
+        text: loop.text.substring(0, 50),
+      },
     })
     this.emitEvent({ type: 'loop_created', loop, timestamp: Date.now() })
 
@@ -547,8 +547,8 @@ export class SentenceLoopingService {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           action: 'activateLoop',
-          loopId: loop.id
-        }
+          loopId: loop.id,
+        },
       })
       return false
     }
@@ -599,8 +599,8 @@ export class SentenceLoopingService {
         startTime: this.currentLoop.startTime,
         endTime: this.currentLoop.endTime,
         maxIterations: this.currentLoop.maxIterations,
-        text: this.currentLoop.text.substring(0, 50)
-      }
+        text: this.currentLoop.text.substring(0, 50),
+      },
     })
   }
 
@@ -620,8 +620,8 @@ export class SentenceLoopingService {
         metadata: {
           loopId: this.currentLoop?.id,
           startTime: this.currentLoop?.startTime,
-          error: error instanceof Error ? error.message : String(error)
-        }
+          error: error instanceof Error ? error.message : String(error),
+        },
       })
     }
   }
@@ -658,8 +658,8 @@ export class SentenceLoopingService {
           loopId: this.currentLoop.id,
           currentTime,
           loopStartTime: this.currentLoop.startTime,
-          loopEndTime: this.currentLoop.endTime
-        }
+          loopEndTime: this.currentLoop.endTime,
+        },
       })
       this.stopCurrentLoop()
     }
@@ -738,8 +738,8 @@ export class SentenceLoopingService {
         loopId: completedLoop.id,
         finalIteration: completedLoop.currentIteration,
         maxIterations: completedLoop.maxIterations,
-        text: completedLoop.text.substring(0, 50)
-      }
+        text: completedLoop.text.substring(0, 50),
+      },
     })
   }
 
@@ -771,8 +771,8 @@ export class SentenceLoopingService {
         loopId: stoppedLoop.id,
         iteration: stoppedLoop.currentIteration,
         maxIterations: stoppedLoop.maxIterations,
-        text: stoppedLoop.text.substring(0, 50)
-      }
+        text: stoppedLoop.text.substring(0, 50),
+      },
     })
   }
 
@@ -901,8 +901,8 @@ export class SentenceLoopingService {
             eventType: event.type,
             loopId: event.loop.id,
             timestamp: event.timestamp,
-            error: error instanceof Error ? error.message : String(error)
-          }
+            error: error instanceof Error ? error.message : String(error),
+          },
         })
       }
     })

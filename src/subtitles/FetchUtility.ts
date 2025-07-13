@@ -59,8 +59,8 @@ export class SubtitleFetchUtility {
           url: request.url,
           metadata: {
             attempt: attempt + 1,
-            maxAttempts: config.retryConfig.maxAttempts
-          }
+            maxAttempts: config.retryConfig.maxAttempts,
+          },
         })
 
         // Add delay for retries
@@ -78,8 +78,8 @@ export class SubtitleFetchUtility {
             metadata: {
               contentLength: response.contentLength,
               contentType: response.contentType,
-              status: response.status
-            }
+              status: response.status,
+            },
           })
           return response
         }
@@ -104,8 +104,8 @@ export class SubtitleFetchUtility {
           metadata: {
             attempt: attempt + 1,
             maxAttempts: config.retryConfig.maxAttempts,
-            error: error instanceof Error ? error.message : String(error)
-          }
+            error: error instanceof Error ? error.message : String(error),
+          },
         })
       }
 
@@ -226,11 +226,11 @@ export class SubtitleFetchUtility {
       // Cross-origin requests
       return 'cors'
     } catch (error) {
-             this.logger?.warn('Invalid URL, using CORS mode', {
-         component: ComponentType.SUBTITLE_MANAGER,
-         url,
-         metadata: { error: error instanceof Error ? error.message : String(error) }
-       })
+      this.logger?.warn('Invalid URL, using CORS mode', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        url,
+        metadata: { error: error instanceof Error ? error.message : String(error) },
+      })
       return 'cors'
     }
   }

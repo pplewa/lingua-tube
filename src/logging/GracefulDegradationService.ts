@@ -16,21 +16,21 @@ import {
  * Feature availability states
  */
 export enum FeatureState {
-  AVAILABLE = 'available',           // Feature working normally
-  DEGRADED = 'degraded',            // Feature working with limitations
-  FALLBACK = 'fallback',            // Using fallback implementation
-  UNAVAILABLE = 'unavailable',      // Feature completely disabled
+  AVAILABLE = 'available', // Feature working normally
+  DEGRADED = 'degraded', // Feature working with limitations
+  FALLBACK = 'fallback', // Using fallback implementation
+  UNAVAILABLE = 'unavailable', // Feature completely disabled
 }
 
 /**
  * System degradation levels
  */
 export enum DegradationLevel {
-  NONE = 'none',                    // All features working normally
-  MINOR = 'minor',                  // Some non-critical features degraded
-  MODERATE = 'moderate',            // Multiple features using fallbacks
-  SEVERE = 'severe',                // Only core features working
-  CRITICAL = 'critical',            // System barely functional
+  NONE = 'none', // All features working normally
+  MINOR = 'minor', // Some non-critical features degraded
+  MODERATE = 'moderate', // Multiple features using fallbacks
+  SEVERE = 'severe', // Only core features working
+  CRITICAL = 'critical', // System barely functional
 }
 
 /**
@@ -177,7 +177,9 @@ export class GracefulDegradationService {
   /**
    * Get singleton instance
    */
-  public static getInstance(config?: { notifications?: Partial<UserNotificationConfig> }): GracefulDegradationService | null {
+  public static getInstance(config?: {
+    notifications?: Partial<UserNotificationConfig>
+  }): GracefulDegradationService | null {
     if (typeof window === 'undefined') {
       return null
     }
@@ -418,13 +420,13 @@ export class GracefulDegradationService {
    * Report feature failure and trigger degradation
    */
   public async reportFeatureFailure(
-    featureName: string, 
-    error: Error, 
+    featureName: string,
+    error: Error,
     context?: {
       severity?: ErrorSeverity
       expectedRecoveryTime?: number
       userImpact?: 'none' | 'low' | 'medium' | 'high' | 'critical'
-    }
+    },
   ): Promise<void> {
     const feature = this.features.get(featureName)
     const status = this.featureStatus.get(featureName)
@@ -436,13 +438,13 @@ export class GracefulDegradationService {
 
     const previousState = status.state
     const userImpact = context?.userImpact || this.assessUserImpact(feature, error)
-    
+
     // Determine appropriate degradation response
     const degradationResponse = await this.determineDegradationResponse(feature, error, context)
-    
+
     // Apply degradation
     const success = await this.applyDegradation(featureName, degradationResponse)
-    
+
     if (success) {
       // Update status
       this.updateFeatureStatus(featureName, {
@@ -493,11 +495,11 @@ export class GracefulDegradationService {
     try {
       // Perform feature health check
       const healthResult = await this.performHealthCheck(feature)
-      
+
       if (healthResult.success) {
         // Recovery successful
         const previousState = status.state
-        
+
         this.updateFeatureStatus(featureName, {
           state: FeatureState.AVAILABLE,
           activeFallback: undefined,
@@ -544,26 +546,29 @@ export class GracefulDegradationService {
    */
   public getSystemHealth(): SystemHealth {
     const features = Array.from(this.featureStatus.values())
-    const availableFeatures = features.filter(f => f.state === FeatureState.AVAILABLE).length
-    const degradedFeatures = features.filter(f => f.state === FeatureState.DEGRADED || f.state === FeatureState.FALLBACK).length
-    const unavailableFeatures = features.filter(f => f.state === FeatureState.UNAVAILABLE).length
+    const availableFeatures = features.filter((f) => f.state === FeatureState.AVAILABLE).length
+    const degradedFeatures = features.filter(
+      (f) => f.state === FeatureState.DEGRADED || f.state === FeatureState.FALLBACK,
+    ).length
+    const unavailableFeatures = features.filter((f) => f.state === FeatureState.UNAVAILABLE).length
 
     // Calculate estimated performance
     const totalFeatures = features.length
-    const performanceScore = features.reduce((score, feature) => {
-      switch (feature.state) {
-        case FeatureState.AVAILABLE:
-          return score + 100
-        case FeatureState.DEGRADED:
-          return score + 70
-        case FeatureState.FALLBACK:
-          return score + 50
-        case FeatureState.UNAVAILABLE:
-          return score + 0
-        default:
-          return score + 50
-      }
-    }, 0) / totalFeatures
+    const performanceScore =
+      features.reduce((score, feature) => {
+        switch (feature.state) {
+          case FeatureState.AVAILABLE:
+            return score + 100
+          case FeatureState.DEGRADED:
+            return score + 70
+          case FeatureState.FALLBACK:
+            return score + 50
+          case FeatureState.UNAVAILABLE:
+            return score + 0
+          default:
+            return score + 50
+        }
+      }, 0) / totalFeatures
 
     // Determine user experience impact
     let userExperienceImpact: SystemHealth['userExperienceImpact'] = 'none'
@@ -611,20 +616,22 @@ export class GracefulDegradationService {
    */
   public getDegradationHistory(featureName?: string, limit: number = 50): DegradationEvent[] {
     let events = this.degradationHistory
-    
+
     if (featureName) {
-      events = events.filter(event => event.feature === featureName)
+      events = events.filter((event) => event.feature === featureName)
     }
 
-    return events
-      .sort((a, b) => b.timestamp - a.timestamp)
-      .slice(0, limit)
+    return events.sort((a, b) => b.timestamp - a.timestamp).slice(0, limit)
   }
 
   /**
    * Force feature state change (for testing or manual intervention)
    */
-  public async forceFeatureState(featureName: string, state: FeatureState, fallbackName?: string): Promise<boolean> {
+  public async forceFeatureState(
+    featureName: string,
+    state: FeatureState,
+    fallbackName?: string,
+  ): Promise<boolean> {
     const feature = this.features.get(featureName)
     if (!feature) {
       return false
@@ -636,15 +643,18 @@ export class GracefulDegradationService {
     }
 
     const previousState = status.state
-    
+
     // Apply the forced state
     if (state !== FeatureState.AVAILABLE && fallbackName) {
-      const fallback = feature.fallbackOptions.find(f => f.name === fallbackName)
+      const fallback = feature.fallbackOptions.find((f) => f.name === fallbackName)
       if (fallback) {
         try {
           await fallback.implementation()
         } catch (error) {
-          console.error(`[GracefulDegradation] Failed to apply forced fallback ${fallbackName}:`, error)
+          console.error(
+            `[GracefulDegradation] Failed to apply forced fallback ${fallbackName}:`,
+            error,
+          )
           return false
         }
       }
@@ -676,20 +686,22 @@ export class GracefulDegradationService {
    */
   private updateSystemDegradationLevel(): void {
     const features = Array.from(this.featureStatus.values())
-    const criticalFeatures = features.filter(f => {
+    const criticalFeatures = features.filter((f) => {
       const config = this.features.get(f.name)
       return config?.priority === 'critical'
     })
 
-    const highFeatures = features.filter(f => {
+    const highFeatures = features.filter((f) => {
       const config = this.features.get(f.name)
       return config?.priority === 'high'
     })
 
     // Count degraded/unavailable features by priority
-    const criticalDegraded = criticalFeatures.filter(f => f.state !== FeatureState.AVAILABLE).length
-    const highDegraded = highFeatures.filter(f => f.state !== FeatureState.AVAILABLE).length
-    const totalDegraded = features.filter(f => f.state !== FeatureState.AVAILABLE).length
+    const criticalDegraded = criticalFeatures.filter(
+      (f) => f.state !== FeatureState.AVAILABLE,
+    ).length
+    const highDegraded = highFeatures.filter((f) => f.state !== FeatureState.AVAILABLE).length
+    const totalDegraded = features.filter((f) => f.state !== FeatureState.AVAILABLE).length
 
     // Determine degradation level
     let newLevel: DegradationLevel = DegradationLevel.NONE
@@ -709,7 +721,9 @@ export class GracefulDegradationService {
 
     // Log level changes
     if (newLevel !== previousLevel) {
-      console.log(`[GracefulDegradation] System degradation level changed: ${previousLevel} → ${newLevel}`)
+      console.log(
+        `[GracefulDegradation] System degradation level changed: ${previousLevel} → ${newLevel}`,
+      )
     }
   }
 
@@ -778,7 +792,7 @@ export class GracefulDegradationService {
   private async checkAudioPermissions(): Promise<boolean> {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      stream.getTracks().forEach(track => track.stop())
+      stream.getTracks().forEach((track) => track.stop())
       return true
     } catch {
       return false
@@ -802,18 +816,21 @@ export class GracefulDegradationService {
    */
   private async performSystemHealthCheck(): Promise<void> {
     this.lastSystemHealthCheck = Date.now()
-    
+
     // Check overall system performance
     const systemHealth = this.getSystemHealth()
-    
+
     // Log health status if degraded
     if (systemHealth.overallLevel !== DegradationLevel.NONE) {
-      console.log(`[GracefulDegradation] System health check: ${systemHealth.overallLevel} degradation`, {
-        available: systemHealth.availableFeatures,
-        degraded: systemHealth.degradedFeatures,
-        unavailable: systemHealth.unavailableFeatures,
-        performance: systemHealth.estimatedPerformance,
-      })
+      console.log(
+        `[GracefulDegradation] System health check: ${systemHealth.overallLevel} degradation`,
+        {
+          available: systemHealth.availableFeatures,
+          degraded: systemHealth.degradedFeatures,
+          unavailable: systemHealth.unavailableFeatures,
+          performance: systemHealth.estimatedPerformance,
+        },
+      )
     }
   }
 
@@ -827,7 +844,7 @@ export class GracefulDegradationService {
     const timer = window.setInterval(async () => {
       const healthResult = await this.performHealthCheck(feature)
       this.updateHealthCheckResult(featureName, healthResult)
-      
+
       // Trigger recovery if feature is degraded but health check passes
       const status = this.featureStatus.get(featureName)
       if (status?.state !== FeatureState.AVAILABLE && healthResult.success) {
@@ -843,13 +860,13 @@ export class GracefulDegradationService {
    */
   private async performHealthCheck(feature: FeatureConfig): Promise<HealthCheckResult> {
     const startTime = performance.now()
-    
+
     try {
       // Basic health check implementation
       // In a real implementation, this would test feature-specific functionality
       const success = await this.testFeatureHealth(feature.name)
       const responseTime = performance.now() - startTime
-      
+
       return {
         timestamp: Date.now(),
         success,
@@ -934,7 +951,7 @@ export class GracefulDegradationService {
     if (!status) return
 
     const updatedResults = [...status.healthCheckResults, result].slice(-10) // Keep last 10 results
-    
+
     this.updateFeatureStatus(featureName, {
       lastHealthCheck: result.timestamp,
       healthCheckResults: updatedResults,
@@ -955,18 +972,30 @@ export class GracefulDegradationService {
   }
 
   // Placeholder methods for remaining functionality
-  private assessUserImpact(feature: FeatureConfig, error: Error): 'none' | 'low' | 'medium' | 'high' | 'critical' {
+  private assessUserImpact(
+    feature: FeatureConfig,
+    error: Error,
+  ): 'none' | 'low' | 'medium' | 'high' | 'critical' {
     // Assess impact based on feature priority and error type
     switch (feature.priority) {
-      case 'critical': return 'high'
-      case 'high': return 'medium'
-      case 'medium': return 'low'
-      case 'low': return 'none'
-      default: return 'low'
+      case 'critical':
+        return 'high'
+      case 'high':
+        return 'medium'
+      case 'medium':
+        return 'low'
+      case 'low':
+        return 'none'
+      default:
+        return 'low'
     }
   }
 
-  private async determineDegradationResponse(feature: FeatureConfig, error: Error, context?: any): Promise<{
+  private async determineDegradationResponse(
+    feature: FeatureConfig,
+    error: Error,
+    context?: any,
+  ): Promise<{
     newState: FeatureState
     fallbackUsed?: string
     performanceImpact: number
@@ -974,7 +1003,7 @@ export class GracefulDegradationService {
   }> {
     // Determine best fallback option
     const fallback = feature.fallbackOptions[0] // Use first fallback for now
-    
+
     return {
       newState: FeatureState.FALLBACK,
       fallbackUsed: fallback?.name,
@@ -985,11 +1014,16 @@ export class GracefulDegradationService {
 
   private calculatePerformanceImpact(impact: 'none' | 'low' | 'medium' | 'high'): number {
     switch (impact) {
-      case 'none': return 0
-      case 'low': return 10
-      case 'medium': return 25
-      case 'high': return 50
-      default: return 0
+      case 'none':
+        return 0
+      case 'low':
+        return 10
+      case 'medium':
+        return 25
+      case 'high':
+        return 50
+      default:
+        return 0
     }
   }
 
@@ -1002,7 +1036,11 @@ export class GracefulDegradationService {
     return this.notificationConfig.enabled && this.notificationConfig.notifyOnDegradation
   }
 
-  private async notifyUserOfDegradation(feature: FeatureConfig, response: any, userImpact: string): Promise<void> {
+  private async notifyUserOfDegradation(
+    feature: FeatureConfig,
+    response: any,
+    userImpact: string,
+  ): Promise<void> {
     // Send user notification about degradation
     console.log(`[GracefulDegradation] User notification: ${feature.name} degraded`)
   }
@@ -1031,7 +1069,7 @@ export class GracefulDegradationService {
 
   private recordDegradationEvent(event: DegradationEvent): void {
     this.degradationHistory.push(event)
-    
+
     // Keep only last 1000 events
     if (this.degradationHistory.length > 1000) {
       this.degradationHistory.shift()
@@ -1040,25 +1078,25 @@ export class GracefulDegradationService {
 
   private generateRecommendations(features: FeatureStatus[]): string[] {
     const recommendations: string[] = []
-    
-    const degradedFeatures = features.filter(f => f.state !== FeatureState.AVAILABLE)
-    
+
+    const degradedFeatures = features.filter((f) => f.state !== FeatureState.AVAILABLE)
+
     if (degradedFeatures.length > 0) {
       recommendations.push('Some features are experiencing issues')
-      
-      if (degradedFeatures.some(f => f.name === 'translation')) {
+
+      if (degradedFeatures.some((f) => f.name === 'translation')) {
         recommendations.push('Try refreshing the page to restore translation')
       }
-      
-      if (degradedFeatures.some(f => f.name === 'subtitles')) {
+
+      if (degradedFeatures.some((f) => f.name === 'subtitles')) {
         recommendations.push('Check your internet connection for subtitle loading')
       }
-      
+
       if (degradedFeatures.length > 2) {
         recommendations.push('Consider disabling other browser extensions temporarily')
       }
     }
-    
+
     return recommendations
   }
 
@@ -1087,4 +1125,4 @@ export class GracefulDegradationService {
 
     GracefulDegradationService.instance = null
   }
-} 
+}

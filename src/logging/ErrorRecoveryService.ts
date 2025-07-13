@@ -16,14 +16,14 @@ import {
  * Recovery strategy types
  */
 export enum RecoveryStrategyType {
-  RETRY = 'retry',                    // Simple retry with backoff
-  STATE_RESET = 'state_reset',        // Reset component state
+  RETRY = 'retry', // Simple retry with backoff
+  STATE_RESET = 'state_reset', // Reset component state
   SERVICE_RESTART = 'service_restart', // Restart service/component
   PERMISSION_REQUEST = 'permission_request', // Request missing permissions
-  CACHE_CLEAR = 'cache_clear',        // Clear cache and retry
-  STORAGE_REPAIR = 'storage_repair',  // Repair storage issues
-  NETWORK_RETRY = 'network_retry',    // Network-specific retry logic
-  API_FALLBACK = 'api_fallback',      // Switch to fallback API
+  CACHE_CLEAR = 'cache_clear', // Clear cache and retry
+  STORAGE_REPAIR = 'storage_repair', // Repair storage issues
+  NETWORK_RETRY = 'network_retry', // Network-specific retry logic
+  API_FALLBACK = 'api_fallback', // Switch to fallback API
   RESOURCE_CLEANUP = 'resource_cleanup', // Clean up resources and retry
   CONFIGURATION_RESET = 'configuration_reset', // Reset configuration to defaults
 }
@@ -32,10 +32,10 @@ export enum RecoveryStrategyType {
  * Recovery result status
  */
 export enum RecoveryResult {
-  SUCCESS = 'success',                // Recovery succeeded
+  SUCCESS = 'success', // Recovery succeeded
   PARTIAL_SUCCESS = 'partial_success', // Partial recovery achieved
-  FAILED = 'failed',                  // Recovery failed
-  NOT_APPLICABLE = 'not_applicable',   // Recovery strategy not applicable
+  FAILED = 'failed', // Recovery failed
+  NOT_APPLICABLE = 'not_applicable', // Recovery strategy not applicable
   REQUIRES_USER_ACTION = 'requires_user_action', // User intervention needed
 }
 
@@ -68,7 +68,11 @@ export interface RecoveryStrategy {
   readonly backoffMultiplier: number
   readonly timeoutMs: number
   readonly prerequisites?: (() => Promise<boolean>)[]
-  readonly implementation: (error: Error, attempt: number, context: RecoveryContext) => Promise<RecoveryResult>
+  readonly implementation: (
+    error: Error,
+    attempt: number,
+    context: RecoveryContext,
+  ) => Promise<RecoveryResult>
   readonly onSuccess?: (context: RecoveryContext) => Promise<void>
   readonly onFailure?: (context: RecoveryContext, finalError: Error) => Promise<void>
 }
@@ -98,17 +102,23 @@ export interface RecoveryStats {
   readonly successRate: number
   readonly averageRecoveryTime: number
   readonly strategiesUsed: Record<RecoveryStrategyType, number>
-  readonly componentStats: Record<ComponentType, {
-    attempts: number
-    successes: number
-    failures: number
-    averageTime: number
-  }>
-  readonly errorTypeStats: Record<ErrorType, {
-    attempts: number
-    successes: number
-    failures: number
-  }>
+  readonly componentStats: Record<
+    ComponentType,
+    {
+      attempts: number
+      successes: number
+      failures: number
+      averageTime: number
+    }
+  >
+  readonly errorTypeStats: Record<
+    ErrorType,
+    {
+      attempts: number
+      successes: number
+      failures: number
+    }
+  >
   readonly recentAttempts: RecoveryAttempt[]
 }
 
@@ -123,17 +133,23 @@ interface MutableRecoveryStats {
   successRate: number
   averageRecoveryTime: number
   strategiesUsed: Record<RecoveryStrategyType, number>
-  componentStats: Record<ComponentType, {
-    attempts: number
-    successes: number
-    failures: number
-    averageTime: number
-  }>
-  errorTypeStats: Record<ErrorType, {
-    attempts: number
-    successes: number
-    failures: number
-  }>
+  componentStats: Record<
+    ComponentType,
+    {
+      attempts: number
+      successes: number
+      failures: number
+      averageTime: number
+    }
+  >
+  errorTypeStats: Record<
+    ErrorType,
+    {
+      attempts: number
+      successes: number
+      failures: number
+    }
+  >
   recentAttempts: RecoveryAttempt[]
 }
 
@@ -161,11 +177,11 @@ export class ErrorRecoveryService {
   private readonly activeRecoveries: Map<string, Promise<RecoveryResult>> = new Map()
   private readonly recoveryHistory: RecoveryAttempt[] = []
   private readonly componentStates: Map<ComponentType, any> = new Map()
-  
+
   // Cleanup and maintenance
   private cleanupTimer: number | null = null
   private statsTimer: number | null = null
-  
+
   // Statistics tracking
   private stats: MutableRecoveryStats = this.initializeStats()
 
@@ -330,18 +346,21 @@ export class ErrorRecoveryService {
   public registerStrategy(strategy: RecoveryStrategy): void {
     const key = this.getStrategyKey(strategy.component, strategy.type)
     this.strategies.set(key, strategy)
-    this.log(LogLevel.DEBUG, `Registered recovery strategy: ${strategy.type} for ${strategy.component}`)
+    this.log(
+      LogLevel.DEBUG,
+      `Registered recovery strategy: ${strategy.type} for ${strategy.component}`,
+    )
   }
 
   /**
    * Attempt to recover from an error
    */
   public async attemptRecovery(
-    error: Error, 
-    component: ComponentType, 
-    errorType: ErrorType, 
+    error: Error,
+    component: ComponentType,
+    errorType: ErrorType,
     severity: ErrorSeverity,
-    metadata?: Record<string, any>
+    metadata?: Record<string, any>,
   ): Promise<RecoveryResult> {
     if (!this.config.enabled) {
       return RecoveryResult.NOT_APPLICABLE
@@ -364,8 +383,15 @@ export class ErrorRecoveryService {
     // Try each strategy in order of priority
     for (const strategy of applicableStrategies) {
       try {
-        const result = await this.executeStrategy(strategy, error, component, errorType, severity, metadata)
-        
+        const result = await this.executeStrategy(
+          strategy,
+          error,
+          component,
+          errorType,
+          severity,
+          metadata,
+        )
+
         if (result === RecoveryResult.SUCCESS || result === RecoveryResult.PARTIAL_SUCCESS) {
           this.log(LogLevel.INFO, `Recovery successful using ${strategy.type} for ${component}`)
           return result
@@ -388,23 +414,30 @@ export class ErrorRecoveryService {
     component: ComponentType,
     errorType: ErrorType,
     severity: ErrorSeverity,
-    metadata?: Record<string, any>
+    metadata?: Record<string, any>,
   ): Promise<RecoveryResult> {
     const startTime = Date.now()
     let attempt = 1
 
     while (attempt <= strategy.maxAttempts) {
       const attemptId = `${component}-${strategy.type}-${startTime}-${attempt}`
-      
+
       try {
         // Check prerequisites if any
         if (strategy.prerequisites) {
           for (const prerequisite of strategy.prerequisites) {
             const prerequisiteMet = await prerequisite()
             if (!prerequisiteMet) {
-              this.recordAttempt(attemptId, startTime, component, errorType, strategy.type, 
-                               RecoveryResult.NOT_APPLICABLE, Date.now() - startTime, 
-                               new Error('Prerequisites not met'))
+              this.recordAttempt(
+                attemptId,
+                startTime,
+                component,
+                errorType,
+                strategy.type,
+                RecoveryResult.NOT_APPLICABLE,
+                Date.now() - startTime,
+                new Error('Prerequisites not met'),
+              )
               return RecoveryResult.NOT_APPLICABLE
             }
           }
@@ -424,11 +457,19 @@ export class ErrorRecoveryService {
         // Execute the recovery strategy with timeout
         const result = await this.withTimeout(
           strategy.implementation(error, attempt, context),
-          strategy.timeoutMs
+          strategy.timeoutMs,
         )
 
         const duration = Date.now() - startTime
-        this.recordAttempt(attemptId, startTime, component, errorType, strategy.type, result, duration)
+        this.recordAttempt(
+          attemptId,
+          startTime,
+          component,
+          errorType,
+          strategy.type,
+          result,
+          duration,
+        )
 
         if (result === RecoveryResult.SUCCESS) {
           if (strategy.onSuccess) {
@@ -452,22 +493,34 @@ export class ErrorRecoveryService {
         attempt++
       } catch (strategyError) {
         const duration = Date.now() - startTime
-        const errorToRecord = strategyError instanceof Error ? strategyError : new Error(String(strategyError))
-        this.recordAttempt(attemptId, startTime, component, errorType, strategy.type, 
-                         RecoveryResult.FAILED, duration, errorToRecord)
-        
+        const errorToRecord =
+          strategyError instanceof Error ? strategyError : new Error(String(strategyError))
+        this.recordAttempt(
+          attemptId,
+          startTime,
+          component,
+          errorType,
+          strategy.type,
+          RecoveryResult.FAILED,
+          duration,
+          errorToRecord,
+        )
+
         if (attempt >= strategy.maxAttempts) {
           if (strategy.onFailure) {
-            await strategy.onFailure({
-              originalError: error,
-              component,
-              errorType,
-              severity,
-              attempt,
-              maxAttempts: strategy.maxAttempts,
-              startTime,
-              metadata,
-            }, errorToRecord)
+            await strategy.onFailure(
+              {
+                originalError: error,
+                component,
+                errorType,
+                severity,
+                attempt,
+                maxAttempts: strategy.maxAttempts,
+                startTime,
+                metadata,
+              },
+              errorToRecord,
+            )
           }
           this.updateStats(RecoveryResult.FAILED, duration, strategy.type, component, errorType)
           break
@@ -483,7 +536,10 @@ export class ErrorRecoveryService {
   /**
    * Find applicable recovery strategies for component and error type
    */
-  private findApplicableStrategies(component: ComponentType, errorType: ErrorType): RecoveryStrategy[] {
+  private findApplicableStrategies(
+    component: ComponentType,
+    errorType: ErrorType,
+  ): RecoveryStrategy[] {
     const strategies: RecoveryStrategy[] = []
 
     for (const strategy of this.strategies.values()) {
@@ -517,8 +573,15 @@ export class ErrorRecoveryService {
   /**
    * Network retry recovery implementation
    */
-  private async performNetworkRetry(error: Error, attempt: number, context: RecoveryContext): Promise<RecoveryResult> {
-    this.log(LogLevel.DEBUG, `Attempting network retry (attempt ${attempt}) for ${context.component}`)
+  private async performNetworkRetry(
+    error: Error,
+    attempt: number,
+    context: RecoveryContext,
+  ): Promise<RecoveryResult> {
+    this.log(
+      LogLevel.DEBUG,
+      `Attempting network retry (attempt ${attempt}) for ${context.component}`,
+    )
 
     try {
       // Test network connectivity
@@ -549,7 +612,11 @@ export class ErrorRecoveryService {
   /**
    * Storage repair recovery implementation
    */
-  private async performStorageRepair(error: Error, attempt: number, context: RecoveryContext): Promise<RecoveryResult> {
+  private async performStorageRepair(
+    error: Error,
+    attempt: number,
+    context: RecoveryContext,
+  ): Promise<RecoveryResult> {
     this.log(LogLevel.DEBUG, `Attempting storage repair (attempt ${attempt})`)
 
     try {
@@ -560,7 +627,7 @@ export class ErrorRecoveryService {
       // Try to write and read a test value
       await chrome.storage.local.set({ [testKey]: testValue })
       const result = await chrome.storage.local.get(testKey)
-      
+
       if (result[testKey]?.timestamp === testValue.timestamp) {
         // Clean up test data
         await chrome.storage.local.remove(testKey)
@@ -570,7 +637,7 @@ export class ErrorRecoveryService {
       return RecoveryResult.FAILED
     } catch (storageError) {
       this.log(LogLevel.DEBUG, `Storage repair failed:`, storageError)
-      
+
       // Try alternative storage if available
       try {
         sessionStorage.setItem('recovery-test', JSON.stringify({ timestamp: Date.now() }))
@@ -585,14 +652,18 @@ export class ErrorRecoveryService {
   /**
    * Permission request recovery implementation
    */
-  private async performPermissionRequest(error: Error, attempt: number, context: RecoveryContext): Promise<RecoveryResult> {
+  private async performPermissionRequest(
+    error: Error,
+    attempt: number,
+    context: RecoveryContext,
+  ): Promise<RecoveryResult> {
     this.log(LogLevel.DEBUG, `Attempting permission request for ${context.component}`)
 
     try {
       if (context.component === ComponentType.TTS_SERVICE) {
         // Check if audio permissions are available
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-        stream.getTracks().forEach(track => track.stop())
+        stream.getTracks().forEach((track) => track.stop())
         return RecoveryResult.SUCCESS
       }
 
@@ -605,7 +676,11 @@ export class ErrorRecoveryService {
   /**
    * Cache clear recovery implementation
    */
-  private async performCacheClear(error: Error, attempt: number, context: RecoveryContext): Promise<RecoveryResult> {
+  private async performCacheClear(
+    error: Error,
+    attempt: number,
+    context: RecoveryContext,
+  ): Promise<RecoveryResult> {
     this.log(LogLevel.DEBUG, `Attempting cache clear for ${context.component}`)
 
     try {
@@ -631,7 +706,11 @@ export class ErrorRecoveryService {
   /**
    * State reset recovery implementation
    */
-  private async performStateReset(error: Error, attempt: number, context: RecoveryContext): Promise<RecoveryResult> {
+  private async performStateReset(
+    error: Error,
+    attempt: number,
+    context: RecoveryContext,
+  ): Promise<RecoveryResult> {
     this.log(LogLevel.DEBUG, `Attempting state reset for ${context.component}`)
 
     try {
@@ -639,7 +718,10 @@ export class ErrorRecoveryService {
       const currentState = this.componentStates.get(context.component)
       if (currentState) {
         // Reset to initial state
-        this.componentStates.set(context.component, this.getInitialComponentState(context.component))
+        this.componentStates.set(
+          context.component,
+          this.getInitialComponentState(context.component),
+        )
       }
 
       if (context.component === ComponentType.YOUTUBE_INTEGRATION) {
@@ -658,7 +740,11 @@ export class ErrorRecoveryService {
   /**
    * Service restart recovery implementation
    */
-  private async performServiceRestart(error: Error, attempt: number, context: RecoveryContext): Promise<RecoveryResult> {
+  private async performServiceRestart(
+    error: Error,
+    attempt: number,
+    context: RecoveryContext,
+  ): Promise<RecoveryResult> {
     this.log(LogLevel.DEBUG, `Attempting service restart for ${context.component}`)
 
     try {
@@ -678,7 +764,11 @@ export class ErrorRecoveryService {
   /**
    * Configuration reset recovery implementation
    */
-  private async performConfigurationReset(error: Error, attempt: number, context: RecoveryContext): Promise<RecoveryResult> {
+  private async performConfigurationReset(
+    error: Error,
+    attempt: number,
+    context: RecoveryContext,
+  ): Promise<RecoveryResult> {
     this.log(LogLevel.DEBUG, `Attempting configuration reset for ${context.component}`)
 
     try {
@@ -694,7 +784,11 @@ export class ErrorRecoveryService {
   /**
    * Resource cleanup recovery implementation
    */
-  private async performResourceCleanup(error: Error, attempt: number, context: RecoveryContext): Promise<RecoveryResult> {
+  private async performResourceCleanup(
+    error: Error,
+    attempt: number,
+    context: RecoveryContext,
+  ): Promise<RecoveryResult> {
     this.log(LogLevel.DEBUG, `Attempting resource cleanup for ${context.component}`)
 
     try {
@@ -728,7 +822,7 @@ export class ErrorRecoveryService {
   private async clearTranslationCache(): Promise<void> {
     // Clear translation-related cache entries
     const keys = await chrome.storage.local.get(null)
-    const translationKeys = Object.keys(keys).filter(key => key.startsWith('translation-'))
+    const translationKeys = Object.keys(keys).filter((key) => key.startsWith('translation-'))
     if (translationKeys.length > 0) {
       await chrome.storage.local.remove(translationKeys)
     }
@@ -737,7 +831,7 @@ export class ErrorRecoveryService {
   private async clearSubtitleCache(): Promise<void> {
     // Clear subtitle-related cache entries
     const keys = await chrome.storage.local.get(null)
-    const subtitleKeys = Object.keys(keys).filter(key => key.startsWith('subtitle-'))
+    const subtitleKeys = Object.keys(keys).filter((key) => key.startsWith('subtitle-'))
     if (subtitleKeys.length > 0) {
       await chrome.storage.local.remove(subtitleKeys)
     }
@@ -792,14 +886,14 @@ export class ErrorRecoveryService {
   private async withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
     return Promise.race([
       promise,
-      new Promise<never>((_, reject) => 
-        setTimeout(() => reject(new Error('Recovery timeout')), timeoutMs)
-      )
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Recovery timeout')), timeoutMs),
+      ),
     ])
   }
 
   private sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms))
+    return new Promise((resolve) => setTimeout(resolve, ms))
   }
 
   private recordAttempt(
@@ -811,7 +905,7 @@ export class ErrorRecoveryService {
     result: RecoveryResult,
     duration: number,
     error?: Error,
-    details?: Record<string, any>
+    details?: Record<string, any>,
   ): void {
     const attempt: RecoveryAttempt = {
       id,
@@ -838,7 +932,7 @@ export class ErrorRecoveryService {
     duration: number,
     strategy: RecoveryStrategyType,
     component: ComponentType,
-    errorType: ErrorType
+    errorType: ErrorType,
   ): void {
     if (!this.config.enableStatisticsTracking) return
 
@@ -861,7 +955,12 @@ export class ErrorRecoveryService {
 
     // Update component stats
     if (!this.stats.componentStats[component]) {
-      this.stats.componentStats[component] = { attempts: 0, successes: 0, failures: 0, averageTime: 0 }
+      this.stats.componentStats[component] = {
+        attempts: 0,
+        successes: 0,
+        failures: 0,
+        averageTime: 0,
+      }
     }
     const componentStat = this.stats.componentStats[component]
     componentStat.attempts++
@@ -907,9 +1006,12 @@ export class ErrorRecoveryService {
   private startMaintenanceTasks(): void {
     // Cleanup old history entries
     this.cleanupTimer = window.setInterval(() => {
-      const cutoff = Date.now() - (24 * 60 * 60 * 1000) // 24 hours
-      this.recoveryHistory.splice(0, this.recoveryHistory.findIndex(attempt => attempt.timestamp > cutoff))
-      
+      const cutoff = Date.now() - 24 * 60 * 60 * 1000 // 24 hours
+      this.recoveryHistory.splice(
+        0,
+        this.recoveryHistory.findIndex((attempt) => attempt.timestamp > cutoff),
+      )
+
       // Update recent attempts in stats
       this.stats.recentAttempts = this.recoveryHistory.slice(-50) // Last 50 attempts
     }, this.config.cleanupInterval)
@@ -925,25 +1027,32 @@ export class ErrorRecoveryService {
   private calculateAdvancedStats(): void {
     // Calculate more detailed statistics
     const recentAttempts = this.recoveryHistory.filter(
-      attempt => attempt.timestamp > Date.now() - (60 * 60 * 1000) // Last hour
+      (attempt) => attempt.timestamp > Date.now() - 60 * 60 * 1000, // Last hour
     )
 
     // Update success rate for recent attempts
     if (recentAttempts.length > 0) {
       const recentSuccesses = recentAttempts.filter(
-        attempt => attempt.result === RecoveryResult.SUCCESS || attempt.result === RecoveryResult.PARTIAL_SUCCESS
+        (attempt) =>
+          attempt.result === RecoveryResult.SUCCESS ||
+          attempt.result === RecoveryResult.PARTIAL_SUCCESS,
       ).length
-      
+
       // Update rolling statistics
     }
   }
 
   private log(level: LogLevel, message: string, ...args: any[]): void {
     if (this.shouldLog(level)) {
-      const logMethod = level === LogLevel.ERROR ? console.error :
-                      level === LogLevel.WARN ? console.warn :
-                      level === LogLevel.DEBUG ? console.debug : console.log
-      
+      const logMethod =
+        level === LogLevel.ERROR
+          ? console.error
+          : level === LogLevel.WARN
+            ? console.warn
+            : level === LogLevel.DEBUG
+              ? console.debug
+              : console.log
+
       logMethod(`[ErrorRecovery] ${message}`, ...args)
     }
   }
@@ -972,14 +1081,12 @@ export class ErrorRecoveryService {
    */
   public getHistory(component?: ComponentType, limit: number = 100): RecoveryAttempt[] {
     let history = [...this.recoveryHistory]
-    
+
     if (component) {
-      history = history.filter(attempt => attempt.component === component)
+      history = history.filter((attempt) => attempt.component === component)
     }
 
-    return history
-      .sort((a, b) => b.timestamp - a.timestamp)
-      .slice(0, limit)
+    return history.sort((a, b) => b.timestamp - a.timestamp).slice(0, limit)
   }
 
   /**
@@ -1021,4 +1128,4 @@ export class ErrorRecoveryService {
 
     ErrorRecoveryService.instance = null
   }
-} 
+}

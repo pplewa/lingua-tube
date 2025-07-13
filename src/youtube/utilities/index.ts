@@ -327,16 +327,16 @@ export async function safeQuerySelector<T extends Element = Element>(
         if (element && (!validateElement || validateElement(element))) {
           return element
         }
-              } catch (error) {
-          const logger = Logger.getInstance()
-          logger?.warn(`[safeQuerySelector] Query failed for selector "${currentSelector}"`, {
-            component: ComponentType.YOUTUBE_INTEGRATION,
-            metadata: {
-              selector: currentSelector,
-              error: error instanceof Error ? error.message : String(error)
-            }
-          })
-        }
+      } catch (error) {
+        const logger = Logger.getInstance()
+        logger?.warn(`[safeQuerySelector] Query failed for selector "${currentSelector}"`, {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: {
+            selector: currentSelector,
+            error: error instanceof Error ? error.message : String(error),
+          },
+        })
+      }
     }
 
     if (attempt < retries - 1) {

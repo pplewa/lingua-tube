@@ -69,16 +69,16 @@ export class LinguaTubeStorageService implements StorageService {
       await this.ensureSchemaVersion()
       await this.ensureDefaultSettings()
       this.isInitialized = true
-          } catch (error) {
-        this.logger?.error('Storage initialization failed', {
-          component: ComponentType.STORAGE_SERVICE,
-          metadata: {
-            error: error instanceof Error ? error.message : String(error),
-            errorType: error instanceof Error ? error.name : 'Unknown'
-          }
-        })
-        throw error
-      }
+    } catch (error) {
+      this.logger?.error('Storage initialization failed', {
+        component: ComponentType.STORAGE_SERVICE,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+          errorType: error instanceof Error ? error.name : 'Unknown',
+        },
+      })
+      throw error
+    }
   }
 
   /**
@@ -426,15 +426,15 @@ export class LinguaTubeStorageService implements StorageService {
       listeners.forEach((listener) => {
         try {
           listener(event)
-                  } catch (error) {
-            this.logger?.error('Event listener error', {
-              component: ComponentType.STORAGE_SERVICE,
-              metadata: {
-                error: error instanceof Error ? error.message : String(error),
-                errorType: error instanceof Error ? error.name : 'Unknown'
-              }
-            })
-          }
+        } catch (error) {
+          this.logger?.error('Event listener error', {
+            component: ComponentType.STORAGE_SERVICE,
+            metadata: {
+              error: error instanceof Error ? error.message : String(error),
+              errorType: error instanceof Error ? error.name : 'Unknown',
+            },
+          })
+        }
       })
     }
   }

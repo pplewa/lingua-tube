@@ -57,8 +57,8 @@ export class YouTubeXMLParser {
         metadata: {
           contentLength: content.length,
           configMaxSegmentGap: config.maxSegmentGap,
-          preserveFormatting: config.preserveFormatting
-        }
+          preserveFormatting: config.preserveFormatting,
+        },
       })
 
       // Validate and clean content
@@ -79,8 +79,8 @@ export class YouTubeXMLParser {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           format: detectedFormat,
-          contentLength: cleanedContent.length
-        }
+          contentLength: cleanedContent.length,
+        },
       })
 
       // Parse based on detected format
@@ -113,9 +113,13 @@ export class YouTubeXMLParser {
           parseTime: parseTime.toFixed(2),
           format: detectedFormat,
           errorsCount: errors.length,
-          averageSegmentDuration: segments.length > 0 ? 
-            (segments.reduce((sum, s) => sum + (s.endTime - s.startTime), 0) / segments.length).toFixed(2) : 0
-        }
+          averageSegmentDuration:
+            segments.length > 0
+              ? (
+                  segments.reduce((sum, s) => sum + (s.endTime - s.startTime), 0) / segments.length
+                ).toFixed(2)
+              : 0,
+        },
       })
 
       return {
@@ -137,8 +141,8 @@ export class YouTubeXMLParser {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           contentLength: content.length,
-          error: error instanceof Error ? error.message : String(error)
-        }
+          error: error instanceof Error ? error.message : String(error),
+        },
       })
 
       const parseError: ParseError = {

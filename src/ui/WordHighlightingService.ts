@@ -193,8 +193,8 @@ export class WordHighlightingService {
         component: ComponentType.WORD_LOOKUP,
         metadata: {
           error: error instanceof Error ? error.message : String(error),
-          elementTag: element.tagName
-        }
+          elementTag: element.tagName,
+        },
       })
       return this.updateStats(startTime, 0, 0, 1)
     }
@@ -249,8 +249,8 @@ export class WordHighlightingService {
           component: ComponentType.WORD_LOOKUP,
           metadata: {
             error: error instanceof Error ? error.message : String(error),
-            contextId: contextId
-          }
+            contextId: contextId,
+          },
         })
         this.highlightContexts.delete(contextId)
       }
@@ -413,8 +413,8 @@ export class WordHighlightingService {
       this.logger?.warn('Could not create stylesheet', {
         component: ComponentType.WORD_LOOKUP,
         metadata: {
-          error: error instanceof Error ? error.message : String(error)
-        }
+          error: error instanceof Error ? error.message : String(error),
+        },
       })
     }
   }

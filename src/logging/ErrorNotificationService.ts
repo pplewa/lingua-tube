@@ -105,7 +105,7 @@ export class ErrorNotificationService {
 
   // Error message mappings for different error types and components
   private errorMessages: Map<string, ErrorMessage> = new Map()
-  
+
   // Default configuration
   private defaultConfig: NotificationConfig = {
     type: NotificationType.TOAST,
@@ -161,10 +161,10 @@ export class ErrorNotificationService {
     // Create main container
     this.container = document.createElement('lingua-tube-notifications')
     this.container.setAttribute('data-component', 'error-notifications')
-    
+
     // Create shadow DOM for style isolation
     this.shadowRoot = this.container.attachShadow({ mode: 'closed' })
-    
+
     // Add CSS styles
     const styles = this.createNotificationStyles()
     this.shadowRoot.appendChild(styles)
@@ -592,7 +592,8 @@ export class ErrorNotificationService {
     this.errorMessages.set('fallback-high', {
       title: 'Service Disruption',
       message: 'LinguaTube is experiencing technical difficulties.',
-      guidance: 'Some features are temporarily disabled. We\'re working to restore full functionality.',
+      guidance:
+        "Some features are temporarily disabled. We're working to restore full functionality.",
       actionLabel: 'Report Issue',
       reportable: true,
     })
@@ -614,7 +615,11 @@ export class ErrorNotificationService {
       return null
     }
 
-    const errorMessage = this.getErrorMessage(logEntry.errorContext.errorType, logEntry.context.component, logEntry.errorContext.severity)
+    const errorMessage = this.getErrorMessage(
+      logEntry.errorContext.errorType,
+      logEntry.context.component,
+      logEntry.errorContext.severity,
+    )
     const actions = this.createActions(logEntry.errorContext, errorMessage)
 
     const notification: EnhancedNotification = {
@@ -657,7 +662,7 @@ export class ErrorNotificationService {
 
     // Create notification element
     const element = this.createNotificationElement(notification)
-    
+
     // Add to container
     const notificationArea = this.shadowRoot?.querySelector('.notification-area')
     if (!notificationArea) {
@@ -715,7 +720,7 @@ export class ErrorNotificationService {
     // Animate out
     if (element) {
       element.classList.remove('visible')
-      
+
       // Remove after animation
       setTimeout(() => {
         element.remove()
@@ -741,7 +746,7 @@ export class ErrorNotificationService {
    */
   public updateConfig(newConfig: Partial<NotificationConfig>): void {
     this.config = { ...this.config, ...newConfig }
-    
+
     // Update position if changed
     const notificationArea = this.shadowRoot?.querySelector('.notification-area')
     if (notificationArea) {
@@ -761,7 +766,7 @@ export class ErrorNotificationService {
    */
   public destroy(): void {
     this.hideAll()
-    
+
     if (this.mutationObserver) {
       this.mutationObserver.disconnect()
     }
@@ -776,7 +781,7 @@ export class ErrorNotificationService {
   }
 
   // Private helper methods
-  
+
   private async ensureInitialized(): Promise<void> {
     if (!this.isInitialized) {
       await this.initialize()
@@ -797,22 +802,28 @@ export class ErrorNotificationService {
     return true
   }
 
-  private getErrorMessage(errorType: ErrorType, component: ComponentType, severity: ErrorSeverity): ErrorMessage {
+  private getErrorMessage(
+    errorType: ErrorType,
+    component: ComponentType,
+    severity: ErrorSeverity,
+  ): ErrorMessage {
     const key = `${errorType}-${component}`
     const message = this.errorMessages.get(key)
-    
+
     if (message) {
       return message
     }
 
     // Fallback to severity-based message
     const fallbackKey = `fallback-${severity.toLowerCase()}`
-    return this.errorMessages.get(fallbackKey) || {
-      title: 'Something went wrong',
-      message: 'An unexpected error occurred.',
-      guidance: 'Please try again or contact support if the problem persists.',
-      reportable: true,
-    }
+    return (
+      this.errorMessages.get(fallbackKey) || {
+        title: 'Something went wrong',
+        message: 'An unexpected error occurred.',
+        guidance: 'Please try again or contact support if the problem persists.',
+        reportable: true,
+      }
+    )
   }
 
   private getNotificationTypeForSeverity(severity: ErrorSeverity): NotificationType {
@@ -844,7 +855,7 @@ export class ErrorNotificationService {
 
   private getConfigForSeverity(severity: ErrorSeverity): NotificationConfig {
     const baseConfig = { ...this.config }
-    
+
     switch (severity) {
       case ErrorSeverity.CRITICAL:
         return {
@@ -867,7 +878,10 @@ export class ErrorNotificationService {
     }
   }
 
-  private createActions(errorContext: ErrorContext, errorMessage: ErrorMessage): NotificationAction[] {
+  private createActions(
+    errorContext: ErrorContext,
+    errorMessage: ErrorMessage,
+  ): NotificationAction[] {
     const actions: NotificationAction[] = []
 
     // Add retry action if recoverable
@@ -930,7 +944,7 @@ export class ErrorNotificationService {
     element.setAttribute('data-id', notification.id)
 
     const icon = this.getIconForSeverity(notification.severity)
-    
+
     element.innerHTML = `
       <div class="notification-header">
         <div class="notification-icon severity-${notification.severity.toLowerCase()}">
@@ -1065,4 +1079,4 @@ export class ErrorNotificationService {
     div.textContent = text
     return div.innerHTML
   }
-} 
+}

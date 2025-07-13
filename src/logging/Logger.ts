@@ -273,49 +273,75 @@ export class Logger {
       }
 
       // Attempt error recovery before triggering graceful degradation
-      if (this.errorRecoveryService && context.component && enhancedContext.errorType && enhancedContext.severity) {
+      if (
+        this.errorRecoveryService &&
+        context.component &&
+        enhancedContext.errorType &&
+        enhancedContext.severity
+      ) {
         const componentType = context.component
-        this.errorRecoveryService.attemptRecovery(
-          error, 
-          componentType, 
-          enhancedContext.errorType, 
-          enhancedContext.severity,
-          context.metadata
-        ).then((recoveryResult) => {
-          if (recoveryResult === RecoveryResult.SUCCESS || recoveryResult === RecoveryResult.PARTIAL_SUCCESS) {
-            this.log(LogLevel.INFO, `Error recovery succeeded for ${componentType}: ${recoveryResult}`)
-          } else {
-            // If recovery failed, report to graceful degradation service
+        this.errorRecoveryService
+          .attemptRecovery(
+            error,
+            componentType,
+            enhancedContext.errorType,
+            enhancedContext.severity,
+            context.metadata,
+          )
+          .then((recoveryResult) => {
+            if (
+              recoveryResult === RecoveryResult.SUCCESS ||
+              recoveryResult === RecoveryResult.PARTIAL_SUCCESS
+            ) {
+              this.log(
+                LogLevel.INFO,
+                `Error recovery succeeded for ${componentType}: ${recoveryResult}`,
+              )
+            } else {
+              // If recovery failed, report to graceful degradation service
+              if (this.gracefulDegradationService) {
+                const featureName = this.mapComponentToFeatureName(componentType)
+                if (featureName && enhancedContext.severity !== ErrorSeverity.LOW) {
+                  this.gracefulDegradationService
+                    .reportFeatureFailure(featureName, error, {
+                      severity: enhancedContext.severity,
+                      userImpact:
+                        enhancedContext.severity === ErrorSeverity.CRITICAL
+                          ? 'critical'
+                          : enhancedContext.severity === ErrorSeverity.HIGH
+                            ? 'high'
+                            : 'medium',
+                    })
+                    .catch((degradationError) => {
+                      console.error('[Logger] Failed to report feature failure:', degradationError)
+                    })
+                }
+              }
+            }
+          })
+          .catch((recoveryError) => {
+            console.error('[Logger] Error recovery attempt failed:', recoveryError)
+
+            // Still report to graceful degradation service as fallback
             if (this.gracefulDegradationService) {
               const featureName = this.mapComponentToFeatureName(componentType)
               if (featureName && enhancedContext.severity !== ErrorSeverity.LOW) {
-                this.gracefulDegradationService.reportFeatureFailure(featureName, error, {
-                  severity: enhancedContext.severity,
-                  userImpact: enhancedContext.severity === ErrorSeverity.CRITICAL ? 'critical' : 
-                             enhancedContext.severity === ErrorSeverity.HIGH ? 'high' : 'medium'
-                }).catch((degradationError) => {
-                  console.error('[Logger] Failed to report feature failure:', degradationError)
-                })
+                this.gracefulDegradationService
+                  .reportFeatureFailure(featureName, error, {
+                    severity: enhancedContext.severity,
+                    userImpact:
+                      enhancedContext.severity === ErrorSeverity.CRITICAL
+                        ? 'critical'
+                        : enhancedContext.severity === ErrorSeverity.HIGH
+                          ? 'high'
+                          : 'medium',
+                  })
+                  .catch((degradationError) => {
+                    console.error('[Logger] Failed to report feature failure:', degradationError)
+                  })
               }
             }
-          }
-        }).catch((recoveryError) => {
-          console.error('[Logger] Error recovery attempt failed:', recoveryError)
-          
-          // Still report to graceful degradation service as fallback
-          if (this.gracefulDegradationService) {
-            const featureName = this.mapComponentToFeatureName(componentType)
-            if (featureName && enhancedContext.severity !== ErrorSeverity.LOW) {
-              this.gracefulDegradationService.reportFeatureFailure(featureName, error, {
-                severity: enhancedContext.severity,
-                userImpact: enhancedContext.severity === ErrorSeverity.CRITICAL ? 'critical' : 
-                           enhancedContext.severity === ErrorSeverity.HIGH ? 'high' : 'medium'
-              }).catch((degradationError) => {
-                console.error('[Logger] Failed to report feature failure:', degradationError)
-              })
-            }
-          }
-        })
+          })
       }
 
       this.log(LogLevel.ERROR, message, enhancedContext)
@@ -343,12 +369,14 @@ export class Logger {
       if (this.gracefulDegradationService && context.component) {
         const featureName = this.mapComponentToFeatureName(context.component)
         if (featureName) {
-          this.gracefulDegradationService.reportFeatureFailure(featureName, error, {
-            severity: ErrorSeverity.CRITICAL,
-            userImpact: 'critical'
-          }).catch((degradationError) => {
-            console.error('[Logger] Failed to report critical feature failure:', degradationError)
-          })
+          this.gracefulDegradationService
+            .reportFeatureFailure(featureName, error, {
+              severity: ErrorSeverity.CRITICAL,
+              userImpact: 'critical',
+            })
+            .catch((degradationError) => {
+              console.error('[Logger] Failed to report critical feature failure:', degradationError)
+            })
         }
       }
 
@@ -682,9 +710,9 @@ export class Logger {
    */
   private checkDeduplication(entry: LogEntry): { shouldLog: boolean; modifiedEntry?: LogEntry } {
     if (!this.rateLimitingService) return { shouldLog: true }
-    
+
     const result = this.rateLimitingService.checkDeduplication(entry)
-    
+
     // Create a modified entry if we have deduplication info
     if (result.dedupInfo && result.shouldLog && result.dedupInfo.count > 1) {
       const modifiedEntry: LogEntry = {
@@ -693,7 +721,7 @@ export class Logger {
       }
       return { shouldLog: result.shouldLog, modifiedEntry }
     }
-    
+
     return { shouldLog: result.shouldLog }
   }
 
@@ -1208,7 +1236,9 @@ export class Logger {
   /**
    * Update debug mode configuration
    */
-  public updateDebugModeConfig(config: Partial<import('./DebugModeService').DebugModeConfig>): void {
+  public updateDebugModeConfig(
+    config: Partial<import('./DebugModeService').DebugModeConfig>,
+  ): void {
     if (this.debugModeService) {
       this.debugModeService.updateConfig(config)
     }
@@ -1225,7 +1255,9 @@ export class Logger {
    * Get system health overview from graceful degradation service
    */
   public getSystemHealth(): SystemHealth | null {
-    return this.gracefulDegradationService ? this.gracefulDegradationService.getSystemHealth() : null
+    return this.gracefulDegradationService
+      ? this.gracefulDegradationService.getSystemHealth()
+      : null
   }
 
   /**
@@ -1257,7 +1289,10 @@ export class Logger {
   /**
    * Get degradation event history
    */
-  public getDegradationHistory(featureName?: string, limit?: number): import('./GracefulDegradationService').DegradationEvent[] {
+  public getDegradationHistory(
+    featureName?: string,
+    limit?: number,
+  ): import('./GracefulDegradationService').DegradationEvent[] {
     if (!this.gracefulDegradationService) return []
     return this.gracefulDegradationService.getDegradationHistory(featureName, limit)
   }
@@ -1272,7 +1307,10 @@ export class Logger {
   /**
    * Get error recovery history
    */
-  public getRecoveryHistory(component?: ComponentType, limit?: number): import('./ErrorRecoveryService').RecoveryAttempt[] {
+  public getRecoveryHistory(
+    component?: ComponentType,
+    limit?: number,
+  ): import('./ErrorRecoveryService').RecoveryAttempt[] {
     if (!this.errorRecoveryService) return []
     return this.errorRecoveryService.getHistory(component, limit)
   }
@@ -1287,7 +1325,9 @@ export class Logger {
   /**
    * Update error recovery configuration
    */
-  public updateRecoveryConfig(config: Partial<import('./ErrorRecoveryService').RecoveryConfig>): void {
+  public updateRecoveryConfig(
+    config: Partial<import('./ErrorRecoveryService').RecoveryConfig>,
+  ): void {
     if (this.errorRecoveryService) {
       this.errorRecoveryService.updateConfig(config)
     }
@@ -1390,7 +1430,7 @@ export class Logger {
       actionLabel?: string
       action?: () => Promise<void>
       duration?: number
-    }
+    },
   ): Promise<string | null> {
     if (this.isBackground) {
       return null // Only show notifications in content script/popup contexts
@@ -1399,48 +1439,55 @@ export class Logger {
     try {
       const notificationService = this.ensureNotificationService()
       const notificationId = `manual-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-      
+
       // We need to access private methods, so we'll create a simple notification manually
       // This is a simplified version for manual notifications
-             await notificationService.show({
-         id: notificationId,
-         type: severity === ErrorSeverity.CRITICAL ? NotificationType.POPUP : NotificationType.TOAST,
-         severity,
-         title,
-         message,
-         component,
-         actions: options?.action ? [{
-           label: options.actionLabel || 'Action',
-           type: 'primary',
-           action: options.action
-         }] : [{
-           label: 'Dismiss',
-           type: 'secondary',
-           action: async () => {
-             await notificationService.hide(notificationId)
-           }
-         }],
-         duration: options?.duration || (severity === ErrorSeverity.CRITICAL ? 0 : 5000),
-         dismissible: true,
-         config: {
-           type: severity === ErrorSeverity.CRITICAL ? NotificationType.POPUP : NotificationType.TOAST,
-           position: 'top-right',
-           duration: options?.duration || (severity === ErrorSeverity.CRITICAL ? 0 : 5000),
-           dismissible: true,
-           autoHide: severity !== ErrorSeverity.CRITICAL,
-           showProgress: true,
-           allowMultiple: true,
-           stackable: true,
-           maxStack: 5,
-           animationDuration: 300,
-           theme: 'auto',
-         },
-         retryable: false,
-         retryCount: 0,
-         maxRetries: 0,
-         timestamp: Date.now(),
-         context: options?.guidance ? { guidance: options.guidance } : undefined,
-       })
+      await notificationService.show({
+        id: notificationId,
+        type: severity === ErrorSeverity.CRITICAL ? NotificationType.POPUP : NotificationType.TOAST,
+        severity,
+        title,
+        message,
+        component,
+        actions: options?.action
+          ? [
+              {
+                label: options.actionLabel || 'Action',
+                type: 'primary',
+                action: options.action,
+              },
+            ]
+          : [
+              {
+                label: 'Dismiss',
+                type: 'secondary',
+                action: async () => {
+                  await notificationService.hide(notificationId)
+                },
+              },
+            ],
+        duration: options?.duration || (severity === ErrorSeverity.CRITICAL ? 0 : 5000),
+        dismissible: true,
+        config: {
+          type:
+            severity === ErrorSeverity.CRITICAL ? NotificationType.POPUP : NotificationType.TOAST,
+          position: 'top-right',
+          duration: options?.duration || (severity === ErrorSeverity.CRITICAL ? 0 : 5000),
+          dismissible: true,
+          autoHide: severity !== ErrorSeverity.CRITICAL,
+          showProgress: true,
+          allowMultiple: true,
+          stackable: true,
+          maxStack: 5,
+          animationDuration: 300,
+          theme: 'auto',
+        },
+        retryable: false,
+        retryCount: 0,
+        maxRetries: 0,
+        timestamp: Date.now(),
+        context: options?.guidance ? { guidance: options.guidance } : undefined,
+      })
 
       return notificationId
     } catch (error) {

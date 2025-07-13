@@ -397,15 +397,15 @@ export class ConfigService {
     this.configUpdateListeners.forEach((listener) => {
       try {
         listener(config)
-              } catch (error) {
-          const logger = Logger.getInstance()
-          logger?.warn('Error in config update listener', {
-            component: ComponentType.TRANSLATION_SERVICE,
-            metadata: {
-              error: error instanceof Error ? error.message : String(error)
-            }
-          })
-        }
+      } catch (error) {
+        const logger = Logger.getInstance()
+        logger?.warn('Error in config update listener', {
+          component: ComponentType.TRANSLATION_SERVICE,
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        })
+      }
     })
   }
 

@@ -119,15 +119,15 @@ export class VocabularyListManager {
         metadata: {
           position: this.config.position,
           theme: this.config.theme,
-          autoShow: this.config.autoShow
-        }
+          autoShow: this.config.autoShow,
+        },
       })
     } catch (error) {
       this.logger?.error('Initialization failed', {
         component: ComponentType.WORD_LOOKUP,
         metadata: {
-          error: error instanceof Error ? error.message : String(error)
-        }
+          error: error instanceof Error ? error.message : String(error),
+        },
       })
       throw error
     }
@@ -162,16 +162,16 @@ export class VocabularyListManager {
         component: ComponentType.WORD_LOOKUP,
         metadata: {
           position: this.config.position,
-          hasContainer: !!container
-        }
+          hasContainer: !!container,
+        },
       })
     } catch (error) {
       this.logger?.error('Failed to show vocabulary list', {
         component: ComponentType.WORD_LOOKUP,
         metadata: {
           error: error instanceof Error ? error.message : String(error),
-          position: this.config.position
-        }
+          position: this.config.position,
+        },
       })
       throw error
     }
@@ -202,14 +202,14 @@ export class VocabularyListManager {
       }
 
       this.logger?.info('Vocabulary list hidden', {
-        component: ComponentType.WORD_LOOKUP
+        component: ComponentType.WORD_LOOKUP,
       })
     } catch (error) {
       this.logger?.error('Failed to hide vocabulary list', {
         component: ComponentType.WORD_LOOKUP,
         metadata: {
-          error: error instanceof Error ? error.message : String(error)
-        }
+          error: error instanceof Error ? error.message : String(error),
+        },
       })
     }
   }
@@ -460,8 +460,8 @@ export class VocabularyListManager {
       component: ComponentType.WORD_LOOKUP,
       metadata: {
         word: word.word,
-        wordId: word.id
-      }
+        wordId: word.id,
+      },
     })
     // Could emit custom events or trigger other actions
   }
@@ -471,8 +471,8 @@ export class VocabularyListManager {
       component: ComponentType.WORD_LOOKUP,
       metadata: {
         word: word.word,
-        wordId: word.id
-      }
+        wordId: word.id,
+      },
     })
     // Could open edit dialog or integrate with existing edit functionality
   }
@@ -486,8 +486,8 @@ export class VocabularyListManager {
             component: ComponentType.WORD_LOOKUP,
             metadata: {
               word: word.word,
-              wordId: word.id
-            }
+              wordId: word.id,
+            },
           })
           await this.refresh()
         } else {
@@ -495,8 +495,8 @@ export class VocabularyListManager {
             component: ComponentType.WORD_LOOKUP,
             metadata: {
               word: word.word,
-              error: result.failed[0]?.error || 'Unknown error'
-            }
+              error: result.failed[0]?.error || 'Unknown error',
+            },
           })
         }
       } catch (error) {
@@ -504,8 +504,8 @@ export class VocabularyListManager {
           component: ComponentType.WORD_LOOKUP,
           metadata: {
             error: error instanceof Error ? error.message : String(error),
-            word: word.word
-          }
+            word: word.word,
+          },
         })
       }
     }
@@ -516,8 +516,8 @@ export class VocabularyListManager {
       component: ComponentType.WORD_LOOKUP,
       metadata: {
         action: action,
-        wordCount: words.length
-      }
+        wordCount: words.length,
+      },
     })
 
     switch (action) {
@@ -529,16 +529,16 @@ export class VocabularyListManager {
               component: ComponentType.WORD_LOOKUP,
               metadata: {
                 successful: result.successful.length,
-                total: words.length
-              }
+                total: words.length,
+              },
             })
             if (result.failed.length > 0) {
               this.logger?.error('Failed to delete some words', {
                 component: ComponentType.WORD_LOOKUP,
                 metadata: {
                   failedCount: result.failed.length,
-                  failedEntries: result.failed
-                }
+                  failedEntries: result.failed,
+                },
               })
             }
             await this.refresh()
@@ -547,8 +547,8 @@ export class VocabularyListManager {
               component: ComponentType.WORD_LOOKUP,
               metadata: {
                 error: error instanceof Error ? error.message : String(error),
-                wordCount: words.length
-              }
+                wordCount: words.length,
+              },
             })
           }
         }
@@ -564,8 +564,8 @@ export class VocabularyListManager {
           this.logger?.error('Error in bulk export', {
             component: ComponentType.WORD_LOOKUP,
             metadata: {
-              error: error instanceof Error ? error.message : String(error)
-            }
+              error: error instanceof Error ? error.message : String(error),
+            },
           })
         }
         break
@@ -577,8 +577,8 @@ export class VocabularyListManager {
       component: ComponentType.WORD_LOOKUP,
       metadata: {
         query: query,
-        queryLength: query.length
-      }
+        queryLength: query.length,
+      },
     })
   }
 
@@ -586,8 +586,8 @@ export class VocabularyListManager {
     this.logger?.info('Filters changed', {
       component: ComponentType.WORD_LOOKUP,
       metadata: {
-        filters: filters
-      }
+        filters: filters,
+      },
     })
   }
 
@@ -595,8 +595,8 @@ export class VocabularyListManager {
     this.logger?.info('Import completed', {
       component: ComponentType.WORD_LOOKUP,
       metadata: {
-        format: format
-      }
+        format: format,
+      },
     })
     // The actual import is handled by the VocabularyListComponent
     // This is just for logging and potential additional actions
@@ -607,8 +607,8 @@ export class VocabularyListManager {
     this.logger?.info('Export requested', {
       component: ComponentType.WORD_LOOKUP,
       metadata: {
-        format: format
-      }
+        format: format,
+      },
     })
 
     try {
@@ -621,16 +621,16 @@ export class VocabularyListManager {
           component: ComponentType.WORD_LOOKUP,
           metadata: {
             filename: filename,
-            format: format
-          }
+            format: format,
+          },
         })
       } else {
         this.logger?.error('Export failed', {
           component: ComponentType.WORD_LOOKUP,
           metadata: {
             error: result.error?.message || 'Unknown error',
-            format: format
-          }
+            format: format,
+          },
         })
       }
     } catch (error) {
@@ -638,8 +638,8 @@ export class VocabularyListManager {
         component: ComponentType.WORD_LOOKUP,
         metadata: {
           error: error instanceof Error ? error.message : String(error),
-          format: format
-        }
+          format: format,
+        },
       })
     }
   }

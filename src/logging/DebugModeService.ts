@@ -212,10 +212,13 @@ export class DebugModeService {
         [LogLevel.ERROR]: 0,
         [LogLevel.CRITICAL]: 0,
       },
-      logsByComponent: Object.values(ComponentType).reduce((acc, component) => {
-        acc[component] = 0
-        return acc
-      }, {} as Record<ComponentType, number>),
+      logsByComponent: Object.values(ComponentType).reduce(
+        (acc, component) => {
+          acc[component] = 0
+          return acc
+        },
+        {} as Record<ComponentType, number>,
+      ),
       averageLogFrequency: 0,
       memorySnapshots: [],
       performanceMarks: [],
@@ -298,9 +301,11 @@ export class DebugModeService {
    */
   private logToConsole(entry: LogEntry): void {
     const styles = this.getConsoleStyles(entry.level)
-    const timestamp = this.config.consoleTimestamps ? `[${new Date(entry.timestamp).toLocaleTimeString()}]` : ''
+    const timestamp = this.config.consoleTimestamps
+      ? `[${new Date(entry.timestamp).toLocaleTimeString()}]`
+      : ''
     const component = `[${entry.context.component.toUpperCase()}]`
-    
+
     const baseMessage = `${timestamp} ${component} ${entry.message}`
 
     if (this.config.colorizedOutput) {
@@ -317,7 +322,7 @@ export class DebugModeService {
       console.log('Level:', entry.level)
       console.log('Component:', entry.context.component)
       console.log('Context:', entry.context)
-      
+
       if (entry.error) {
         console.log('Error:', entry.error)
       }
@@ -360,7 +365,8 @@ export class DebugModeService {
         details: 'color: #c0392b; font-style: italic;',
       },
       [LogLevel.CRITICAL]: {
-        message: 'color: #fff; font-weight: bold; background: #e74c3c; padding: 4px 8px; border-radius: 3px;',
+        message:
+          'color: #fff; font-weight: bold; background: #e74c3c; padding: 4px 8px; border-radius: 3px;',
         details: 'color: #8e2930; font-style: italic;',
       },
     }
@@ -394,9 +400,9 @@ export class DebugModeService {
    */
   private analyzeErrorPattern(entry: LogEntry): void {
     const pattern = entry.message.replace(/\d+/g, 'N').replace(/[a-f0-9-]{36}/g, 'UUID')
-    
-    let existingPattern = this.stats.errorPatterns.find(p => p.pattern === pattern)
-    
+
+    let existingPattern = this.stats.errorPatterns.find((p) => p.pattern === pattern)
+
     if (existingPattern) {
       existingPattern.count++
       existingPattern.lastSeen = Date.now()
@@ -477,10 +483,10 @@ export class DebugModeService {
     // This is a hint to developers - actual DevTools opening requires user action
     console.info(
       '%c🔧 LinguaTube Debug Mode Active%c\n' +
-      'Open Chrome DevTools (F12) for enhanced debugging features.\n' +
-      'Available debug commands: debugLinguaTube.help()',
+        'Open Chrome DevTools (F12) for enhanced debugging features.\n' +
+        'Available debug commands: debugLinguaTube.help()',
       'font-size: 16px; font-weight: bold; color: #007acc;',
-      'font-size: 12px; color: #666;'
+      'font-size: 12px; color: #666;',
     )
   }
 
@@ -489,7 +495,7 @@ export class DebugModeService {
    */
   private registerGlobalDebugUtils(): void {
     if (typeof window !== 'undefined') {
-      (window as any).debugLinguaTube = {
+      ;(window as any).debugLinguaTube = {
         getStats: () => this.getStats(),
         exportLogs: () => this.exportDebugData(),
         clearHistory: () => this.clearConsoleHistory(),
@@ -508,15 +514,34 @@ export class DebugModeService {
    * Show debug help in console
    */
   private showDebugHelp(): void {
-    console.group('%c🔧 LinguaTube Debug Commands', 'font-size: 14px; font-weight: bold; color: #007acc;')
+    console.group(
+      '%c🔧 LinguaTube Debug Commands',
+      'font-size: 14px; font-weight: bold; color: #007acc;',
+    )
     console.log('%cdebugLinguaTube.getStats()', 'font-weight: bold;', '- Get debug statistics')
     console.log('%cdebugLinguaTube.exportLogs()', 'font-weight: bold;', '- Export debug data')
     console.log('%cdebugLinguaTube.clearHistory()', 'font-weight: bold;', '- Clear console history')
-    console.log('%cdebugLinguaTube.setLogLevel(level)', 'font-weight: bold;', '- Set console log level')
-    console.log('%cdebugLinguaTube.enableComponent(component)', 'font-weight: bold;', '- Enable component logging')
-    console.log('%cdebugLinguaTube.disableComponent(component)', 'font-weight: bold;', '- Disable component logging')
+    console.log(
+      '%cdebugLinguaTube.setLogLevel(level)',
+      'font-weight: bold;',
+      '- Set console log level',
+    )
+    console.log(
+      '%cdebugLinguaTube.enableComponent(component)',
+      'font-weight: bold;',
+      '- Enable component logging',
+    )
+    console.log(
+      '%cdebugLinguaTube.disableComponent(component)',
+      'font-weight: bold;',
+      '- Disable component logging',
+    )
     console.log('%cdebugLinguaTube.memory()', 'font-weight: bold;', '- Get memory statistics')
-    console.log('%cdebugLinguaTube.performance()', 'font-weight: bold;', '- Get performance statistics')
+    console.log(
+      '%cdebugLinguaTube.performance()',
+      'font-weight: bold;',
+      '- Get performance statistics',
+    )
     console.log('%cdebugLinguaTube.patterns()', 'font-weight: bold;', '- Get error patterns')
     console.groupEnd()
   }
@@ -535,7 +560,7 @@ export class DebugModeService {
    */
   public updateConfig(updates: Partial<DebugModeConfig>): void {
     this.config = { ...this.config, ...updates }
-    
+
     // Re-initialize if needed
     if (updates.enabled !== undefined) {
       if (updates.enabled && !isProduction()) {
@@ -584,7 +609,7 @@ export class DebugModeService {
     if (!this.config.enabledComponents.includes(component)) {
       this.config = {
         ...this.config,
-        enabledComponents: [...this.config.enabledComponents, component]
+        enabledComponents: [...this.config.enabledComponents, component],
       }
       console.info(`[DebugMode] Enabled logging for ${component}`)
     }
@@ -596,7 +621,7 @@ export class DebugModeService {
   public disableComponent(component: ComponentType): void {
     this.config = {
       ...this.config,
-      enabledComponents: this.config.enabledComponents.filter(c => c !== component)
+      enabledComponents: this.config.enabledComponents.filter((c) => c !== component),
     }
     console.info(`[DebugMode] Disabled logging for ${component}`)
   }
@@ -731,7 +756,7 @@ class ChromeDevToolsLogger {
 
     // Expose logging API to DevTools
     if (typeof window !== 'undefined') {
-      (window as any).__LINGUA_TUBE_LOGGER__ = {
+      ;(window as any).__LINGUA_TUBE_LOGGER__ = {
         version: chrome.runtime.getManifest().version,
         logEntry: (entry: LogEntry) => this.log(entry),
         getConfig: () => this.config,
@@ -777,4 +802,4 @@ export function createDebugModeService(loggerConfig: LoggerConfig): DebugModeSer
   }
 
   return DebugModeService.getInstance(debugConfig)
-} 
+}
