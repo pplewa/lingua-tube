@@ -23,69 +23,69 @@ import {
   isProduction,
   ErrorType,
   ErrorSeverity,
-} from './types'
-import { StackTraceProcessor, ProcessedStackTrace, ErrorSource } from './StackTraceProcessor'
+} from './types';
+import { StackTraceProcessor, ProcessedStackTrace, ErrorSource } from './StackTraceProcessor';
 import {
   PerformanceMonitor,
   OperationMetadata,
   PerformanceMeasurement,
   PerformanceAnalytics,
-} from './PerformanceMonitor'
-import { ErrorNotificationService, NotificationType } from './ErrorNotificationService'
-import { RateLimitingService, createRateLimitingServiceFromConfig } from './RateLimitingService'
-import type { RateLimitStats, DeduplicationStats } from './RateLimitingService'
-import { DebugModeService, createDebugModeService } from './DebugModeService'
-import { GracefulDegradationService } from './GracefulDegradationService'
-import type { FeatureState, SystemHealth, FeatureStatus } from './GracefulDegradationService'
-import { ErrorRecoveryService, RecoveryResult } from './ErrorRecoveryService'
-import type { RecoveryStats } from './ErrorRecoveryService'
-import { ConsoleLoggingService, createConsoleLoggingService } from './ConsoleLoggingService'
-import type { ConsoleLoggingConfig, ConsolePerformanceStats } from './ConsoleLoggingService'
+} from './PerformanceMonitor';
+import { ErrorNotificationService, NotificationType } from './ErrorNotificationService';
+import { RateLimitingService, createRateLimitingServiceFromConfig } from './RateLimitingService';
+import type { RateLimitStats, DeduplicationStats } from './RateLimitingService';
+import { DebugModeService, createDebugModeService } from './DebugModeService';
+import { GracefulDegradationService } from './GracefulDegradationService';
+import type { FeatureState, SystemHealth, FeatureStatus } from './GracefulDegradationService';
+import { ErrorRecoveryService, RecoveryResult } from './ErrorRecoveryService';
+import type { RecoveryStats } from './ErrorRecoveryService';
+import { ConsoleLoggingService, createConsoleLoggingService } from './ConsoleLoggingService';
+import type { ConsoleLoggingConfig, ConsolePerformanceStats } from './ConsoleLoggingService';
 
 /**
  * Centralized Logger Service for Chrome Extension
  * Handles logging across all extension contexts (background, content script, popup)
  */
 export class Logger {
-  private static instance: Logger | null = null
-  private config: LoggerConfig
-  private logQueue: LogEntry[] = []
-  private performanceMarks: Map<string, number> = new Map()
-  private batchTimer: number | null = null
-  private isBackground: boolean
-  private sessionId: string
-  private extensionVersion: string
-  private stackTraceProcessor: StackTraceProcessor
-  private performanceMonitor: PerformanceMonitor | null
-  private notificationService: ErrorNotificationService | null
-  private rateLimitingService: RateLimitingService | null
-  private debugModeService: DebugModeService | null
-  private gracefulDegradationService: GracefulDegradationService | null
-  private errorRecoveryService: ErrorRecoveryService | null
-  private consoleLoggingService: ConsoleLoggingService | null
+  private static instance: Logger | null = null;
+  private config: LoggerConfig;
+  private logQueue: LogEntry[] = [];
+  private performanceMarks: Map<string, number> = new Map();
+  private batchTimer: number | null = null;
+  private isBackground: boolean;
+  private sessionId: string;
+  private extensionVersion: string;
+  private stackTraceProcessor: StackTraceProcessor;
+  private performanceMonitor: PerformanceMonitor | null;
+  private notificationService: ErrorNotificationService | null;
+  private rateLimitingService: RateLimitingService | null;
+  private debugModeService: DebugModeService | null;
+  private gracefulDegradationService: GracefulDegradationService | null;
+  private errorRecoveryService: ErrorRecoveryService | null;
+  private consoleLoggingService: ConsoleLoggingService | null;
 
   private constructor(config?: Partial<LoggerConfig>) {
-    this.config = { ...DEFAULT_LOGGER_CONFIG, ...config }
-    this.isBackground = this.detectBackgroundContext()
-    this.sessionId = this.generateSessionId()
-    this.extensionVersion = chrome.runtime.getManifest().version
-    this.stackTraceProcessor = StackTraceProcessor.getInstance()
+    this.config = { ...DEFAULT_LOGGER_CONFIG, ...config };
+    this.isBackground = this.detectBackgroundContext();
+    this.sessionId = this.generateSessionId();
+    this.extensionVersion = chrome.runtime.getManifest().version;
+    this.stackTraceProcessor = StackTraceProcessor.getInstance();
     // Initialize PerformanceMonitor lazily to avoid circular dependency
-    this.performanceMonitor = null
+    this.performanceMonitor = null;
     // Initialize ErrorNotificationService lazily to avoid circular dependency
-    this.notificationService = null
+    this.notificationService = null;
     // Initialize RateLimitingService
-    this.rateLimitingService = createRateLimitingServiceFromConfig(this.config)
+    this.rateLimitingService = createRateLimitingServiceFromConfig(this.config);
     // Initialize DebugModeService
-    this.debugModeService = createDebugModeService(this.config)
+    this.debugModeService = createDebugModeService(this.config);
     // Initialize GracefulDegradationService
-    this.gracefulDegradationService = GracefulDegradationService.getInstance()
+    this.gracefulDegradationService = GracefulDegradationService.getInstance();
     // Initialize ErrorRecoveryService
-    this.errorRecoveryService = ErrorRecoveryService.getInstance()
+    this.errorRecoveryService = ErrorRecoveryService.getInstance();
     // Initialize ConsoleLoggingService
-    this.consoleLoggingService = createConsoleLoggingService()
+    this.consoleLoggingService = createConsoleLoggingService();
 
-    this.initialize()
+    this.initialize();
   }
 
   /**
@@ -93,12 +93,12 @@ export class Logger {
    */
   public static getInstance(config?: Partial<LoggerConfig>): Logger | null {
     if (typeof window === 'undefined') {
-      return null
+      return null;
     }
     if (!Logger.instance) {
-      Logger.instance = new Logger(config)
+      Logger.instance = new Logger(config);
     }
-    return Logger.instance
+    return Logger.instance;
   }
 
   /**
@@ -106,9 +106,9 @@ export class Logger {
    */
   private ensurePerformanceMonitor(): PerformanceMonitor {
     if (!this.performanceMonitor) {
-      this.performanceMonitor = PerformanceMonitor.getInstance()
+      this.performanceMonitor = PerformanceMonitor.getInstance();
     }
-    return this.performanceMonitor
+    return this.performanceMonitor;
   }
 
   /**
@@ -116,15 +116,15 @@ export class Logger {
    */
   private ensureNotificationService(): ErrorNotificationService {
     if (!this.notificationService) {
-      this.notificationService = ErrorNotificationService.getInstance()
+      this.notificationService = ErrorNotificationService.getInstance();
       // Initialize the service if we're in a content script or popup context
       if (!this.isBackground) {
         this.notificationService.initialize().catch((error) => {
-          console.error('[Logger] Failed to initialize notification service:', error)
-        })
+          console.error('[Logger] Failed to initialize notification service:', error);
+        });
       }
     }
-    return this.notificationService
+    return this.notificationService;
   }
 
   /**
@@ -132,11 +132,11 @@ export class Logger {
    */
   private initialize(): void {
     if (this.isBackground) {
-      this.setupBackgroundMessageHandler()
+      this.setupBackgroundMessageHandler();
     }
 
-    this.setupBatchTimer()
-    this.setupCleanupTimer()
+    this.setupBatchTimer();
+    this.setupCleanupTimer();
 
     // Log initialization
     this.logInternal(LogLevel.INFO, 'Logger initialized', {
@@ -147,7 +147,7 @@ export class Logger {
         config: this.config,
         sessionId: this.sessionId,
       },
-    })
+    });
   }
 
   /**
@@ -156,9 +156,9 @@ export class Logger {
   private detectBackgroundContext(): boolean {
     try {
       // Background service worker has access to chrome.runtime.onMessage
-      return typeof chrome?.runtime?.onMessage !== 'undefined' && typeof document === 'undefined'
+      return typeof chrome?.runtime?.onMessage !== 'undefined' && typeof document === 'undefined';
     } catch {
-      return false
+      return false;
     }
   }
 
@@ -166,7 +166,7 @@ export class Logger {
    * Generate unique session ID
    */
   private generateSessionId(): string {
-    return `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    return `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   }
 
   /**
@@ -181,22 +181,22 @@ export class Logger {
       ) => {
         try {
           if (message.type === MessageType.LOG_EVENT) {
-            const payload = message.payload as LogEventPayload
-            this.processLogEntry(payload.entry)
-            sendResponse({ success: true })
+            const payload = message.payload as LogEventPayload;
+            this.processLogEntry(payload.entry);
+            sendResponse({ success: true });
           } else if (message.type === MessageType.LOG_BATCH) {
-            const payload = message.payload as LogBatchPayload
-            payload.entries.forEach((entry) => this.processLogEntry(entry))
-            sendResponse({ success: true })
+            const payload = message.payload as LogBatchPayload;
+            payload.entries.forEach((entry) => this.processLogEntry(entry));
+            sendResponse({ success: true });
           }
         } catch (error) {
-          console.error('[Logger] Error processing message:', error)
-          const errorMessage = error instanceof Error ? error.message : String(error)
-          sendResponse({ success: false, error: errorMessage })
+          console.error('[Logger] Error processing message:', error);
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          sendResponse({ success: false, error: errorMessage });
         }
-        return true // Keep message channel open for async response
+        return true; // Keep message channel open for async response
       },
-    )
+    );
   }
 
   /**
@@ -205,8 +205,8 @@ export class Logger {
   private setupBatchTimer(): void {
     if (this.config.batching.enabled && this.isBackground) {
       this.batchTimer = window.setInterval(() => {
-        this.flushLogs()
-      }, this.config.batching.flushInterval)
+        this.flushLogs();
+      }, this.config.batching.flushInterval);
     }
   }
 
@@ -218,10 +218,10 @@ export class Logger {
       // Run cleanup every hour
       setInterval(
         () => {
-          this.cleanupOldLogs()
+          this.cleanupOldLogs();
         },
         60 * 60 * 1000,
-      )
+      );
     }
   }
 
@@ -230,15 +230,15 @@ export class Logger {
    */
   public log(level: LogLevel, message: string, context: Partial<LogContext> = {}): void {
     if (!this.config.enabled || !this.shouldLog(level)) {
-      return
+      return;
     }
 
-    const logEntry = this.createLogEntry(level, message, context)
+    const logEntry = this.createLogEntry(level, message, context);
 
     if (this.isBackground) {
-      this.processLogEntry(logEntry)
+      this.processLogEntry(logEntry);
     } else {
-      this.sendToBackground(logEntry)
+      this.sendToBackground(logEntry);
     }
   }
 
@@ -246,22 +246,22 @@ export class Logger {
    * Convenience methods for different log levels
    */
   public debug(message: string, context: Partial<LogContext> = {}): void {
-    this.log(LogLevel.DEBUG, message, context)
+    this.log(LogLevel.DEBUG, message, context);
   }
 
   public info(message: string, context: Partial<LogContext> = {}): void {
-    this.log(LogLevel.INFO, message, context)
+    this.log(LogLevel.INFO, message, context);
   }
 
   public warn(message: string, context: Partial<LogContext> = {}): void {
-    this.log(LogLevel.WARN, message, context)
+    this.log(LogLevel.WARN, message, context);
   }
 
   public error(message: string, context: Partial<LogContext> = {}, error?: Error): void {
     if (error) {
       const processedTrace = this.stackTraceProcessor.processError(error, {
         component: context.component,
-      })
+      });
       const enhancedContext: Partial<ErrorContext> = {
         ...context,
         stackTrace: processedTrace.processed,
@@ -270,7 +270,7 @@ export class Logger {
         errorType: this.mapErrorSourceToType(processedTrace.errorSource),
         severity: this.determineSeverityFromTrace(processedTrace),
         recoverable: this.isRecoverableError(error, processedTrace),
-      }
+      };
 
       // Attempt error recovery before triggering graceful degradation
       if (
@@ -279,7 +279,7 @@ export class Logger {
         enhancedContext.errorType &&
         enhancedContext.severity
       ) {
-        const componentType = context.component
+        const componentType = context.component;
         this.errorRecoveryService
           .attemptRecovery(
             error,
@@ -296,11 +296,11 @@ export class Logger {
               this.log(
                 LogLevel.INFO,
                 `Error recovery succeeded for ${componentType}: ${recoveryResult}`,
-              )
+              );
             } else {
               // If recovery failed, report to graceful degradation service
               if (this.gracefulDegradationService) {
-                const featureName = this.mapComponentToFeatureName(componentType)
+                const featureName = this.mapComponentToFeatureName(componentType);
                 if (featureName && enhancedContext.severity !== ErrorSeverity.LOW) {
                   this.gracefulDegradationService
                     .reportFeatureFailure(featureName, error, {
@@ -313,18 +313,18 @@ export class Logger {
                             : 'medium',
                     })
                     .catch((degradationError) => {
-                      console.error('[Logger] Failed to report feature failure:', degradationError)
-                    })
+                      console.error('[Logger] Failed to report feature failure:', degradationError);
+                    });
                 }
               }
             }
           })
           .catch((recoveryError) => {
-            console.error('[Logger] Error recovery attempt failed:', recoveryError)
+            console.error('[Logger] Error recovery attempt failed:', recoveryError);
 
             // Still report to graceful degradation service as fallback
             if (this.gracefulDegradationService) {
-              const featureName = this.mapComponentToFeatureName(componentType)
+              const featureName = this.mapComponentToFeatureName(componentType);
               if (featureName && enhancedContext.severity !== ErrorSeverity.LOW) {
                 this.gracefulDegradationService
                   .reportFeatureFailure(featureName, error, {
@@ -337,16 +337,16 @@ export class Logger {
                           : 'medium',
                   })
                   .catch((degradationError) => {
-                    console.error('[Logger] Failed to report feature failure:', degradationError)
-                  })
+                    console.error('[Logger] Failed to report feature failure:', degradationError);
+                  });
               }
             }
-          })
+          });
       }
 
-      this.log(LogLevel.ERROR, message, enhancedContext)
+      this.log(LogLevel.ERROR, message, enhancedContext);
     } else {
-      this.log(LogLevel.ERROR, message, context)
+      this.log(LogLevel.ERROR, message, context);
     }
   }
 
@@ -354,7 +354,7 @@ export class Logger {
     if (error) {
       const processedTrace = this.stackTraceProcessor.processError(error, {
         component: context.component,
-      })
+      });
       const enhancedContext: Partial<ErrorContext> = {
         ...context,
         stackTrace: processedTrace.processed,
@@ -363,11 +363,11 @@ export class Logger {
         errorType: this.mapErrorSourceToType(processedTrace.errorSource),
         severity: ErrorSeverity.CRITICAL,
         recoverable: false,
-      }
+      };
 
       // Always report critical errors to graceful degradation service
       if (this.gracefulDegradationService && context.component) {
-        const featureName = this.mapComponentToFeatureName(context.component)
+        const featureName = this.mapComponentToFeatureName(context.component);
         if (featureName) {
           this.gracefulDegradationService
             .reportFeatureFailure(featureName, error, {
@@ -375,14 +375,17 @@ export class Logger {
               userImpact: 'critical',
             })
             .catch((degradationError) => {
-              console.error('[Logger] Failed to report critical feature failure:', degradationError)
-            })
+              console.error(
+                '[Logger] Failed to report critical feature failure:',
+                degradationError,
+              );
+            });
         }
       }
 
-      this.log(LogLevel.CRITICAL, message, enhancedContext)
+      this.log(LogLevel.CRITICAL, message, enhancedContext);
     } else {
-      this.log(LogLevel.CRITICAL, message, context)
+      this.log(LogLevel.CRITICAL, message, context);
     }
   }
 
@@ -390,12 +393,12 @@ export class Logger {
    * Log with error context for enhanced error handling
    */
   public logError(message: string, errorContext: Partial<ErrorContext>, error?: Error): void {
-    const logEntry = this.createLogEntry(LogLevel.ERROR, message, errorContext, error)
+    const logEntry = this.createLogEntry(LogLevel.ERROR, message, errorContext, error);
 
     if (this.isBackground) {
-      this.processLogEntry(logEntry)
+      this.processLogEntry(logEntry);
     } else {
-      this.sendToBackground(logEntry)
+      this.sendToBackground(logEntry);
     }
   }
 
@@ -410,12 +413,12 @@ export class Logger {
    * Create a performance mark (legacy method, enhanced with PerformanceMonitor)
    */
   public mark(name: string): void {
-    if (!this.config.enablePerformance) return
+    if (!this.config.enablePerformance) return;
 
-    this.performanceMarks.set(name, performance.now())
+    this.performanceMarks.set(name, performance.now());
 
     if (typeof performance.mark === 'function') {
-      performance.mark(name)
+      performance.mark(name);
     }
   }
 
@@ -423,13 +426,13 @@ export class Logger {
    * Measure duration between marks (legacy method, enhanced with PerformanceMonitor)
    */
   public measure(name: string, startMark: string, endMark?: string): number | null {
-    if (!this.config.enablePerformance) return null
+    if (!this.config.enablePerformance) return null;
 
-    const startTime = this.performanceMarks.get(startMark)
-    const endTime = endMark ? this.performanceMarks.get(endMark) : performance.now()
+    const startTime = this.performanceMarks.get(startMark);
+    const endTime = endMark ? this.performanceMarks.get(endMark) : performance.now();
 
     if (startTime && endTime) {
-      const duration = endTime - startTime
+      const duration = endTime - startTime;
 
       this.debug(`Performance: ${name}`, {
         component: ComponentType.ERROR_HANDLER,
@@ -438,22 +441,22 @@ export class Logger {
           duration,
           timing: { start: startTime, end: endTime },
         },
-      })
+      });
 
-      return duration
+      return duration;
     }
 
-    return null
+    return null;
   }
 
   /**
    * Start monitoring a performance operation
    */
   public startPerformanceOperation(name: string, metadata: OperationMetadata): void {
-    if (!this.config.enablePerformance) return
+    if (!this.config.enablePerformance) return;
 
-    const performanceMonitor = this.ensurePerformanceMonitor()
-    performanceMonitor.startOperation(name, metadata)
+    const performanceMonitor = this.ensurePerformanceMonitor();
+    performanceMonitor.startOperation(name, metadata);
 
     this.debug(`Started performance operation: ${name}`, {
       component: metadata.component,
@@ -462,7 +465,7 @@ export class Logger {
         operationType: metadata.operationType,
         inputSize: metadata.inputSize,
       },
-    })
+    });
   }
 
   /**
@@ -472,13 +475,13 @@ export class Logger {
     name: string,
     additionalMetadata?: Partial<OperationMetadata>,
   ): PerformanceMeasurement | null {
-    if (!this.config.enablePerformance) return null
+    if (!this.config.enablePerformance) return null;
 
-    const performanceMonitor = this.ensurePerformanceMonitor()
-    const measurement = performanceMonitor.endOperation(name, additionalMetadata)
+    const performanceMonitor = this.ensurePerformanceMonitor();
+    const measurement = performanceMonitor.endOperation(name, additionalMetadata);
 
     if (measurement) {
-      const logLevel = measurement.isSlowOperation ? LogLevel.WARN : LogLevel.DEBUG
+      const logLevel = measurement.isSlowOperation ? LogLevel.WARN : LogLevel.DEBUG;
       this.log(logLevel, `Performance operation completed: ${name}`, {
         component: measurement.metadata.component,
         action: measurement.isSlowOperation
@@ -497,10 +500,10 @@ export class Logger {
           threshold: measurement.threshold,
           memoryDelta: measurement.memoryDelta,
         },
-      })
+      });
     }
 
-    return measurement
+    return measurement;
   }
 
   /**
@@ -512,11 +515,11 @@ export class Logger {
     metadata: OperationMetadata,
   ): Promise<T> {
     if (!this.config.enablePerformance) {
-      return operation()
+      return operation();
     }
 
-    const performanceMonitor = this.ensurePerformanceMonitor()
-    return performanceMonitor.measureAsync(name, operation, metadata)
+    const performanceMonitor = this.ensurePerformanceMonitor();
+    return performanceMonitor.measureAsync(name, operation, metadata);
   }
 
   /**
@@ -524,21 +527,21 @@ export class Logger {
    */
   public measureSyncOperation<T>(name: string, operation: () => T, metadata: OperationMetadata): T {
     if (!this.config.enablePerformance) {
-      return operation()
+      return operation();
     }
 
-    const performanceMonitor = this.ensurePerformanceMonitor()
-    return performanceMonitor.measureSync(name, operation, metadata)
+    const performanceMonitor = this.ensurePerformanceMonitor();
+    return performanceMonitor.measureSync(name, operation, metadata);
   }
 
   /**
    * Get performance analytics from the PerformanceMonitor
    */
   public getPerformanceAnalytics(): PerformanceAnalytics | null {
-    if (!this.config.enablePerformance) return null
+    if (!this.config.enablePerformance) return null;
 
-    const performanceMonitor = this.ensurePerformanceMonitor()
-    return performanceMonitor.generateAnalytics()
+    const performanceMonitor = this.ensurePerformanceMonitor();
+    return performanceMonitor.generateAnalytics();
   }
 
   /**
@@ -547,35 +550,35 @@ export class Logger {
   public updatePerformanceThresholds(
     thresholds: Partial<import('./PerformanceMonitor').PerformanceThresholds>,
   ): void {
-    if (!this.config.enablePerformance) return
+    if (!this.config.enablePerformance) return;
 
-    const performanceMonitor = this.ensurePerformanceMonitor()
-    performanceMonitor.updateThresholds(thresholds)
+    const performanceMonitor = this.ensurePerformanceMonitor();
+    performanceMonitor.updateThresholds(thresholds);
 
     this.info('Performance thresholds updated', {
       component: ComponentType.ERROR_HANDLER,
       action: 'performance_thresholds_update',
       metadata: { thresholds },
-    })
+    });
   }
 
   /**
    * Get current performance monitoring statistics
    */
   public getPerformanceStats(): {
-    activeOperations: number
-    totalMeasurements: number
-    isEnabled: boolean
+    activeOperations: number;
+    totalMeasurements: number;
+    isEnabled: boolean;
   } | null {
-    if (!this.config.enablePerformance) return null
+    if (!this.config.enablePerformance) return null;
 
-    const performanceMonitor = this.ensurePerformanceMonitor()
-    const stats = performanceMonitor.getStats()
+    const performanceMonitor = this.ensurePerformanceMonitor();
+    const stats = performanceMonitor.getStats();
     return {
       activeOperations: stats.activeOperations,
       totalMeasurements: stats.totalMeasurements,
       isEnabled: stats.isEnabled,
-    }
+    };
   }
 
   /**
@@ -587,7 +590,7 @@ export class Logger {
     context: Partial<LogContext>,
     error?: Error,
   ): LogEntry {
-    const timestamp = new Date().toISOString()
+    const timestamp = new Date().toISOString();
     const fullContext: LogContext = {
       component: ComponentType.ERROR_HANDLER,
       sessionId: this.sessionId,
@@ -596,7 +599,7 @@ export class Logger {
       url: typeof window !== 'undefined' ? window.location?.href : undefined,
       userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
       ...context,
-    }
+    };
 
     const logEntry: LogEntry = {
       id: generateLogId(),
@@ -606,47 +609,47 @@ export class Logger {
       context: fullContext,
       error,
       fingerprint: generateFingerprint(level, message, fullContext.component),
-    }
+    };
 
-    return logEntry
+    return logEntry;
   }
 
   /**
    * Process log entry (background context only)
    */
   private processLogEntry(entry: LogEntry): void {
-    if (!this.isBackground) return
+    if (!this.isBackground) return;
 
     // Rate limiting check
     if (!this.checkRateLimit(entry)) {
-      return
+      return;
     }
 
     // Deduplication check
-    const dedupResult = this.checkDeduplication(entry)
+    const dedupResult = this.checkDeduplication(entry);
     if (!dedupResult.shouldLog) {
-      return
+      return;
     }
 
     // Use modified entry if available (for deduplication messages)
-    const finalEntry = dedupResult.modifiedEntry || entry
+    const finalEntry = dedupResult.modifiedEntry || entry;
 
     // Process with debug mode service
     if (this.debugModeService && this.config.debugMode) {
-      this.debugModeService.processLogEntry(finalEntry)
+      this.debugModeService.processLogEntry(finalEntry);
     }
 
     // Show user notification for error conditions (only in content script/popup contexts)
     if (!this.isBackground && this.config.enableErrorReporting) {
-      this.showUserNotificationIfNeeded(finalEntry)
+      this.showUserNotificationIfNeeded(finalEntry);
     }
 
     // Add to queue
-    this.logQueue.push(finalEntry)
+    this.logQueue.push(finalEntry);
 
     // Console logging
     if (this.config.enableConsole) {
-      this.logToConsole(entry)
+      this.logToConsole(entry);
     }
 
     // Immediate flush for critical errors
@@ -654,7 +657,7 @@ export class Logger {
       entry.level === LogLevel.CRITICAL ||
       this.logQueue.length >= this.config.batching.batchSize
     ) {
-      this.flushLogs()
+      this.flushLogs();
     }
   }
 
@@ -668,16 +671,16 @@ export class Logger {
         payload: { entry },
         sender: entry.context.component,
         timestamp: entry.timestamp,
-      }
+      };
 
       chrome.runtime.sendMessage(message).catch((error) => {
         // Fallback to console if background is unavailable
-        console.error('[Logger] Failed to send to background:', error)
-        this.logToConsole(entry)
-      })
+        console.error('[Logger] Failed to send to background:', error);
+        this.logToConsole(entry);
+      });
     } catch (error) {
       // Fallback to console
-      this.logToConsole(entry)
+      this.logToConsole(entry);
     }
   }
 
@@ -685,8 +688,8 @@ export class Logger {
    * Check rate limiting
    */
   private checkRateLimit(entry: LogEntry): boolean {
-    if (!this.rateLimitingService) return true
-    return this.rateLimitingService.checkRateLimit(entry)
+    if (!this.rateLimitingService) return true;
+    return this.rateLimitingService.checkRateLimit(entry);
   }
 
   /**
@@ -694,14 +697,14 @@ export class Logger {
    */
   private showUserNotificationIfNeeded(entry: LogEntry): void {
     try {
-      const notificationService = this.ensureNotificationService()
+      const notificationService = this.ensureNotificationService();
       notificationService.showFromLogEntry(entry).catch((error) => {
         // Don't log notification errors to avoid infinite loops
-        console.error('[Logger] Failed to show user notification:', error)
-      })
+        console.error('[Logger] Failed to show user notification:', error);
+      });
     } catch (error) {
       // Silently handle notification service errors
-      console.error('[Logger] Notification service error:', error)
+      console.error('[Logger] Notification service error:', error);
     }
   }
 
@@ -709,20 +712,20 @@ export class Logger {
    * Check deduplication and return result with potentially modified entry
    */
   private checkDeduplication(entry: LogEntry): { shouldLog: boolean; modifiedEntry?: LogEntry } {
-    if (!this.rateLimitingService) return { shouldLog: true }
+    if (!this.rateLimitingService) return { shouldLog: true };
 
-    const result = this.rateLimitingService.checkDeduplication(entry)
+    const result = this.rateLimitingService.checkDeduplication(entry);
 
     // Create a modified entry if we have deduplication info
     if (result.dedupInfo && result.shouldLog && result.dedupInfo.count > 1) {
       const modifiedEntry: LogEntry = {
         ...entry,
         message: result.dedupInfo.message,
-      }
-      return { shouldLog: result.shouldLog, modifiedEntry }
+      };
+      return { shouldLog: result.shouldLog, modifiedEntry };
     }
 
-    return { shouldLog: result.shouldLog }
+    return { shouldLog: result.shouldLog };
   }
 
   /**
@@ -730,26 +733,26 @@ export class Logger {
    */
   private logToConsole(entry: LogEntry): void {
     if (this.consoleLoggingService) {
-      this.consoleLoggingService.processLogEntry(entry)
+      this.consoleLoggingService.processLogEntry(entry);
     } else {
       // Fallback to basic console output
-      const prefix = `[${entry.context.component}]`
-      const message = `${prefix} ${entry.message}`
+      const prefix = `[${entry.context.component}]`;
+      const message = `${prefix} ${entry.message}`;
 
       switch (entry.level) {
         case LogLevel.DEBUG:
-          console.debug(message, entry.context)
-          break
+          console.debug(message, entry.context);
+          break;
         case LogLevel.INFO:
-          console.info(message, entry.context)
-          break
+          console.info(message, entry.context);
+          break;
         case LogLevel.WARN:
-          console.warn(message, entry.context)
-          break
+          console.warn(message, entry.context);
+          break;
         case LogLevel.ERROR:
         case LogLevel.CRITICAL:
-          console.error(message, entry.context, entry.error)
-          break
+          console.error(message, entry.context, entry.error);
+          break;
       }
     }
   }
@@ -758,35 +761,35 @@ export class Logger {
    * Flush queued logs to storage
    */
   private async flushLogs(): Promise<void> {
-    if (this.logQueue.length === 0 || !this.config.enableStorage) return
+    if (this.logQueue.length === 0 || !this.config.enableStorage) return;
 
     try {
-      const logsToFlush = [...this.logQueue]
-      this.logQueue = []
+      const logsToFlush = [...this.logQueue];
+      this.logQueue = [];
 
       const storedEntries: StoredLogEntry[] = logsToFlush.map((entry) => ({
         ...entry,
         stored: new Date().toISOString(),
         version: this.extensionVersion,
         environment: isProduction() ? 'production' : 'development',
-      }))
+      }));
 
       // Get existing logs
-      const result = await chrome.storage.local.get(['logs'])
-      const existingLogs: StoredLogEntry[] = result.logs || []
+      const result = await chrome.storage.local.get(['logs']);
+      const existingLogs: StoredLogEntry[] = result.logs || [];
 
       // Add new logs
-      const allLogs = [...existingLogs, ...storedEntries]
+      const allLogs = [...existingLogs, ...storedEntries];
 
       // Enforce limits
-      const limitedLogs = this.enforceLimits(allLogs)
+      const limitedLogs = this.enforceLimits(allLogs);
 
       // Save back to storage
-      await chrome.storage.local.set({ logs: limitedLogs })
+      await chrome.storage.local.set({ logs: limitedLogs });
     } catch (error) {
-      console.error('[Logger] Failed to flush logs:', error)
+      console.error('[Logger] Failed to flush logs:', error);
       // Re-add failed logs to queue
-      this.logQueue.unshift(...this.logQueue)
+      this.logQueue.unshift(...this.logQueue);
     }
   }
 
@@ -795,18 +798,18 @@ export class Logger {
    */
   private enforceLimits(logs: StoredLogEntry[]): StoredLogEntry[] {
     // Sort by timestamp (newest first)
-    logs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+    logs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
     // Enforce max entries
     if (logs.length > this.config.maxEntries) {
-      logs = logs.slice(0, this.config.maxEntries)
+      logs = logs.slice(0, this.config.maxEntries);
     }
 
     // Enforce retention period
-    const cutoffDate = new Date(Date.now() - this.config.retentionDays * 24 * 60 * 60 * 1000)
-    logs = logs.filter((log) => new Date(log.timestamp) > cutoffDate)
+    const cutoffDate = new Date(Date.now() - this.config.retentionDays * 24 * 60 * 60 * 1000);
+    logs = logs.filter((log) => new Date(log.timestamp) > cutoffDate);
 
-    return logs
+    return logs;
   }
 
   /**
@@ -814,13 +817,13 @@ export class Logger {
    */
   private async cleanupOldLogs(): Promise<void> {
     try {
-      const result = await chrome.storage.local.get(['logs'])
-      const logs: StoredLogEntry[] = result.logs || []
+      const result = await chrome.storage.local.get(['logs']);
+      const logs: StoredLogEntry[] = result.logs || [];
 
-      const cleanedLogs = this.enforceLimits(logs)
+      const cleanedLogs = this.enforceLimits(logs);
 
       if (cleanedLogs.length !== logs.length) {
-        await chrome.storage.local.set({ logs: cleanedLogs })
+        await chrome.storage.local.set({ logs: cleanedLogs });
         this.info('Cleaned up old logs', {
           component: ComponentType.BACKGROUND,
           action: 'cleanup',
@@ -828,10 +831,10 @@ export class Logger {
             removed: logs.length - cleanedLogs.length,
             remaining: cleanedLogs.length,
           },
-        })
+        });
       }
     } catch (error) {
-      console.error('[Logger] Cleanup failed:', error)
+      console.error('[Logger] Cleanup failed:', error);
     }
   }
 
@@ -839,21 +842,21 @@ export class Logger {
    * Check if log level should be logged
    */
   private shouldLog(level: LogLevel): boolean {
-    return LOG_LEVEL_PRIORITY[level] >= LOG_LEVEL_PRIORITY[this.config.minLevel]
+    return LOG_LEVEL_PRIORITY[level] >= LOG_LEVEL_PRIORITY[this.config.minLevel];
   }
 
   /**
    * Sanitize message to remove sensitive data
    */
   private sanitizeMessage(message: string): string {
-    let sanitized = message
+    let sanitized = message;
 
     this.config.sensitiveDataPatterns.forEach((pattern) => {
-      const regex = new RegExp(pattern, 'gi')
-      sanitized = sanitized.replace(regex, '[REDACTED]')
-    })
+      const regex = new RegExp(pattern, 'gi');
+      sanitized = sanitized.replace(regex, '[REDACTED]');
+    });
 
-    return sanitized
+    return sanitized;
   }
 
   /**
@@ -861,8 +864,8 @@ export class Logger {
    */
   private logInternal(level: LogLevel, message: string, context: LogContext): void {
     if (this.isBackground) {
-      const entry = this.createLogEntry(level, message, context)
-      this.processLogEntry(entry)
+      const entry = this.createLogEntry(level, message, context);
+      this.processLogEntry(entry);
     }
   }
 
@@ -870,24 +873,24 @@ export class Logger {
    * Update logger configuration
    */
   public updateConfig(newConfig: Partial<LoggerConfig>): void {
-    this.config = { ...this.config, ...newConfig }
+    this.config = { ...this.config, ...newConfig };
 
     this.info('Logger configuration updated', {
       component: ComponentType.ERROR_HANDLER,
       action: 'config_update',
       metadata: newConfig,
-    })
+    });
   }
 
   /**
    * Get logger statistics
    */
   public async getStats(): Promise<LoggerStats | null> {
-    if (!this.isBackground) return null
+    if (!this.isBackground) return null;
 
     try {
-      const result = await chrome.storage.local.get(['logs'])
-      const logs: StoredLogEntry[] = result.logs || []
+      const result = await chrome.storage.local.get(['logs']);
+      const logs: StoredLogEntry[] = result.logs || [];
 
       const stats: LoggerStats = {
         totalEntries: logs.length,
@@ -903,12 +906,12 @@ export class Logger {
           oldest: logs.length > 0 ? logs[logs.length - 1].timestamp : '',
           newest: logs.length > 0 ? logs[0].timestamp : '',
         },
-      }
+      };
 
-      return stats
+      return stats;
     } catch (error) {
-      console.error('[Logger] Failed to get stats:', error)
-      return null
+      console.error('[Logger] Failed to get stats:', error);
+      return null;
     }
   }
 
@@ -916,59 +919,59 @@ export class Logger {
    * Helper method to count entries by field
    */
   private countByField(logs: StoredLogEntry[], field: string): Record<string, number> {
-    const counts: Record<string, number> = {}
+    const counts: Record<string, number> = {};
 
     logs.forEach((log) => {
-      const value = this.getNestedValue(log, field)
+      const value = this.getNestedValue(log, field);
       if (value) {
-        counts[value] = (counts[value] || 0) + 1
+        counts[value] = (counts[value] || 0) + 1;
       }
-    })
+    });
 
-    return counts
+    return counts;
   }
 
   /**
    * Get nested object value by dot notation
    */
   private getNestedValue(obj: any, path: string): any {
-    return path.split('.').reduce((current, key) => current?.[key], obj)
+    return path.split('.').reduce((current, key) => current?.[key], obj);
   }
 
   /**
    * Count errors by type
    */
   private countErrorsByType(logs: StoredLogEntry[]): Record<string, number> {
-    const counts: Record<string, number> = {}
+    const counts: Record<string, number> = {};
 
     logs.forEach((log) => {
       if (log.errorContext?.errorType) {
-        const type = log.errorContext.errorType
-        counts[type] = (counts[type] || 0) + 1
+        const type = log.errorContext.errorType;
+        counts[type] = (counts[type] || 0) + 1;
       }
-    })
+    });
 
-    return counts
+    return counts;
   }
 
   /**
    * Calculate performance statistics
    */
   private calculatePerformanceStats(logs: StoredLogEntry[]): LoggerStats['performance'] {
-    const performanceLogs = logs.filter((log) => log.context.performance?.duration)
+    const performanceLogs = logs.filter((log) => log.context.performance?.duration);
 
     if (performanceLogs.length === 0) {
-      return { avgLogTime: 0, slowestLog: 0, totalLogTime: 0 }
+      return { avgLogTime: 0, slowestLog: 0, totalLogTime: 0 };
     }
 
-    const durations = performanceLogs.map((log) => log.context.performance!.duration!)
-    const totalLogTime = durations.reduce((sum, duration) => sum + duration, 0)
+    const durations = performanceLogs.map((log) => log.context.performance!.duration!);
+    const totalLogTime = durations.reduce((sum, duration) => sum + duration, 0);
 
     return {
       avgLogTime: totalLogTime / durations.length,
       slowestLog: Math.max(...durations),
       totalLogTime,
-    }
+    };
   }
 
   /**
@@ -978,30 +981,30 @@ export class Logger {
     format: 'json' | 'csv' | 'txt',
     filters?: LogFilters,
   ): Promise<string | null> {
-    if (!this.isBackground) return null
+    if (!this.isBackground) return null;
 
     try {
-      const result = await chrome.storage.local.get(['logs'])
-      let logs: StoredLogEntry[] = result.logs || []
+      const result = await chrome.storage.local.get(['logs']);
+      let logs: StoredLogEntry[] = result.logs || [];
 
       // Apply filters
       if (filters) {
-        logs = this.applyFilters(logs, filters)
+        logs = this.applyFilters(logs, filters);
       }
 
       switch (format) {
         case 'json':
-          return JSON.stringify(logs, null, 2)
+          return JSON.stringify(logs, null, 2);
         case 'csv':
-          return this.convertToCsv(logs)
+          return this.convertToCsv(logs);
         case 'txt':
-          return this.convertToText(logs)
+          return this.convertToText(logs);
         default:
-          return null
+          return null;
       }
     } catch (error) {
-      console.error('[Logger] Export failed:', error)
-      return null
+      console.error('[Logger] Export failed:', error);
+      return null;
     }
   }
 
@@ -1010,36 +1013,36 @@ export class Logger {
    */
   private applyFilters(logs: StoredLogEntry[], filters: LogFilters): StoredLogEntry[] {
     return logs.filter((log) => {
-      if (filters.levels && !filters.levels.includes(log.level)) return false
-      if (filters.components && !filters.components.includes(log.context.component)) return false
+      if (filters.levels && !filters.levels.includes(log.level)) return false;
+      if (filters.components && !filters.components.includes(log.context.component)) return false;
       if (filters.search && !log.message.toLowerCase().includes(filters.search.toLowerCase()))
-        return false
+        return false;
 
       if (filters.timeRange) {
-        const logTime = new Date(log.timestamp).getTime()
-        const start = new Date(filters.timeRange.start).getTime()
-        const end = new Date(filters.timeRange.end).getTime()
-        if (logTime < start || logTime > end) return false
+        const logTime = new Date(log.timestamp).getTime();
+        const start = new Date(filters.timeRange.start).getTime();
+        const end = new Date(filters.timeRange.end).getTime();
+        if (logTime < start || logTime > end) return false;
       }
 
-      return true
-    })
+      return true;
+    });
   }
 
   /**
    * Convert logs to CSV format
    */
   private convertToCsv(logs: StoredLogEntry[]): string {
-    const headers = ['Timestamp', 'Level', 'Component', 'Message', 'Action']
+    const headers = ['Timestamp', 'Level', 'Component', 'Message', 'Action'];
     const rows = logs.map((log) => [
       log.timestamp,
       log.level,
       log.context.component,
       `"${log.message.replace(/"/g, '""')}"`,
       log.context.action || '',
-    ])
+    ]);
 
-    return [headers, ...rows].map((row) => row.join(',')).join('\n')
+    return [headers, ...rows].map((row) => row.join(',')).join('\n');
   }
 
   /**
@@ -1051,38 +1054,38 @@ export class Logger {
         (log) =>
           `[${log.timestamp}] ${log.level.toUpperCase()} [${log.context.component}] ${log.message}`,
       )
-      .join('\n')
+      .join('\n');
   }
 
   /**
    * Clear logs
    */
   public async clearLogs(filters?: LogFilters): Promise<boolean> {
-    if (!this.isBackground) return false
+    if (!this.isBackground) return false;
 
     try {
       if (!filters) {
         // Clear all logs
-        await chrome.storage.local.remove(['logs'])
+        await chrome.storage.local.remove(['logs']);
       } else {
         // Clear filtered logs
-        const result = await chrome.storage.local.get(['logs'])
-        const logs: StoredLogEntry[] = result.logs || []
-        const filteredLogs = this.applyFilters(logs, filters)
-        const remainingLogs = logs.filter((log) => !filteredLogs.includes(log))
-        await chrome.storage.local.set({ logs: remainingLogs })
+        const result = await chrome.storage.local.get(['logs']);
+        const logs: StoredLogEntry[] = result.logs || [];
+        const filteredLogs = this.applyFilters(logs, filters);
+        const remainingLogs = logs.filter((log) => !filteredLogs.includes(log));
+        await chrome.storage.local.set({ logs: remainingLogs });
       }
 
       this.info('Logs cleared', {
         component: ComponentType.BACKGROUND,
         action: 'clear_logs',
         metadata: { filters },
-      })
+      });
 
-      return true
+      return true;
     } catch (error) {
-      console.error('[Logger] Clear logs failed:', error)
-      return false
+      console.error('[Logger] Clear logs failed:', error);
+      return false;
     }
   }
 
@@ -1099,15 +1102,15 @@ export class Logger {
       case ErrorSource.BACKGROUND_SCRIPT:
       case ErrorSource.CONTENT_SCRIPT:
       case ErrorSource.POPUP_SCRIPT:
-        return ErrorType.BACKGROUND
+        return ErrorType.BACKGROUND;
       case ErrorSource.BROWSER_API:
-        return ErrorType.API
+        return ErrorType.API;
       case ErrorSource.THIRD_PARTY:
-        return ErrorType.UNKNOWN
+        return ErrorType.UNKNOWN;
       case ErrorSource.USER_SCRIPT:
-        return ErrorType.CONTENT_SCRIPT
+        return ErrorType.CONTENT_SCRIPT;
       default:
-        return ErrorType.UNKNOWN
+        return ErrorType.UNKNOWN;
     }
   }
 
@@ -1117,20 +1120,20 @@ export class Logger {
   private determineSeverityFromTrace(processedTrace: ProcessedStackTrace): ErrorSeverity {
     // If error originates from extension code, it's more critical
     if (processedTrace.frames.some((f) => f.isExtensionCode)) {
-      return ErrorSeverity.HIGH
+      return ErrorSeverity.HIGH;
     }
 
     // Third-party errors are less critical
     if (processedTrace.errorSource === ErrorSource.THIRD_PARTY) {
-      return ErrorSeverity.LOW
+      return ErrorSeverity.LOW;
     }
 
     // Browser API errors are medium severity
     if (processedTrace.errorSource === ErrorSource.BROWSER_API) {
-      return ErrorSeverity.MEDIUM
+      return ErrorSeverity.MEDIUM;
     }
 
-    return ErrorSeverity.MEDIUM
+    return ErrorSeverity.MEDIUM;
   }
 
   /**
@@ -1139,25 +1142,25 @@ export class Logger {
   private isRecoverableError(error: Error, processedTrace: ProcessedStackTrace): boolean {
     // Network errors are typically recoverable
     if (error.name === 'NetworkError' || error.message.includes('fetch')) {
-      return true
+      return true;
     }
 
     // Permission errors are not recoverable without user action
     if (error.message.includes('permission') || error.message.includes('denied')) {
-      return false
+      return false;
     }
 
     // Third-party errors don't affect core functionality
     if (processedTrace.errorSource === ErrorSource.THIRD_PARTY) {
-      return true
+      return true;
     }
 
     // Extension code errors may be recoverable depending on context
     if (processedTrace.frames.some((f) => f.isExtensionCode)) {
-      return !error.message.includes('Cannot read') && !error.message.includes('undefined')
+      return !error.message.includes('Cannot read') && !error.message.includes('undefined');
     }
 
-    return true
+    return true;
   }
 
   /**
@@ -1166,19 +1169,19 @@ export class Logger {
   private mapComponentToFeatureName(component: ComponentType): string | null {
     switch (component) {
       case ComponentType.TRANSLATION_SERVICE:
-        return 'translation'
+        return 'translation';
       case ComponentType.SUBTITLE_MANAGER:
-        return 'subtitles'
+        return 'subtitles';
       case ComponentType.DICTIONARY_SERVICE:
-        return 'dictionary'
+        return 'dictionary';
       case ComponentType.TTS_SERVICE:
-        return 'tts'
+        return 'tts';
       case ComponentType.STORAGE_SERVICE:
-        return 'storage'
+        return 'storage';
       case ComponentType.YOUTUBE_INTEGRATION:
-        return 'youtube'
+        return 'youtube';
       default:
-        return null
+        return null;
     }
   }
 
@@ -1186,16 +1189,16 @@ export class Logger {
    * Get rate limiting statistics
    */
   public getRateLimitingStats(): RateLimitStats | null {
-    if (!this.rateLimitingService) return null
-    return this.rateLimitingService.getRateLimitStats()
+    if (!this.rateLimitingService) return null;
+    return this.rateLimitingService.getRateLimitStats();
   }
 
   /**
    * Get deduplication statistics
    */
   public getDeduplicationStats(): DeduplicationStats | null {
-    if (!this.rateLimitingService) return null
-    return this.rateLimitingService.getDeduplicationStats()
+    if (!this.rateLimitingService) return null;
+    return this.rateLimitingService.getDeduplicationStats();
   }
 
   /**
@@ -1203,7 +1206,7 @@ export class Logger {
    */
   public resetRateLimitingStats(): void {
     if (this.rateLimitingService) {
-      this.rateLimitingService.reset()
+      this.rateLimitingService.reset();
     }
   }
 
@@ -1211,11 +1214,11 @@ export class Logger {
    * Update rate limiting and deduplication configuration
    */
   public updateRateLimitingConfig(config: {
-    rateLimiting?: Partial<import('./RateLimitingService').RateLimitConfig>
-    deduplication?: Partial<import('./RateLimitingService').DeduplicationConfig>
+    rateLimiting?: Partial<import('./RateLimitingService').RateLimitConfig>;
+    deduplication?: Partial<import('./RateLimitingService').DeduplicationConfig>;
   }): void {
     if (this.rateLimitingService) {
-      this.rateLimitingService.updateConfig(config.rateLimiting, config.deduplication)
+      this.rateLimitingService.updateConfig(config.rateLimiting, config.deduplication);
     }
   }
 
@@ -1223,14 +1226,14 @@ export class Logger {
    * Check if debug mode is enabled
    */
   public isDebugModeEnabled(): boolean {
-    return this.debugModeService ? this.debugModeService.isEnabled() : false
+    return this.debugModeService ? this.debugModeService.isEnabled() : false;
   }
 
   /**
    * Get debug mode statistics
    */
   public getDebugStats(): import('./DebugModeService').DebugStats | null {
-    return this.debugModeService ? this.debugModeService.getStats() : null
+    return this.debugModeService ? this.debugModeService.getStats() : null;
   }
 
   /**
@@ -1240,7 +1243,7 @@ export class Logger {
     config: Partial<import('./DebugModeService').DebugModeConfig>,
   ): void {
     if (this.debugModeService) {
-      this.debugModeService.updateConfig(config)
+      this.debugModeService.updateConfig(config);
     }
   }
 
@@ -1248,7 +1251,7 @@ export class Logger {
    * Export debug data for analysis
    */
   public exportDebugData(): string | null {
-    return this.debugModeService ? this.debugModeService.exportDebugData() : null
+    return this.debugModeService ? this.debugModeService.exportDebugData() : null;
   }
 
   /**
@@ -1257,19 +1260,19 @@ export class Logger {
   public getSystemHealth(): SystemHealth | null {
     return this.gracefulDegradationService
       ? this.gracefulDegradationService.getSystemHealth()
-      : null
+      : null;
   }
 
   /**
    * Get feature status from graceful degradation service
    */
   public getFeatureStatus(featureName?: string): FeatureStatus | FeatureStatus[] | null {
-    if (!this.gracefulDegradationService) return null
+    if (!this.gracefulDegradationService) return null;
     try {
-      return this.gracefulDegradationService.getFeatureStatus(featureName)
+      return this.gracefulDegradationService.getFeatureStatus(featureName);
     } catch (error) {
-      console.error('[Logger] Failed to get feature status:', error)
-      return null
+      console.error('[Logger] Failed to get feature status:', error);
+      return null;
     }
   }
 
@@ -1277,12 +1280,12 @@ export class Logger {
    * Attempt to recover a specific feature
    */
   public async attemptFeatureRecovery(featureName: string): Promise<boolean> {
-    if (!this.gracefulDegradationService) return false
+    if (!this.gracefulDegradationService) return false;
     try {
-      return await this.gracefulDegradationService.attemptFeatureRecovery(featureName)
+      return await this.gracefulDegradationService.attemptFeatureRecovery(featureName);
     } catch (error) {
-      console.error('[Logger] Failed to attempt feature recovery:', error)
-      return false
+      console.error('[Logger] Failed to attempt feature recovery:', error);
+      return false;
     }
   }
 
@@ -1293,15 +1296,15 @@ export class Logger {
     featureName?: string,
     limit?: number,
   ): import('./GracefulDegradationService').DegradationEvent[] {
-    if (!this.gracefulDegradationService) return []
-    return this.gracefulDegradationService.getDegradationHistory(featureName, limit)
+    if (!this.gracefulDegradationService) return [];
+    return this.gracefulDegradationService.getDegradationHistory(featureName, limit);
   }
 
   /**
    * Get error recovery statistics
    */
   public getRecoveryStats(): RecoveryStats | null {
-    return this.errorRecoveryService ? this.errorRecoveryService.getStats() : null
+    return this.errorRecoveryService ? this.errorRecoveryService.getStats() : null;
   }
 
   /**
@@ -1311,15 +1314,15 @@ export class Logger {
     component?: ComponentType,
     limit?: number,
   ): import('./ErrorRecoveryService').RecoveryAttempt[] {
-    if (!this.errorRecoveryService) return []
-    return this.errorRecoveryService.getHistory(component, limit)
+    if (!this.errorRecoveryService) return [];
+    return this.errorRecoveryService.getHistory(component, limit);
   }
 
   /**
    * Check if a component is currently being recovered
    */
   public isComponentRecovering(component: ComponentType): boolean {
-    return this.errorRecoveryService ? this.errorRecoveryService.isRecovering(component) : false
+    return this.errorRecoveryService ? this.errorRecoveryService.isRecovering(component) : false;
   }
 
   /**
@@ -1329,7 +1332,7 @@ export class Logger {
     config: Partial<import('./ErrorRecoveryService').RecoveryConfig>,
   ): void {
     if (this.errorRecoveryService) {
-      this.errorRecoveryService.updateConfig(config)
+      this.errorRecoveryService.updateConfig(config);
     }
   }
 
@@ -1337,7 +1340,7 @@ export class Logger {
    * Get console logging configuration
    */
   public getConsoleLoggingConfig(): ConsoleLoggingConfig | null {
-    return this.consoleLoggingService?.getConfig() || null
+    return this.consoleLoggingService?.getConfig() || null;
   }
 
   /**
@@ -1345,7 +1348,7 @@ export class Logger {
    */
   public updateConsoleLoggingConfig(config: Partial<ConsoleLoggingConfig>): void {
     if (this.consoleLoggingService) {
-      this.consoleLoggingService.updateConfig(config)
+      this.consoleLoggingService.updateConfig(config);
     }
   }
 
@@ -1353,7 +1356,7 @@ export class Logger {
    * Get console logging performance statistics
    */
   public getConsoleLoggingStats(): ConsolePerformanceStats | null {
-    return this.consoleLoggingService?.getStats() || null
+    return this.consoleLoggingService?.getStats() || null;
   }
 
   /**
@@ -1361,7 +1364,7 @@ export class Logger {
    */
   public resetConsoleLoggingStats(): void {
     if (this.consoleLoggingService) {
-      this.consoleLoggingService.resetStats()
+      this.consoleLoggingService.resetStats();
     }
   }
 
@@ -1370,7 +1373,7 @@ export class Logger {
    */
   public setConsoleLoggingEnabled(enabled: boolean): void {
     if (this.consoleLoggingService) {
-      this.consoleLoggingService.setEnabled(enabled)
+      this.consoleLoggingService.setEnabled(enabled);
     }
   }
 
@@ -1379,7 +1382,7 @@ export class Logger {
    */
   public setConsoleLogLevels(levels: LogLevel[]): void {
     if (this.consoleLoggingService) {
-      this.consoleLoggingService.setEnabledLevels(levels)
+      this.consoleLoggingService.setEnabledLevels(levels);
     }
   }
 
@@ -1388,7 +1391,7 @@ export class Logger {
    */
   public setConsoleLogComponents(components: ComponentType[]): void {
     if (this.consoleLoggingService) {
-      this.consoleLoggingService.setEnabledComponents(components)
+      this.consoleLoggingService.setEnabledComponents(components);
     }
   }
 
@@ -1397,7 +1400,7 @@ export class Logger {
    */
   public setSilentComponents(components: ComponentType[]): void {
     if (this.consoleLoggingService) {
-      this.consoleLoggingService.setSilentComponents(components)
+      this.consoleLoggingService.setSilentComponents(components);
     }
   }
 
@@ -1406,7 +1409,7 @@ export class Logger {
    */
   public clearConsoleGroups(): void {
     if (this.consoleLoggingService) {
-      this.consoleLoggingService.clearGroups()
+      this.consoleLoggingService.clearGroups();
     }
   }
 
@@ -1414,7 +1417,7 @@ export class Logger {
    * Export console logs and statistics
    */
   public exportConsoleLogsData(): string | null {
-    return this.consoleLoggingService?.exportLogs() || null
+    return this.consoleLoggingService?.exportLogs() || null;
   }
 
   /**
@@ -1426,19 +1429,19 @@ export class Logger {
     severity: ErrorSeverity = ErrorSeverity.MEDIUM,
     component: ComponentType,
     options?: {
-      guidance?: string
-      actionLabel?: string
-      action?: () => Promise<void>
-      duration?: number
+      guidance?: string;
+      actionLabel?: string;
+      action?: () => Promise<void>;
+      duration?: number;
     },
   ): Promise<string | null> {
     if (this.isBackground) {
-      return null // Only show notifications in content script/popup contexts
+      return null; // Only show notifications in content script/popup contexts
     }
 
     try {
-      const notificationService = this.ensureNotificationService()
-      const notificationId = `manual-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      const notificationService = this.ensureNotificationService();
+      const notificationId = `manual-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
       // We need to access private methods, so we'll create a simple notification manually
       // This is a simplified version for manual notifications
@@ -1462,7 +1465,7 @@ export class Logger {
                 label: 'Dismiss',
                 type: 'secondary',
                 action: async () => {
-                  await notificationService.hide(notificationId)
+                  await notificationService.hide(notificationId);
                 },
               },
             ],
@@ -1487,12 +1490,12 @@ export class Logger {
         maxRetries: 0,
         timestamp: Date.now(),
         context: options?.guidance ? { guidance: options.guidance } : undefined,
-      })
+      });
 
-      return notificationId
+      return notificationId;
     } catch (error) {
-      console.error('[Logger] Failed to show manual notification:', error)
-      return null
+      console.error('[Logger] Failed to show manual notification:', error);
+      return null;
     }
   }
 
@@ -1501,55 +1504,55 @@ export class Logger {
    */
   public destroy(): void {
     if (this.batchTimer) {
-      clearInterval(this.batchTimer)
-      this.batchTimer = null
+      clearInterval(this.batchTimer);
+      this.batchTimer = null;
     }
 
     // Flush remaining logs
     if (this.logQueue.length > 0) {
-      this.flushLogs()
+      this.flushLogs();
     }
 
     // Clean up notification service
     if (this.notificationService) {
-      this.notificationService.destroy()
-      this.notificationService = null
+      this.notificationService.destroy();
+      this.notificationService = null;
     }
 
     // Clean up resources
-    this.logQueue = []
-    this.performanceMarks.clear()
+    this.logQueue = [];
+    this.performanceMarks.clear();
 
     // Clean up PerformanceMonitor
     if (this.performanceMonitor) {
-      this.performanceMonitor.destroy()
+      this.performanceMonitor.destroy();
     }
 
     // Clean up RateLimitingService
     if (this.rateLimitingService) {
-      this.rateLimitingService.destroy()
+      this.rateLimitingService.destroy();
     }
 
     // Clean up DebugModeService
     if (this.debugModeService) {
-      this.debugModeService.destroy()
+      this.debugModeService.destroy();
     }
 
     // Clean up GracefulDegradationService
     if (this.gracefulDegradationService) {
-      this.gracefulDegradationService.destroy()
+      this.gracefulDegradationService.destroy();
     }
 
     // Clean up ErrorRecoveryService
     if (this.errorRecoveryService) {
-      this.errorRecoveryService.destroy()
+      this.errorRecoveryService.destroy();
     }
 
     // Clean up ConsoleLoggingService
     if (this.consoleLoggingService) {
-      this.consoleLoggingService.destroy()
+      this.consoleLoggingService.destroy();
     }
 
-    Logger.instance = null
+    Logger.instance = null;
   }
 }

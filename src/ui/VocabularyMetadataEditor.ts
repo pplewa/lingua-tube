@@ -1,25 +1,25 @@
-import { VocabularyItem } from '../storage/types'
-import { VocabularyManager } from '../vocabulary/VocabularyManager'
+import { VocabularyItem } from '../storage/types';
+import { VocabularyManager } from '../vocabulary/VocabularyManager';
 
 // ========================================
 // Types and Interfaces
 // ========================================
 
 export interface MetadataEditorConfig {
-  readonly showTags: boolean
-  readonly showLearningStatus: boolean
-  readonly showNotes: boolean
-  readonly showDifficulty: boolean
-  readonly showFrequency: boolean
-  readonly allowTagCreation: boolean
-  readonly maxNotesLength: number
-  readonly theme: 'light' | 'dark' | 'auto'
+  readonly showTags: boolean;
+  readonly showLearningStatus: boolean;
+  readonly showNotes: boolean;
+  readonly showDifficulty: boolean;
+  readonly showFrequency: boolean;
+  readonly allowTagCreation: boolean;
+  readonly maxNotesLength: number;
+  readonly theme: 'light' | 'dark' | 'auto';
 }
 
 export interface MetadataEditorEvents {
-  onSave: (metadata: Partial<VocabularyItem>) => void
-  onCancel: () => void
-  onChange: (field: string, value: any) => void
+  onSave: (metadata: Partial<VocabularyItem>) => void;
+  onCancel: () => void;
+  onChange: (field: string, value: any) => void;
 }
 
 export const DEFAULT_METADATA_CONFIG: MetadataEditorConfig = {
@@ -31,67 +31,67 @@ export const DEFAULT_METADATA_CONFIG: MetadataEditorConfig = {
   allowTagCreation: true,
   maxNotesLength: 500,
   theme: 'auto',
-}
+};
 
 // ========================================
 // Vocabulary Metadata Editor Component
 // ========================================
 
 export class VocabularyMetadataEditor {
-  private container: HTMLElement | null = null
-  private shadowRoot: ShadowRoot | null = null
-  private vocabularyManager: VocabularyManager
+  private container: HTMLElement | null = null;
+  private shadowRoot: ShadowRoot | null = null;
+  private vocabularyManager: VocabularyManager;
 
-  private config: MetadataEditorConfig
-  private events: { [K in keyof MetadataEditorEvents]?: MetadataEditorEvents[K] } = {}
+  private config: MetadataEditorConfig;
+  private events: { [K in keyof MetadataEditorEvents]?: MetadataEditorEvents[K] } = {};
 
-  private currentItem: VocabularyItem | null = null
-  private currentMetadata: Partial<VocabularyItem> = {}
-  private availableTags: string[] = []
-  private isDirty = false
+  private currentItem: VocabularyItem | null = null;
+  private currentMetadata: Partial<VocabularyItem> = {};
+  private availableTags: string[] = [];
+  private isDirty = false;
 
   constructor(config: Partial<MetadataEditorConfig> = {}) {
-    this.config = { ...DEFAULT_METADATA_CONFIG, ...config }
-    this.vocabularyManager = VocabularyManager.getInstance()
+    this.config = { ...DEFAULT_METADATA_CONFIG, ...config };
+    this.vocabularyManager = VocabularyManager.getInstance();
   }
 
   public async initialize(container: HTMLElement): Promise<void> {
-    this.container = container
-    this.createShadowDOM()
-    await this.loadAvailableTags()
+    this.container = container;
+    this.createShadowDOM();
+    await this.loadAvailableTags();
   }
 
   public async editItem(item: VocabularyItem): Promise<void> {
-    this.currentItem = item
+    this.currentItem = item;
     this.currentMetadata = {
       tags: item.tags || [],
       learningStatus: item.learningStatus,
       difficulty: item.difficulty,
       notes: item.notes,
       frequency: item.frequency,
-    }
-    this.isDirty = false
-    await this.render()
+    };
+    this.isDirty = false;
+    await this.render();
   }
 
   public destroy(): void {
     if (this.container && this.shadowRoot) {
-      this.container.removeChild(this.shadowRoot.host)
+      this.container.removeChild(this.shadowRoot.host);
     }
-    this.container = null
-    this.shadowRoot = null
-    this.currentItem = null
+    this.container = null;
+    this.shadowRoot = null;
+    this.currentItem = null;
   }
 
   public on<K extends keyof MetadataEditorEvents>(
     event: K,
     callback: MetadataEditorEvents[K],
   ): void {
-    this.events[event] = callback
+    this.events[event] = callback;
   }
 
   public off<K extends keyof MetadataEditorEvents>(event: K): void {
-    delete this.events[event]
+    delete this.events[event];
   }
 
   // ========================================
@@ -99,40 +99,40 @@ export class VocabularyMetadataEditor {
   // ========================================
 
   private createShadowDOM(): void {
-    if (!this.container) return
+    if (!this.container) return;
 
-    const wrapper = document.createElement('div')
-    this.shadowRoot = wrapper.attachShadow({ mode: 'closed' })
-    this.container.appendChild(wrapper)
+    const wrapper = document.createElement('div');
+    this.shadowRoot = wrapper.attachShadow({ mode: 'closed' });
+    this.container.appendChild(wrapper);
 
     // Add styles
-    const style = document.createElement('style')
-    style.textContent = this.getStyles()
-    this.shadowRoot.appendChild(style)
+    const style = document.createElement('style');
+    style.textContent = this.getStyles();
+    this.shadowRoot.appendChild(style);
 
     // Add content container
-    const content = document.createElement('div')
-    content.className = 'metadata-editor'
-    this.shadowRoot.appendChild(content)
+    const content = document.createElement('div');
+    content.className = 'metadata-editor';
+    this.shadowRoot.appendChild(content);
 
-    this.attachEventHandlers()
+    this.attachEventHandlers();
   }
 
   private async loadAvailableTags(): Promise<void> {
-    this.availableTags = await this.vocabularyManager.getAllTags()
+    this.availableTags = await this.vocabularyManager.getAllTags();
   }
 
   private async render(): Promise<void> {
-    if (!this.shadowRoot || !this.currentItem) return
+    if (!this.shadowRoot || !this.currentItem) return;
 
-    const content = this.shadowRoot.querySelector('.metadata-editor')
-    if (!content) return
+    const content = this.shadowRoot.querySelector('.metadata-editor');
+    if (!content) return;
 
-    content.innerHTML = this.renderEditor()
+    content.innerHTML = this.renderEditor();
   }
 
   private renderEditor(): string {
-    if (!this.currentItem) return '<div class="no-item">No item selected</div>'
+    if (!this.currentItem) return '<div class="no-item">No item selected</div>';
 
     return `
       <div class="editor-header">
@@ -154,11 +154,11 @@ export class VocabularyMetadataEditor {
           Save Changes
         </button>
       </div>
-    `
+    `;
   }
 
   private renderTagsSection(): string {
-    const currentTags = this.currentMetadata.tags || []
+    const currentTags = this.currentMetadata.tags || [];
 
     return `
       <div class="field-section">
@@ -207,17 +207,17 @@ export class VocabularyMetadataEditor {
           }
         </div>
       </div>
-    `
+    `;
   }
 
   private renderLearningStatusSection(): string {
-    const currentStatus = this.currentMetadata.learningStatus || 'new'
+    const currentStatus = this.currentMetadata.learningStatus || 'new';
     const statuses = [
       { value: 'new', label: 'New', description: 'Just added to vocabulary' },
       { value: 'learning', label: 'Learning', description: 'Currently studying' },
       { value: 'review', label: 'Review', description: 'Needs periodic review' },
       { value: 'mastered', label: 'Mastered', description: 'Well understood' },
-    ]
+    ];
 
     return `
       <div class="field-section">
@@ -244,17 +244,17 @@ export class VocabularyMetadataEditor {
             .join('')}
         </div>
       </div>
-    `
+    `;
   }
 
   private renderDifficultySection(): string {
-    const currentDifficulty = this.currentMetadata.difficulty || ''
+    const currentDifficulty = this.currentMetadata.difficulty || '';
     const difficulties = [
       { value: '', label: 'Not Set' },
       { value: 'easy', label: 'Easy' },
       { value: 'medium', label: 'Medium' },
       { value: 'hard', label: 'Hard' },
-    ]
+    ];
 
     return `
       <div class="field-section">
@@ -271,11 +271,11 @@ export class VocabularyMetadataEditor {
             .join('')}
         </select>
       </div>
-    `
+    `;
   }
 
   private renderNotesSection(): string {
-    const currentNotes = this.currentMetadata.notes || ''
+    const currentNotes = this.currentMetadata.notes || '';
 
     return `
       <div class="field-section">
@@ -290,11 +290,11 @@ export class VocabularyMetadataEditor {
           ${currentNotes.length}/${this.config.maxNotesLength} characters
         </div>
       </div>
-    `
+    `;
   }
 
   private renderFrequencySection(): string {
-    const frequency = this.currentItem?.frequency || 0
+    const frequency = this.currentItem?.frequency || 0;
 
     return `
       <div class="field-section">
@@ -304,163 +304,163 @@ export class VocabularyMetadataEditor {
           <span class="frequency-label">times encountered</span>
         </div>
       </div>
-    `
+    `;
   }
 
   private attachEventHandlers(): void {
-    if (!this.shadowRoot) return
+    if (!this.shadowRoot) return;
 
     // Click handlers
     this.shadowRoot.addEventListener('click', (e) => {
-      const target = e.target as HTMLElement
-      const action = target.getAttribute('data-action')
+      const target = e.target as HTMLElement;
+      const action = target.getAttribute('data-action');
 
       switch (action) {
         case 'cancel':
-          this.handleCancel()
-          break
+          this.handleCancel();
+          break;
         case 'save':
-          this.handleSave()
-          break
+          this.handleSave();
+          break;
         case 'add-tag':
-          this.handleAddTag()
-          break
+          this.handleAddTag();
+          break;
         case 'remove-tag':
-          this.handleRemoveTag(target.getAttribute('data-tag') || '')
-          break
+          this.handleRemoveTag(target.getAttribute('data-tag') || '');
+          break;
         case 'add-suggested-tag':
-          this.handleAddSuggestedTag(target.getAttribute('data-tag') || '')
-          break
+          this.handleAddSuggestedTag(target.getAttribute('data-tag') || '');
+          break;
       }
-    })
+    });
 
     // Input change handlers
     this.shadowRoot.addEventListener('input', (e) => {
-      const target = e.target as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-      const field = target.getAttribute('data-field')
+      const target = e.target as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+      const field = target.getAttribute('data-field');
 
       if (field) {
-        this.handleFieldChange(field, target.value)
+        this.handleFieldChange(field, target.value);
       }
-    })
+    });
 
     // Radio button change handlers
     this.shadowRoot.addEventListener('change', (e) => {
-      const target = e.target as HTMLInputElement
-      const field = target.getAttribute('data-field')
+      const target = e.target as HTMLInputElement;
+      const field = target.getAttribute('data-field');
 
       if (field && target.type === 'radio') {
-        this.handleFieldChange(field, target.value)
+        this.handleFieldChange(field, target.value);
       }
-    })
+    });
 
     // Enter key for tag input
     this.shadowRoot.addEventListener('keydown', (e) => {
-      const keyboardEvent = e as KeyboardEvent
+      const keyboardEvent = e as KeyboardEvent;
       if (keyboardEvent.key === 'Enter') {
-        const target = e.target as HTMLElement
+        const target = e.target as HTMLElement;
         if (target.classList.contains('tag-input')) {
-          e.preventDefault()
-          this.handleAddTag()
+          e.preventDefault();
+          this.handleAddTag();
         }
       }
-    })
+    });
   }
 
   private handleCancel(): void {
-    this.events.onCancel?.()
+    this.events.onCancel?.();
   }
 
   private async handleSave(): Promise<void> {
-    if (!this.currentItem || !this.isDirty) return
+    if (!this.currentItem || !this.isDirty) return;
 
-    const metadata = this.collectMetadata()
-    this.events.onSave?.(metadata)
+    const metadata = this.collectMetadata();
+    this.events.onSave?.(metadata);
   }
 
   private handleFieldChange(field: string, value: string): void {
-    this.isDirty = true
-    this.events.onChange?.(field, value)
+    this.isDirty = true;
+    this.events.onChange?.(field, value);
 
     // Update UI to reflect dirty state
-    this.updateSaveButton()
+    this.updateSaveButton();
 
     // Update character counter for notes
     if (field === 'notes') {
-      this.updateNotesCounter(value)
+      this.updateNotesCounter(value);
     }
   }
 
   private handleAddTag(): void {
-    if (!this.shadowRoot) return
+    if (!this.shadowRoot) return;
 
-    const input = this.shadowRoot.querySelector('.tag-input') as HTMLInputElement
-    if (!input) return
+    const input = this.shadowRoot.querySelector('.tag-input') as HTMLInputElement;
+    if (!input) return;
 
-    const tag = input.value.trim()
-    if (!tag) return
+    const tag = input.value.trim();
+    if (!tag) return;
 
-    const currentTags = this.currentMetadata.tags || []
+    const currentTags = this.currentMetadata.tags || [];
     if (currentTags.includes(tag)) {
-      input.value = ''
-      return
+      input.value = '';
+      return;
     }
 
     // Add tag to metadata
     this.currentMetadata = {
       ...this.currentMetadata,
       tags: [...currentTags, tag],
-    }
+    };
 
-    this.isDirty = true
-    input.value = ''
-    this.render()
+    this.isDirty = true;
+    input.value = '';
+    this.render();
   }
 
   private handleRemoveTag(tag: string): void {
-    if (!this.currentItem || !tag) return
+    if (!this.currentItem || !tag) return;
 
-    const currentTags = this.currentMetadata.tags || []
-    const newTags = currentTags.filter((t) => t !== tag)
+    const currentTags = this.currentMetadata.tags || [];
+    const newTags = currentTags.filter((t) => t !== tag);
 
     this.currentMetadata = {
       ...this.currentMetadata,
       tags: newTags,
-    }
+    };
 
-    this.isDirty = true
-    this.render()
+    this.isDirty = true;
+    this.render();
   }
 
   private handleAddSuggestedTag(tag: string): void {
-    if (!this.shadowRoot) return
+    if (!this.shadowRoot) return;
 
-    const input = this.shadowRoot.querySelector('.tag-input') as HTMLInputElement
+    const input = this.shadowRoot.querySelector('.tag-input') as HTMLInputElement;
     if (input) {
-      input.value = tag
-      this.handleAddTag()
+      input.value = tag;
+      this.handleAddTag();
     }
   }
 
   private collectMetadata(): Partial<VocabularyItem> {
-    if (!this.shadowRoot || !this.currentItem) return {}
+    if (!this.shadowRoot || !this.currentItem) return {};
 
-    const metadata: Partial<VocabularyItem> = {}
+    const metadata: Partial<VocabularyItem> = {};
 
     // Tags
     if (this.config.showTags && this.currentMetadata.tags) {
-      Object.assign(metadata, { tags: this.currentMetadata.tags })
+      Object.assign(metadata, { tags: this.currentMetadata.tags });
     }
 
     // Learning status
     if (this.config.showLearningStatus) {
       const statusInput = this.shadowRoot.querySelector(
         'input[name="learning-status"]:checked',
-      ) as HTMLInputElement
+      ) as HTMLInputElement;
       if (statusInput) {
         Object.assign(metadata, {
           learningStatus: statusInput.value as VocabularyItem['learningStatus'],
-        })
+        });
       }
     }
 
@@ -468,47 +468,47 @@ export class VocabularyMetadataEditor {
     if (this.config.showDifficulty) {
       const difficultySelect = this.shadowRoot.querySelector(
         '.difficulty-select',
-      ) as HTMLSelectElement
+      ) as HTMLSelectElement;
       if (difficultySelect && difficultySelect.value) {
         Object.assign(metadata, {
           difficulty: difficultySelect.value as VocabularyItem['difficulty'],
-        })
+        });
       }
     }
 
     // Notes
     if (this.config.showNotes) {
-      const notesTextarea = this.shadowRoot.querySelector('.notes-textarea') as HTMLTextAreaElement
+      const notesTextarea = this.shadowRoot.querySelector('.notes-textarea') as HTMLTextAreaElement;
       if (notesTextarea && notesTextarea.value.trim()) {
-        Object.assign(metadata, { notes: notesTextarea.value.trim() })
+        Object.assign(metadata, { notes: notesTextarea.value.trim() });
       }
     }
 
-    return metadata
+    return metadata;
   }
 
   private updateSaveButton(): void {
-    if (!this.shadowRoot) return
+    if (!this.shadowRoot) return;
 
-    const saveButton = this.shadowRoot.querySelector('[data-action="save"]') as HTMLButtonElement
+    const saveButton = this.shadowRoot.querySelector('[data-action="save"]') as HTMLButtonElement;
     if (saveButton) {
-      saveButton.disabled = !this.isDirty
+      saveButton.disabled = !this.isDirty;
     }
   }
 
   private updateNotesCounter(value: string): void {
-    if (!this.shadowRoot) return
+    if (!this.shadowRoot) return;
 
-    const counter = this.shadowRoot.querySelector('.notes-counter')
+    const counter = this.shadowRoot.querySelector('.notes-counter');
     if (counter) {
-      counter.textContent = `${value.length}/${this.config.maxNotesLength} characters`
+      counter.textContent = `${value.length}/${this.config.maxNotesLength} characters`;
     }
   }
 
   private escapeHtml(text: string): string {
-    const div = document.createElement('div')
-    div.textContent = text
-    return div.innerHTML
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   }
 
   private getStyles(): string {
@@ -885,6 +885,6 @@ export class VocabularyMetadataEditor {
           border-color: #4299e1;
         }
       }
-    `
+    `;
   }
 }

@@ -11,136 +11,136 @@
  * Represents a vocabulary item saved by the user while learning
  */
 export interface VocabularyItem {
-  readonly id: string
-  readonly word: string
-  readonly translation: string
-  readonly context: string
-  readonly sourceLanguage: string
-  readonly targetLanguage: string
-  readonly videoId?: string
-  readonly videoTitle?: string
-  readonly timestamp: number
-  readonly createdAt: number
-  readonly lastReviewed?: number
-  readonly reviewCount: number
-  readonly difficulty?: 'easy' | 'medium' | 'hard'
-  readonly tags?: string[]
-  readonly learningStatus?: 'new' | 'learning' | 'mastered' | 'review'
-  readonly notes?: string
-  readonly frequency?: number
-  readonly lastModified?: number
+  readonly id: string;
+  readonly word: string;
+  readonly translation: string;
+  readonly context: string;
+  readonly sourceLanguage: string;
+  readonly targetLanguage: string;
+  readonly videoId?: string;
+  readonly videoTitle?: string;
+  readonly timestamp: number;
+  readonly createdAt: number;
+  readonly lastReviewed?: number;
+  readonly reviewCount: number;
+  readonly difficulty?: 'easy' | 'medium' | 'hard';
+  readonly tags?: string[];
+  readonly learningStatus?: 'new' | 'learning' | 'mastered' | 'review';
+  readonly notes?: string;
+  readonly frequency?: number;
+  readonly lastModified?: number;
 }
 
 /**
  * User preferences and settings for the extension
  */
 export interface UserSettings {
-  readonly version: number
-  readonly languages: LanguageSettings
-  readonly subtitle: SubtitleSettings
-  readonly playback: PlaybackSettings
-  readonly vocabulary: VocabularySettings
-  readonly ui: UISettings
-  readonly privacy: PrivacySettings
-  readonly developer: DeveloperSettings
+  readonly version: number;
+  readonly languages: LanguageSettings;
+  readonly subtitle: SubtitleSettings;
+  readonly playback: PlaybackSettings;
+  readonly vocabulary: VocabularySettings;
+  readonly ui: UISettings;
+  readonly privacy: PrivacySettings;
+  readonly developer: DeveloperSettings;
 }
 
 /**
  * Language configuration settings
  */
 export interface LanguageSettings {
-  readonly sourceLanguage: string // Language being learned (e.g., 'en')
-  readonly nativeLanguage: string // User's native language (e.g., 'es')
-  readonly autoDetectSource: boolean
-  readonly fallbackLanguage: string
+  readonly sourceLanguage: string; // Language being learned (e.g., 'en')
+  readonly nativeLanguage: string; // User's native language (e.g., 'es')
+  readonly autoDetectSource: boolean;
+  readonly fallbackLanguage: string;
 }
 
 /**
  * Subtitle display and behavior settings
  */
 export interface SubtitleSettings {
-  readonly showSource: boolean
-  readonly showNative: boolean
-  readonly fontSize: number // 12-24px range
-  readonly fontFamily: string
-  readonly position: 'top' | 'center' | 'bottom'
-  readonly backgroundColor: string
-  readonly textColor: string
-  readonly opacity: number // 0.1-1.0 range
-  readonly wordSpacing: number
-  readonly lineHeight: number
+  readonly showSource: boolean;
+  readonly showNative: boolean;
+  readonly fontSize: number; // 12-24px range
+  readonly fontFamily: string;
+  readonly position: 'top' | 'center' | 'bottom';
+  readonly backgroundColor: string;
+  readonly textColor: string;
+  readonly opacity: number; // 0.1-1.0 range
+  readonly wordSpacing: number;
+  readonly lineHeight: number;
 }
 
 /**
  * Video playback control settings
  */
 export interface PlaybackSettings {
-  readonly defaultSpeed: number // 0.25-2.0 range
-  readonly enableSentenceLoop: boolean
-  readonly enableAutoReplay: boolean
-  readonly pauseOnClick: boolean
-  readonly skipSilence: boolean
+  readonly defaultSpeed: number; // 0.25-2.0 range
+  readonly enableSentenceLoop: boolean;
+  readonly enableAutoReplay: boolean;
+  readonly pauseOnClick: boolean;
+  readonly skipSilence: boolean;
 }
 
 /**
  * Vocabulary management settings
  */
 export interface VocabularySettings {
-  readonly autoSave: boolean
-  readonly highlightSavedWords: boolean
-  readonly highlightColor: string
-  readonly maxSavedWords: number
-  readonly exportFormat: 'json' | 'csv' | 'anki'
-  readonly reviewReminders: boolean
+  readonly autoSave: boolean;
+  readonly highlightSavedWords: boolean;
+  readonly highlightColor: string;
+  readonly maxSavedWords: number;
+  readonly exportFormat: 'json' | 'csv' | 'anki';
+  readonly reviewReminders: boolean;
 }
 
 /**
  * User interface settings
  */
 export interface UISettings {
-  readonly theme: 'light' | 'dark' | 'auto'
-  readonly compactMode: boolean
-  readonly showTooltips: boolean
-  readonly animationsEnabled: boolean
-  readonly keyboardShortcuts: KeyboardShortcuts
+  readonly theme: 'light' | 'dark' | 'auto';
+  readonly compactMode: boolean;
+  readonly showTooltips: boolean;
+  readonly animationsEnabled: boolean;
+  readonly keyboardShortcuts: KeyboardShortcuts;
 }
 
 /**
  * Keyboard shortcuts configuration
  */
 export interface KeyboardShortcuts {
-  readonly toggleSubtitles: string
-  readonly slowDown: string
-  readonly speedUp: string
-  readonly replay: string
-  readonly saveWord: string
-  readonly showDefinition: string
+  readonly toggleSubtitles: string;
+  readonly slowDown: string;
+  readonly speedUp: string;
+  readonly replay: string;
+  readonly saveWord: string;
+  readonly showDefinition: string;
 }
 
 /**
  * Privacy and data settings
  */
 export interface PrivacySettings {
-  readonly collectAnalytics: boolean
-  readonly shareUsageData: boolean
-  readonly cacheTranslations: boolean
-  readonly maxCacheSize: number // MB
-  readonly autoDeleteOldData: boolean
-  readonly dataRetentionDays: number
+  readonly collectAnalytics: boolean;
+  readonly shareUsageData: boolean;
+  readonly cacheTranslations: boolean;
+  readonly maxCacheSize: number; // MB
+  readonly autoDeleteOldData: boolean;
+  readonly dataRetentionDays: number;
 }
 
 /**
  * Developer and debug settings
  */
 export interface DeveloperSettings {
-  readonly debugMode: boolean
-  readonly verboseLogging: boolean
-  readonly consoleTimestamps: boolean
-  readonly performanceProfiling: boolean
-  readonly memoryMonitoring: boolean
-  readonly consoleLogLevel: 'debug' | 'info' | 'warn' | 'error' | 'critical'
-  readonly enabledComponents: string[]
-  readonly autoExportDebugData: boolean
+  readonly debugMode: boolean;
+  readonly verboseLogging: boolean;
+  readonly consoleTimestamps: boolean;
+  readonly performanceProfiling: boolean;
+  readonly memoryMonitoring: boolean;
+  readonly consoleLogLevel: 'debug' | 'info' | 'warn' | 'error' | 'critical';
+  readonly enabledComponents: string[];
+  readonly autoExportDebugData: boolean;
 }
 
 // ========================================
@@ -151,20 +151,20 @@ export interface DeveloperSettings {
  * Storage schema versioning for data migrations
  */
 export interface StorageSchema {
-  readonly version: number
-  readonly lastMigration: number
-  readonly migrationHistory: MigrationRecord[]
+  readonly version: number;
+  readonly lastMigration: number;
+  readonly migrationHistory: MigrationRecord[];
 }
 
 /**
  * Record of a completed migration
  */
 export interface MigrationRecord {
-  readonly fromVersion: number
-  readonly toVersion: number
-  readonly timestamp: number
-  readonly success: boolean
-  readonly errorMessage?: string
+  readonly fromVersion: number;
+  readonly toVersion: number;
+  readonly timestamp: number;
+  readonly success: boolean;
+  readonly errorMessage?: string;
 }
 
 // ========================================
@@ -175,20 +175,20 @@ export interface MigrationRecord {
  * Storage operation result with status and optional data
  */
 export interface StorageResult<T = unknown> {
-  readonly success: boolean
-  readonly data?: T
-  readonly error?: StorageError
-  readonly timestamp: number
+  readonly success: boolean;
+  readonly data?: T;
+  readonly error?: StorageError;
+  readonly timestamp: number;
 }
 
 /**
  * Storage error information
  */
 export interface StorageError {
-  readonly code: StorageErrorCode
-  readonly message: string
-  readonly details?: Record<string, unknown>
-  readonly timestamp: number
+  readonly code: StorageErrorCode;
+  readonly message: string;
+  readonly details?: Record<string, unknown>;
+  readonly timestamp: number;
 }
 
 /**
@@ -219,10 +219,10 @@ export enum StorageEventType {
  * Storage event data structure
  */
 export interface StorageEvent<T = unknown> {
-  readonly type: StorageEventType
-  readonly data: T
-  readonly timestamp: number
-  readonly source: 'content' | 'popup' | 'background'
+  readonly type: StorageEventType;
+  readonly data: T;
+  readonly timestamp: number;
+  readonly source: 'content' | 'popup' | 'background';
 }
 
 // ========================================
@@ -238,7 +238,7 @@ export const STORAGE_KEYS = {
   SCHEMA: 'lingua_schema',
   CACHE: 'lingua_cache',
   ANALYTICS: 'lingua_analytics',
-} as const
+} as const;
 
 /**
  * Default storage configuration
@@ -251,7 +251,7 @@ export const STORAGE_CONFIG = {
   MIGRATION_TIMEOUT_MS: 30000,
   RETRY_ATTEMPTS: 3,
   RETRY_DELAY_MS: 1000,
-} as const
+} as const;
 
 // ========================================
 // API Function Signatures
@@ -262,28 +262,28 @@ export const STORAGE_CONFIG = {
  */
 export interface StorageService {
   // Vocabulary operations
-  saveWord(item: Omit<VocabularyItem, 'id' | 'createdAt'>): Promise<StorageResult<VocabularyItem>>
-  getVocabulary(): Promise<StorageResult<VocabularyItem[]>>
-  removeWord(id: string): Promise<StorageResult<void>>
-  updateWord(id: string, updates: Partial<VocabularyItem>): Promise<StorageResult<VocabularyItem>>
-  clearVocabulary(): Promise<StorageResult<void>>
+  saveWord(item: Omit<VocabularyItem, 'id' | 'createdAt'>): Promise<StorageResult<VocabularyItem>>;
+  getVocabulary(): Promise<StorageResult<VocabularyItem[]>>;
+  removeWord(id: string): Promise<StorageResult<void>>;
+  updateWord(id: string, updates: Partial<VocabularyItem>): Promise<StorageResult<VocabularyItem>>;
+  clearVocabulary(): Promise<StorageResult<void>>;
 
   // Settings operations
-  saveSettings(settings: Partial<UserSettings>): Promise<StorageResult<UserSettings>>
-  getSettings(): Promise<StorageResult<UserSettings>>
-  resetSettings(): Promise<StorageResult<UserSettings>>
+  saveSettings(settings: Partial<UserSettings>): Promise<StorageResult<UserSettings>>;
+  getSettings(): Promise<StorageResult<UserSettings>>;
+  resetSettings(): Promise<StorageResult<UserSettings>>;
 
   // Cache operations
-  setCache<T>(key: string, value: T, ttl?: number): Promise<StorageResult<void>>
-  getCache<T>(key: string): Promise<StorageResult<T | null>>
-  clearCache(): Promise<StorageResult<void>>
+  setCache<T>(key: string, value: T, ttl?: number): Promise<StorageResult<void>>;
+  getCache<T>(key: string): Promise<StorageResult<T | null>>;
+  clearCache(): Promise<StorageResult<void>>;
 
   // Event handling
-  addEventListener(type: StorageEventType, listener: (event: StorageEvent) => void): void
-  removeEventListener(type: StorageEventType, listener: (event: StorageEvent) => void): void
+  addEventListener(type: StorageEventType, listener: (event: StorageEvent) => void): void;
+  removeEventListener(type: StorageEventType, listener: (event: StorageEvent) => void): void;
 
   // Utility
-  getStorageUsage(): Promise<StorageResult<{ used: number; available: number }>>
-  exportData(): Promise<StorageResult<string>>
-  importData(data: string): Promise<StorageResult<void>>
+  getStorageUsage(): Promise<StorageResult<{ used: number; available: number }>>;
+  exportData(): Promise<StorageResult<string>>;
+  importData(data: string): Promise<StorageResult<void>>;
 }

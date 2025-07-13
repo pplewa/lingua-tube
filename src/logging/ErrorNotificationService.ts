@@ -9,7 +9,7 @@ import {
   UserNotification,
   LogEntry,
   ErrorContext,
-} from './types'
+} from './types';
 
 /**
  * Enhanced notification types for different UI contexts
@@ -26,85 +26,85 @@ export enum NotificationType {
  * Notification positioning and display options
  */
 export interface NotificationConfig {
-  readonly type: NotificationType
-  readonly position: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center'
-  readonly duration: number // ms, 0 = persistent
-  readonly dismissible: boolean
-  readonly autoHide: boolean
-  readonly showProgress: boolean
-  readonly allowMultiple: boolean
-  readonly stackable: boolean
-  readonly maxStack: number
-  readonly animationDuration: number
-  readonly theme: 'light' | 'dark' | 'auto'
+  readonly type: NotificationType;
+  readonly position: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center';
+  readonly duration: number; // ms, 0 = persistent
+  readonly dismissible: boolean;
+  readonly autoHide: boolean;
+  readonly showProgress: boolean;
+  readonly allowMultiple: boolean;
+  readonly stackable: boolean;
+  readonly maxStack: number;
+  readonly animationDuration: number;
+  readonly theme: 'light' | 'dark' | 'auto';
 }
 
 /**
  * User-friendly error messages and guidance
  */
 export interface ErrorMessage {
-  readonly title: string
-  readonly message: string
-  readonly guidance: string
-  readonly actionLabel?: string
-  readonly action?: () => Promise<void>
-  readonly learnMoreUrl?: string
-  readonly reportable: boolean
+  readonly title: string;
+  readonly message: string;
+  readonly guidance: string;
+  readonly actionLabel?: string;
+  readonly action?: () => Promise<void>;
+  readonly learnMoreUrl?: string;
+  readonly reportable: boolean;
 }
 
 /**
  * Notification action for user interaction
  */
 export interface NotificationAction {
-  readonly label: string
-  readonly type: 'primary' | 'secondary' | 'danger'
-  readonly action: () => Promise<void>
-  readonly loading?: boolean
-  readonly disabled?: boolean
+  readonly label: string;
+  readonly type: 'primary' | 'secondary' | 'danger';
+  readonly action: () => Promise<void>;
+  readonly loading?: boolean;
+  readonly disabled?: boolean;
 }
 
 /**
  * Enhanced notification interface
  */
 export interface EnhancedNotification extends Omit<UserNotification, 'type' | 'actions'> {
-  readonly id: string
-  readonly type: NotificationType
-  readonly component: ComponentType
-  readonly errorType?: ErrorType
-  readonly config: NotificationConfig
-  readonly retryable: boolean
-  readonly retryCount: number
-  readonly maxRetries: number
-  readonly timestamp: number
-  readonly context?: Record<string, any>
-  readonly actions?: NotificationAction[]
+  readonly id: string;
+  readonly type: NotificationType;
+  readonly component: ComponentType;
+  readonly errorType?: ErrorType;
+  readonly config: NotificationConfig;
+  readonly retryable: boolean;
+  readonly retryCount: number;
+  readonly maxRetries: number;
+  readonly timestamp: number;
+  readonly context?: Record<string, any>;
+  readonly actions?: NotificationAction[];
 }
 
 /**
  * Notification queue entry
  */
 interface QueuedNotification {
-  readonly notification: EnhancedNotification
-  readonly element?: HTMLElement
-  timeout?: ReturnType<typeof setTimeout>
-  readonly createdAt: number
-  readonly lastUpdated: number
+  readonly notification: EnhancedNotification;
+  readonly element?: HTMLElement;
+  timeout?: ReturnType<typeof setTimeout>;
+  readonly createdAt: number;
+  readonly lastUpdated: number;
 }
 
 /**
  * Service for managing user-friendly error notifications
  */
 export class ErrorNotificationService {
-  private static instance: ErrorNotificationService | null = null
-  private notifications: Map<string, QueuedNotification> = new Map()
-  private container: HTMLElement | null = null
-  private shadowRoot: ShadowRoot | null = null
-  private config: NotificationConfig
-  private isInitialized: boolean = false
-  private mutationObserver: MutationObserver | null = null
+  private static instance: ErrorNotificationService | null = null;
+  private notifications: Map<string, QueuedNotification> = new Map();
+  private container: HTMLElement | null = null;
+  private shadowRoot: ShadowRoot | null = null;
+  private config: NotificationConfig;
+  private isInitialized: boolean = false;
+  private mutationObserver: MutationObserver | null = null;
 
   // Error message mappings for different error types and components
-  private errorMessages: Map<string, ErrorMessage> = new Map()
+  private errorMessages: Map<string, ErrorMessage> = new Map();
 
   // Default configuration
   private defaultConfig: NotificationConfig = {
@@ -119,11 +119,11 @@ export class ErrorNotificationService {
     maxStack: 5,
     animationDuration: 300,
     theme: 'auto',
-  }
+  };
 
   private constructor(config?: Partial<NotificationConfig>) {
-    this.config = { ...this.defaultConfig, ...config }
-    this.initializeErrorMessages()
+    this.config = { ...this.defaultConfig, ...config };
+    this.initializeErrorMessages();
   }
 
   /**
@@ -131,9 +131,9 @@ export class ErrorNotificationService {
    */
   public static getInstance(config?: Partial<NotificationConfig>): ErrorNotificationService {
     if (!ErrorNotificationService.instance) {
-      ErrorNotificationService.instance = new ErrorNotificationService(config)
+      ErrorNotificationService.instance = new ErrorNotificationService(config);
     }
-    return ErrorNotificationService.instance
+    return ErrorNotificationService.instance;
   }
 
   /**
@@ -141,12 +141,12 @@ export class ErrorNotificationService {
    */
   public async initialize(): Promise<void> {
     if (this.isInitialized) {
-      return
+      return;
     }
 
-    await this.createNotificationContainer()
-    this.setupEventListeners()
-    this.isInitialized = true
+    await this.createNotificationContainer();
+    this.setupEventListeners();
+    this.isInitialized = true;
   }
 
   /**
@@ -155,38 +155,38 @@ export class ErrorNotificationService {
   private async createNotificationContainer(): Promise<void> {
     // Remove existing container if it exists
     if (this.container) {
-      this.container.remove()
+      this.container.remove();
     }
 
     // Create main container
-    this.container = document.createElement('lingua-tube-notifications')
-    this.container.setAttribute('data-component', 'error-notifications')
+    this.container = document.createElement('lingua-tube-notifications');
+    this.container.setAttribute('data-component', 'error-notifications');
 
     // Create shadow DOM for style isolation
-    this.shadowRoot = this.container.attachShadow({ mode: 'closed' })
+    this.shadowRoot = this.container.attachShadow({ mode: 'closed' });
 
     // Add CSS styles
-    const styles = this.createNotificationStyles()
-    this.shadowRoot.appendChild(styles)
+    const styles = this.createNotificationStyles();
+    this.shadowRoot.appendChild(styles);
 
     // Create notification area
-    const notificationArea = document.createElement('div')
-    notificationArea.className = 'notification-area'
-    notificationArea.setAttribute('data-position', this.config.position)
-    this.shadowRoot.appendChild(notificationArea)
+    const notificationArea = document.createElement('div');
+    notificationArea.className = 'notification-area';
+    notificationArea.setAttribute('data-position', this.config.position);
+    this.shadowRoot.appendChild(notificationArea);
 
     // Append to document body
-    document.body.appendChild(this.container)
+    document.body.appendChild(this.container);
 
     // Watch for document changes to ensure container remains attached
-    this.observeDocumentChanges()
+    this.observeDocumentChanges();
   }
 
   /**
    * Create CSS styles for notifications
    */
   private createNotificationStyles(): HTMLStyleElement {
-    const style = document.createElement('style')
+    const style = document.createElement('style');
     style.textContent = `
       :host {
         position: fixed;
@@ -494,8 +494,8 @@ export class ErrorNotificationService {
           background: #742a2a;
         }
       }
-    `
-    return style
+    `;
+    return style;
   }
 
   /**
@@ -509,7 +509,7 @@ export class ErrorNotificationService {
       guidance: 'The extension will work offline with limited functionality.',
       actionLabel: 'Retry',
       reportable: true,
-    })
+    });
 
     this.errorMessages.set(`${ErrorType.NETWORK}-${ComponentType.SUBTITLE_MANAGER}`, {
       title: 'Subtitle Loading Failed',
@@ -517,7 +517,7 @@ export class ErrorNotificationService {
       guidance: 'Try refreshing the page or check if subtitles are available for this video.',
       actionLabel: 'Refresh',
       reportable: true,
-    })
+    });
 
     // API-related errors
     this.errorMessages.set(`${ErrorType.API}-${ComponentType.TRANSLATION_SERVICE}`, {
@@ -526,7 +526,7 @@ export class ErrorNotificationService {
       guidance: 'Previously translated words will still be available. Try again in a few minutes.',
       actionLabel: 'Try Again',
       reportable: true,
-    })
+    });
 
     this.errorMessages.set(`${ErrorType.API}-${ComponentType.DICTIONARY_SERVICE}`, {
       title: 'Dictionary Lookup Failed',
@@ -534,7 +534,7 @@ export class ErrorNotificationService {
       guidance: 'Basic translation will still work. Dictionary features will be restored shortly.',
       actionLabel: 'Retry',
       reportable: false,
-    })
+    });
 
     // Storage-related errors
     this.errorMessages.set(`${ErrorType.STORAGE}-${ComponentType.STORAGE_SERVICE}`, {
@@ -543,7 +543,7 @@ export class ErrorNotificationService {
       guidance: 'Check if you have enough storage space available.',
       actionLabel: 'Try Again',
       reportable: true,
-    })
+    });
 
     // Permission-related errors
     this.errorMessages.set(`${ErrorType.PERMISSION}-${ComponentType.TTS_SERVICE}`, {
@@ -552,7 +552,7 @@ export class ErrorNotificationService {
       guidance: 'Grant audio permissions in your browser settings to use pronunciation features.',
       actionLabel: 'Grant Permission',
       reportable: false,
-    })
+    });
 
     // UI-related errors
     this.errorMessages.set(`${ErrorType.UI}-${ComponentType.WORD_LOOKUP}`, {
@@ -561,7 +561,7 @@ export class ErrorNotificationService {
       guidance: 'Try clicking the word again or refresh the page.',
       actionLabel: 'Refresh Page',
       reportable: true,
-    })
+    });
 
     // Performance-related errors
     this.errorMessages.set(`${ErrorType.PERFORMANCE}-${ComponentType.YOUTUBE_INTEGRATION}`, {
@@ -570,7 +570,7 @@ export class ErrorNotificationService {
       guidance: 'Consider closing other tabs or disabling other extensions temporarily.',
       actionLabel: 'Optimize',
       reportable: true,
-    })
+    });
 
     // Generic fallback messages
     this.errorMessages.set('fallback-low', {
@@ -579,7 +579,7 @@ export class ErrorNotificationService {
       guidance: 'No action needed - the extension will handle this automatically.',
       actionLabel: undefined,
       reportable: false,
-    })
+    });
 
     this.errorMessages.set('fallback-medium', {
       title: 'Feature Temporarily Unavailable',
@@ -587,7 +587,7 @@ export class ErrorNotificationService {
       guidance: 'Most functionality will continue working. Try refreshing if issues persist.',
       actionLabel: 'Refresh',
       reportable: true,
-    })
+    });
 
     this.errorMessages.set('fallback-high', {
       title: 'Service Disruption',
@@ -596,7 +596,7 @@ export class ErrorNotificationService {
         "Some features are temporarily disabled. We're working to restore full functionality.",
       actionLabel: 'Report Issue',
       reportable: true,
-    })
+    });
 
     this.errorMessages.set('fallback-critical', {
       title: 'Extension Error',
@@ -604,7 +604,7 @@ export class ErrorNotificationService {
       guidance: 'Please refresh the page or restart your browser. Consider reporting this issue.',
       actionLabel: 'Report Problem',
       reportable: true,
-    })
+    });
   }
 
   /**
@@ -612,15 +612,15 @@ export class ErrorNotificationService {
    */
   public async showFromLogEntry(logEntry: LogEntry): Promise<string | null> {
     if (!logEntry.errorContext || !this.shouldShowNotification(logEntry)) {
-      return null
+      return null;
     }
 
     const errorMessage = this.getErrorMessage(
       logEntry.errorContext.errorType,
       logEntry.context.component,
       logEntry.errorContext.severity,
-    )
-    const actions = this.createActions(logEntry.errorContext, errorMessage)
+    );
+    const actions = this.createActions(logEntry.errorContext, errorMessage);
 
     const notification: EnhancedNotification = {
       id: this.generateNotificationId(),
@@ -643,37 +643,37 @@ export class ErrorNotificationService {
         logId: logEntry.id,
         reportable: errorMessage.reportable,
       },
-    }
+    };
 
-    return this.show(notification)
+    return this.show(notification);
   }
 
   /**
    * Show custom notification
    */
   public async show(notification: EnhancedNotification): Promise<string> {
-    await this.ensureInitialized()
+    await this.ensureInitialized();
 
     // Check if we should deduplicate
-    const existingId = this.findDuplicateNotification(notification)
+    const existingId = this.findDuplicateNotification(notification);
     if (existingId) {
-      return existingId
+      return existingId;
     }
 
     // Create notification element
-    const element = this.createNotificationElement(notification)
+    const element = this.createNotificationElement(notification);
 
     // Add to container
-    const notificationArea = this.shadowRoot?.querySelector('.notification-area')
+    const notificationArea = this.shadowRoot?.querySelector('.notification-area');
     if (!notificationArea) {
-      throw new Error('Notification area not found')
+      throw new Error('Notification area not found');
     }
 
     // Handle stacking limits
-    this.enforceStackingLimits()
+    this.enforceStackingLimits();
 
     // Add to area
-    notificationArea.appendChild(element)
+    notificationArea.appendChild(element);
 
     // Create queued notification
     const queuedNotification: QueuedNotification = {
@@ -681,76 +681,76 @@ export class ErrorNotificationService {
       element,
       createdAt: Date.now(),
       lastUpdated: Date.now(),
-    }
+    };
 
     // Store in map
-    this.notifications.set(notification.id, queuedNotification)
+    this.notifications.set(notification.id, queuedNotification);
 
     // Setup auto-hide timer
     if (notification.config.autoHide && notification.duration && notification.duration > 0) {
       queuedNotification.timeout = setTimeout(() => {
-        this.hide(notification.id)
-      }, notification.duration)
+        this.hide(notification.id);
+      }, notification.duration);
     }
 
     // Trigger show animation
     requestAnimationFrame(() => {
-      element.classList.add('visible')
-    })
+      element.classList.add('visible');
+    });
 
-    return notification.id
+    return notification.id;
   }
 
   /**
    * Hide notification by ID
    */
   public async hide(notificationId: string): Promise<boolean> {
-    const queuedNotification = this.notifications.get(notificationId)
+    const queuedNotification = this.notifications.get(notificationId);
     if (!queuedNotification) {
-      return false
+      return false;
     }
 
-    const { element, timeout } = queuedNotification
+    const { element, timeout } = queuedNotification;
 
     // Clear timeout
     if (timeout) {
-      clearTimeout(timeout)
+      clearTimeout(timeout);
     }
 
     // Animate out
     if (element) {
-      element.classList.remove('visible')
+      element.classList.remove('visible');
 
       // Remove after animation
       setTimeout(() => {
-        element.remove()
-      }, this.config.animationDuration)
+        element.remove();
+      }, this.config.animationDuration);
     }
 
     // Remove from map
-    this.notifications.delete(notificationId)
+    this.notifications.delete(notificationId);
 
-    return true
+    return true;
   }
 
   /**
    * Hide all notifications
    */
   public async hideAll(): Promise<void> {
-    const notificationIds = Array.from(this.notifications.keys())
-    await Promise.all(notificationIds.map((id) => this.hide(id)))
+    const notificationIds = Array.from(this.notifications.keys());
+    await Promise.all(notificationIds.map((id) => this.hide(id)));
   }
 
   /**
    * Update notification config
    */
   public updateConfig(newConfig: Partial<NotificationConfig>): void {
-    this.config = { ...this.config, ...newConfig }
+    this.config = { ...this.config, ...newConfig };
 
     // Update position if changed
-    const notificationArea = this.shadowRoot?.querySelector('.notification-area')
+    const notificationArea = this.shadowRoot?.querySelector('.notification-area');
     if (notificationArea) {
-      notificationArea.setAttribute('data-position', this.config.position)
+      notificationArea.setAttribute('data-position', this.config.position);
     }
   }
 
@@ -758,48 +758,48 @@ export class ErrorNotificationService {
    * Get all active notifications
    */
   public getActiveNotifications(): EnhancedNotification[] {
-    return Array.from(this.notifications.values()).map((q) => q.notification)
+    return Array.from(this.notifications.values()).map((q) => q.notification);
   }
 
   /**
    * Cleanup and destroy service
    */
   public destroy(): void {
-    this.hideAll()
+    this.hideAll();
 
     if (this.mutationObserver) {
-      this.mutationObserver.disconnect()
+      this.mutationObserver.disconnect();
     }
 
     if (this.container) {
-      this.container.remove()
+      this.container.remove();
     }
 
-    this.notifications.clear()
-    this.isInitialized = false
-    ErrorNotificationService.instance = null
+    this.notifications.clear();
+    this.isInitialized = false;
+    ErrorNotificationService.instance = null;
   }
 
   // Private helper methods
 
   private async ensureInitialized(): Promise<void> {
     if (!this.isInitialized) {
-      await this.initialize()
+      await this.initialize();
     }
   }
 
   private shouldShowNotification(logEntry: LogEntry): boolean {
     // Only show notifications for errors and warnings
     if (!['error', 'critical', 'warn'].includes(logEntry.level)) {
-      return false
+      return false;
     }
 
     // Don't show notifications for internal logging errors
     if (logEntry.context.component === ComponentType.ERROR_HANDLER) {
-      return false
+      return false;
     }
 
-    return true
+    return true;
   }
 
   private getErrorMessage(
@@ -807,15 +807,15 @@ export class ErrorNotificationService {
     component: ComponentType,
     severity: ErrorSeverity,
   ): ErrorMessage {
-    const key = `${errorType}-${component}`
-    const message = this.errorMessages.get(key)
+    const key = `${errorType}-${component}`;
+    const message = this.errorMessages.get(key);
 
     if (message) {
-      return message
+      return message;
     }
 
     // Fallback to severity-based message
-    const fallbackKey = `fallback-${severity.toLowerCase()}`
+    const fallbackKey = `fallback-${severity.toLowerCase()}`;
     return (
       this.errorMessages.get(fallbackKey) || {
         title: 'Something went wrong',
@@ -823,38 +823,38 @@ export class ErrorNotificationService {
         guidance: 'Please try again or contact support if the problem persists.',
         reportable: true,
       }
-    )
+    );
   }
 
   private getNotificationTypeForSeverity(severity: ErrorSeverity): NotificationType {
     switch (severity) {
       case ErrorSeverity.CRITICAL:
-        return NotificationType.POPUP
+        return NotificationType.POPUP;
       case ErrorSeverity.HIGH:
-        return NotificationType.BANNER
+        return NotificationType.BANNER;
       case ErrorSeverity.MEDIUM:
       case ErrorSeverity.LOW:
       default:
-        return NotificationType.TOAST
+        return NotificationType.TOAST;
     }
   }
 
   private getDurationForSeverity(severity: ErrorSeverity): number {
     switch (severity) {
       case ErrorSeverity.CRITICAL:
-        return 0 // Persistent
+        return 0; // Persistent
       case ErrorSeverity.HIGH:
-        return 10000 // 10 seconds
+        return 10000; // 10 seconds
       case ErrorSeverity.MEDIUM:
-        return 7000 // 7 seconds
+        return 7000; // 7 seconds
       case ErrorSeverity.LOW:
       default:
-        return 5000 // 5 seconds
+        return 5000; // 5 seconds
     }
   }
 
   private getConfigForSeverity(severity: ErrorSeverity): NotificationConfig {
-    const baseConfig = { ...this.config }
+    const baseConfig = { ...this.config };
 
     switch (severity) {
       case ErrorSeverity.CRITICAL:
@@ -865,16 +865,16 @@ export class ErrorNotificationService {
           duration: 0,
           dismissible: true,
           autoHide: false,
-        }
+        };
       case ErrorSeverity.HIGH:
         return {
           ...baseConfig,
           type: NotificationType.BANNER,
           position: 'top-right',
           duration: 10000,
-        }
+        };
       default:
-        return baseConfig
+        return baseConfig;
     }
   }
 
@@ -882,7 +882,7 @@ export class ErrorNotificationService {
     errorContext: ErrorContext,
     errorMessage: ErrorMessage,
   ): NotificationAction[] {
-    const actions: NotificationAction[] = []
+    const actions: NotificationAction[] = [];
 
     // Add retry action if recoverable
     if (errorContext.recoverable && errorMessage.actionLabel) {
@@ -892,9 +892,9 @@ export class ErrorNotificationService {
         action: async () => {
           // Retry logic would be implemented here
           // For now, just hide the notification
-          await this.hide(errorContext.userMessage || '')
+          await this.hide(errorContext.userMessage || '');
         },
-      })
+      });
     }
 
     // Add dismiss action
@@ -902,9 +902,9 @@ export class ErrorNotificationService {
       label: 'Dismiss',
       type: 'secondary',
       action: async () => {
-        await this.hide(errorContext.userMessage || '')
+        await this.hide(errorContext.userMessage || '');
       },
-    })
+    });
 
     // Add report action if reportable
     if (errorMessage.reportable) {
@@ -913,16 +913,16 @@ export class ErrorNotificationService {
         type: 'secondary',
         action: async () => {
           // Report logic would be implemented here
-          console.log('Reporting error:', errorContext)
+          console.log('Reporting error:', errorContext);
         },
-      })
+      });
     }
 
-    return actions
+    return actions;
   }
 
   private generateNotificationId(): string {
-    return `notification-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    return `notification-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   }
 
   private findDuplicateNotification(notification: EnhancedNotification): string | null {
@@ -932,18 +932,18 @@ export class ErrorNotificationService {
         queued.notification.component === notification.component &&
         queued.notification.severity === notification.severity
       ) {
-        return id
+        return id;
       }
     }
-    return null
+    return null;
   }
 
   private createNotificationElement(notification: EnhancedNotification): HTMLElement {
-    const element = document.createElement('div')
-    element.className = `notification type-${notification.config.type} severity-${notification.severity.toLowerCase()}`
-    element.setAttribute('data-id', notification.id)
+    const element = document.createElement('div');
+    element.className = `notification type-${notification.config.type} severity-${notification.severity.toLowerCase()}`;
+    element.setAttribute('data-id', notification.id);
 
-    const icon = this.getIconForSeverity(notification.severity)
+    const icon = this.getIconForSeverity(notification.severity);
 
     element.innerHTML = `
       <div class="notification-header">
@@ -959,12 +959,12 @@ export class ErrorNotificationService {
       </div>
       ${notification.actions && notification.actions.length > 0 ? this.createActionsHTML(notification.actions) : ''}
       ${notification.config.showProgress && notification.duration && notification.duration > 0 ? '<div class="notification-progress"></div>' : ''}
-    `
+    `;
 
     // Attach event listeners
-    this.attachNotificationEvents(element, notification)
+    this.attachNotificationEvents(element, notification);
 
-    return element
+    return element;
   }
 
   private createActionsHTML(actions: NotificationAction[]): string {
@@ -976,51 +976,51 @@ export class ErrorNotificationService {
         </button>
       `,
       )
-      .join('')
+      .join('');
 
-    return `<div class="notification-actions">${actionsHTML}</div>`
+    return `<div class="notification-actions">${actionsHTML}</div>`;
   }
 
   private attachNotificationEvents(element: HTMLElement, notification: EnhancedNotification): void {
     // Close button
-    const closeButton = element.querySelector('.notification-close')
+    const closeButton = element.querySelector('.notification-close');
     if (closeButton) {
       closeButton.addEventListener('click', () => {
-        this.hide(notification.id)
-      })
+        this.hide(notification.id);
+      });
     }
 
     // Action buttons
-    const actionButtons = element.querySelectorAll('.notification-button')
+    const actionButtons = element.querySelectorAll('.notification-button');
     actionButtons.forEach((button, index) => {
-      const action = notification.actions?.[index]
+      const action = notification.actions?.[index];
       if (action) {
         button.addEventListener('click', async () => {
           try {
-            await action.action()
+            await action.action();
           } catch (error) {
-            console.error('Notification action failed:', error)
+            console.error('Notification action failed:', error);
           }
-        })
+        });
       }
-    })
+    });
 
     // Progress bar animation
     if (notification.config.showProgress && notification.duration && notification.duration > 0) {
-      const progressBar = element.querySelector('.notification-progress') as HTMLElement
+      const progressBar = element.querySelector('.notification-progress') as HTMLElement;
       if (progressBar) {
-        let startTime = Date.now()
-        const duration = notification.duration // Capture to avoid undefined issues
+        let startTime = Date.now();
+        const duration = notification.duration; // Capture to avoid undefined issues
         const updateProgress = () => {
-          const elapsed = Date.now() - startTime
-          const progress = Math.min((elapsed / duration) * 100, 100)
-          progressBar.style.width = `${100 - progress}%`
+          const elapsed = Date.now() - startTime;
+          const progress = Math.min((elapsed / duration) * 100, 100);
+          progressBar.style.width = `${100 - progress}%`;
 
           if (progress < 100) {
-            requestAnimationFrame(updateProgress)
+            requestAnimationFrame(updateProgress);
           }
-        }
-        requestAnimationFrame(updateProgress)
+        };
+        requestAnimationFrame(updateProgress);
       }
     }
   }
@@ -1028,23 +1028,23 @@ export class ErrorNotificationService {
   private getIconForSeverity(severity: ErrorSeverity): string {
     switch (severity) {
       case ErrorSeverity.CRITICAL:
-        return '⚠️'
+        return '⚠️';
       case ErrorSeverity.HIGH:
-        return '❌'
+        return '❌';
       case ErrorSeverity.MEDIUM:
-        return '⚠️'
+        return '⚠️';
       case ErrorSeverity.LOW:
       default:
-        return 'ℹ️'
+        return 'ℹ️';
     }
   }
 
   private enforceStackingLimits(): void {
     if (this.notifications.size >= this.config.maxStack) {
       // Remove oldest notification
-      const oldestId = Array.from(this.notifications.keys())[0]
+      const oldestId = Array.from(this.notifications.keys())[0];
       if (oldestId) {
-        this.hide(oldestId)
+        this.hide(oldestId);
       }
     }
   }
@@ -1052,8 +1052,8 @@ export class ErrorNotificationService {
   private setupEventListeners(): void {
     // Listen for page navigation to re-attach container if needed
     window.addEventListener('beforeunload', () => {
-      this.hideAll()
-    })
+      this.hideAll();
+    });
   }
 
   private observeDocumentChanges(): void {
@@ -1062,21 +1062,21 @@ export class ErrorNotificationService {
         if (mutation.type === 'childList') {
           // Check if our container was removed
           if (!document.body.contains(this.container!)) {
-            document.body.appendChild(this.container!)
+            document.body.appendChild(this.container!);
           }
         }
-      })
-    })
+      });
+    });
 
     this.mutationObserver.observe(document.body, {
       childList: true,
       subtree: false,
-    })
+    });
   }
 
   private escapeHtml(text: string): string {
-    const div = document.createElement('div')
-    div.textContent = text
-    return div.innerHTML
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   }
 }

@@ -50,10 +50,10 @@ import {
   deepClone,
   isEmpty,
   mergeObjects,
-} from './utilities'
+} from './utilities';
 
 // Or import everything
-import PlayerUtils from './utilities'
+import PlayerUtils from './utilities';
 ```
 
 ## API Reference
@@ -74,16 +74,16 @@ Parse time string to seconds with support for multiple formats.
 
 ```typescript
 // Examples
-parseTimeToSeconds('45.5') // 45.5
-parseTimeToSeconds('1:30') // 90
-parseTimeToSeconds('1:23:45') // 5025
-parseTimeToSeconds('1:23:45.500') // 5025.5
+parseTimeToSeconds('45.5'); // 45.5
+parseTimeToSeconds('1:30'); // 90
+parseTimeToSeconds('1:23:45'); // 5025
+parseTimeToSeconds('1:23:45.500'); // 5025.5
 
 // Error handling
 try {
-  parseTimeToSeconds('invalid')
+  parseTimeToSeconds('invalid');
 } catch (error) {
-  console.error(error.message) // "Invalid time format: invalid. Expected formats: HH:MM:SS, MM:SS, SS, or decimal seconds"
+  console.error(error.message); // "Invalid time format: invalid. Expected formats: HH:MM:SS, MM:SS, SS, or decimal seconds"
 }
 ```
 
@@ -93,16 +93,16 @@ Format seconds to time string with various output formats.
 
 ```typescript
 interface TimeFormatOptions {
-  readonly format: 'srt' | 'vtt' | 'human' | 'seconds'
-  readonly precision?: number // decimal places for seconds
-  readonly includeMilliseconds?: boolean
+  readonly format: 'srt' | 'vtt' | 'human' | 'seconds';
+  readonly precision?: number; // decimal places for seconds
+  readonly includeMilliseconds?: boolean;
 }
 
 // Examples
-formatTime(5025.5, { format: 'human' }) // "1:23:45"
-formatTime(5025.5, { format: 'srt', includeMilliseconds: true }) // "01:23:45,500"
-formatTime(5025.5, { format: 'vtt', includeMilliseconds: true }) // "1:23:45.500"
-formatTime(5025.5, { format: 'seconds', precision: 3 }) // "5025.500"
+formatTime(5025.5, { format: 'human' }); // "1:23:45"
+formatTime(5025.5, { format: 'srt', includeMilliseconds: true }); // "01:23:45,500"
+formatTime(5025.5, { format: 'vtt', includeMilliseconds: true }); // "1:23:45.500"
+formatTime(5025.5, { format: 'seconds', precision: 3 }); // "5025.500"
 ```
 
 #### `validateTimeRange(startTime: number, endTime: number): ValidationResult`
@@ -110,16 +110,16 @@ formatTime(5025.5, { format: 'seconds', precision: 3 }) // "5025.500"
 Validate that a time range is valid.
 
 ```typescript
-const result = validateTimeRange(10, 30)
+const result = validateTimeRange(10, 30);
 if (result.isValid) {
-  console.log('Range is valid:', result.value) // { startTime: 10, endTime: 30 }
+  console.log('Range is valid:', result.value); // { startTime: 10, endTime: 30 }
 } else {
-  console.error('Invalid range:', result.error)
+  console.error('Invalid range:', result.error);
 }
 
 // Error cases
-validateTimeRange(30, 10) // { isValid: false, error: "Start time must be less than end time" }
-validateTimeRange(-5, 10) // { isValid: false, error: "Start and end times must be non-negative" }
+validateTimeRange(30, 10); // { isValid: false, error: "Start time must be less than end time" }
+validateTimeRange(-5, 10); // { isValid: false, error: "Start and end times must be non-negative" }
 ```
 
 #### `isTimeInRange(time: number, startTime: number, endTime: number, tolerance?: number): boolean`
@@ -127,9 +127,9 @@ validateTimeRange(-5, 10) // { isValid: false, error: "Start and end times must 
 Check if a time is within a range with optional tolerance.
 
 ```typescript
-isTimeInRange(15, 10, 20) // true
-isTimeInRange(25, 10, 20) // false
-isTimeInRange(9.9, 10, 20, 0.2) // true (within tolerance)
+isTimeInRange(15, 10, 20); // true
+isTimeInRange(25, 10, 20); // false
+isTimeInRange(9.9, 10, 20, 0.2); // true (within tolerance)
 ```
 
 ### Math Utilities
@@ -140,16 +140,16 @@ Clamp a value to a specified range.
 
 ```typescript
 interface ClampOptions {
-  readonly min: number
-  readonly max: number
-  readonly inclusive?: boolean
+  readonly min: number;
+  readonly max: number;
+  readonly inclusive?: boolean;
 }
 
 // Examples
-clamp(15, { min: 0, max: 10 }) // 10
-clamp(-5, { min: 0, max: 10 }) // 0
-clamp(5, { min: 0, max: 10, inclusive: false }) // 5
-clamp(10, { min: 0, max: 10, inclusive: false }) // 9.999999999999998 (max - epsilon)
+clamp(15, { min: 0, max: 10 }); // 10
+clamp(-5, { min: 0, max: 10 }); // 0
+clamp(5, { min: 0, max: 10, inclusive: false }); // 5
+clamp(10, { min: 0, max: 10, inclusive: false }); // 9.999999999999998 (max - epsilon)
 ```
 
 #### `isInRange(value: number, min: number, max: number, inclusive?: boolean): boolean`
@@ -157,10 +157,10 @@ clamp(10, { min: 0, max: 10, inclusive: false }) // 9.999999999999998 (max - eps
 Check if a value is within a range.
 
 ```typescript
-isInRange(5, 0, 10) // true
-isInRange(10, 0, 10) // true
-isInRange(10, 0, 10, false) // false (exclusive)
-isInRange(15, 0, 10) // false
+isInRange(5, 0, 10); // true
+isInRange(10, 0, 10); // true
+isInRange(10, 0, 10, false); // false (exclusive)
+isInRange(15, 0, 10); // false
 ```
 
 #### `lerp(start: number, end: number, t: number): number`
@@ -168,9 +168,9 @@ isInRange(15, 0, 10) // false
 Linear interpolation between two values.
 
 ```typescript
-lerp(0, 100, 0.5) // 50
-lerp(10, 20, 0.75) // 17.5
-lerp(100, 0, 0.25) // 75
+lerp(0, 100, 0.5); // 50
+lerp(10, 20, 0.75); // 17.5
+lerp(100, 0, 0.25); // 75
 ```
 
 #### `mapRange(value, fromMin, fromMax, toMin, toMax): number`
@@ -179,10 +179,10 @@ Map a value from one range to another.
 
 ```typescript
 // Map volume from 0-1 to 0-100
-mapRange(0.7, 0, 1, 0, 100) // 70
+mapRange(0.7, 0, 1, 0, 100); // 70
 
 // Map playback rate from 0.25-2 to -100-100
-mapRange(1.25, 0.25, 2, -100, 100) // 14.285714285714286
+mapRange(1.25, 0.25, 2, -100, 100); // 14.285714285714286
 ```
 
 ### DOM Utilities
@@ -193,21 +193,21 @@ Safe DOM query with retries, fallback selectors, and validation.
 
 ```typescript
 interface DOMQueryOptions {
-  readonly timeout?: number
-  readonly retries?: number
-  readonly fallbackSelectors?: string[]
-  readonly validateElement?: (element: Element) => boolean
+  readonly timeout?: number;
+  readonly retries?: number;
+  readonly fallbackSelectors?: string[];
+  readonly validateElement?: (element: Element) => boolean;
 }
 
 // Basic usage
-const videoElement = await safeQuerySelector<HTMLVideoElement>('video')
+const videoElement = await safeQuerySelector<HTMLVideoElement>('video');
 
 // With fallback selectors and validation
 const videoElement = await safeQuerySelector<HTMLVideoElement>('video[src*="youtube"]', {
   retries: 5,
   fallbackSelectors: ['video', 'iframe[src*="youtube"]'],
   validateElement: (el) => el instanceof HTMLVideoElement && el.duration > 0,
-})
+});
 ```
 
 #### `waitForElement<T>(selector: string, options?: DOMQueryOptions): Promise<T | null>`
@@ -219,17 +219,17 @@ Wait for an element to appear in the DOM with MutationObserver.
 const player = await waitForElement<HTMLVideoElement>('video', {
   timeout: 10000,
   validateElement: (el) => el instanceof HTMLVideoElement && !isNaN(el.duration),
-})
+});
 
 // With abort signal
-const controller = new AbortController()
-setTimeout(() => controller.abort(), 5000) // Cancel after 5s
+const controller = new AbortController();
+setTimeout(() => controller.abort(), 5000); // Cancel after 5s
 
 const element = await waitForElement('video', {
   signal: controller.signal,
 }).catch((error) => {
-  console.log('Operation was aborted')
-})
+  console.log('Operation was aborted');
+});
 ```
 
 #### `isElementValid(element: unknown): element is Element`
@@ -237,10 +237,10 @@ const element = await waitForElement('video', {
 Type guard to check if an element is valid and connected to DOM.
 
 ```typescript
-const maybeElement = document.querySelector('video')
+const maybeElement = document.querySelector('video');
 if (isElementValid(maybeElement)) {
   // TypeScript now knows maybeElement is Element
-  console.log(maybeElement.tagName)
+  console.log(maybeElement.tagName);
 }
 ```
 
@@ -249,11 +249,11 @@ if (isElementValid(maybeElement)) {
 Type guard specifically for HTMLVideoElement with functionality checks.
 
 ```typescript
-const element = document.querySelector('video')
+const element = document.querySelector('video');
 if (isValidVideoElement(element)) {
   // TypeScript knows element is HTMLVideoElement
-  await element.play()
-  console.log('Duration:', element.duration)
+  await element.play();
+  console.log('Duration:', element.duration);
 }
 ```
 
@@ -265,28 +265,28 @@ Throttle function execution to limit call frequency.
 
 ```typescript
 interface ThrottleOptions {
-  readonly leading?: boolean // Call immediately on first invoke
-  readonly trailing?: boolean // Call after delay when calls stop
+  readonly leading?: boolean; // Call immediately on first invoke
+  readonly trailing?: boolean; // Call after delay when calls stop
 }
 
 // Basic throttling for scroll events
 const throttledScroll = throttle(() => {
-  console.log('Scroll event')
-}, 100)
+  console.log('Scroll event');
+}, 100);
 
-window.addEventListener('scroll', throttledScroll)
+window.addEventListener('scroll', throttledScroll);
 
 // Advanced usage
 const throttledUpdate = throttle((data: string) => updateUI(data), 250, {
   leading: true,
   trailing: false,
-})
+});
 
 // Cancel pending calls
-throttledUpdate.cancel()
+throttledUpdate.cancel();
 
 // Force immediate execution of pending call
-throttledUpdate.flush()
+throttledUpdate.flush();
 ```
 
 #### `debounce<T>(func: T, delay: number, options?: DebounceOptions): T & { cancel, flush }`
@@ -295,20 +295,20 @@ Debounce function execution to delay calls until after delay period.
 
 ```typescript
 interface DebounceOptions {
-  readonly immediate?: boolean // Call immediately on first invoke
+  readonly immediate?: boolean; // Call immediately on first invoke
 }
 
 // Basic debouncing for search input
 const debouncedSearch = debounce((query: string) => {
-  performSearch(query)
-}, 300)
+  performSearch(query);
+}, 300);
 
 // Immediate execution, then debounce subsequent calls
-const debouncedSave = debounce(() => saveData(), 1000, { immediate: true })
+const debouncedSave = debounce(() => saveData(), 1000, { immediate: true });
 
 // Control methods
-debouncedSearch.cancel() // Cancel pending execution
-debouncedSearch.flush() // Execute immediately
+debouncedSearch.cancel(); // Cancel pending execution
+debouncedSearch.flush(); // Execute immediately
 ```
 
 ### Async Utilities
@@ -319,13 +319,13 @@ Simple promise-based delay utility.
 
 ```typescript
 // Wait 1 second
-await delay(1000)
+await delay(1000);
 
 // Use in sequences
-await delay(500)
-console.log('After 500ms')
-await delay(1000)
-console.log('After another 1000ms')
+await delay(500);
+console.log('After 500ms');
+await delay(1000);
+console.log('After another 1000ms');
 ```
 
 #### `withTimeout<T>(promise: Promise<T>, options: TimeoutOptions): Promise<T>`
@@ -334,8 +334,8 @@ Add timeout capability to any promise.
 
 ```typescript
 interface TimeoutOptions {
-  readonly timeoutMs: number
-  readonly timeoutMessage?: string
+  readonly timeoutMs: number;
+  readonly timeoutMessage?: string;
 }
 
 // Timeout a fetch request
@@ -343,13 +343,13 @@ try {
   const response = await withTimeout(fetch('/api/data'), {
     timeoutMs: 5000,
     timeoutMessage: 'API request timed out',
-  })
+  });
 } catch (error) {
-  console.error(error.message) // "API request timed out"
+  console.error(error.message); // "API request timed out"
 }
 
 // Timeout DOM operations
-const element = await withTimeout(waitForElement('video'), { timeoutMs: 10000 })
+const element = await withTimeout(waitForElement('video'), { timeoutMs: 10000 });
 ```
 
 #### `retry<T>(operation: () => Promise<T>, options: RetryOptions): Promise<T>`
@@ -358,11 +358,11 @@ Retry operations with exponential backoff and jitter.
 
 ```typescript
 interface RetryOptions {
-  readonly maxAttempts: number
-  readonly baseDelay: number
-  readonly maxDelay?: number
-  readonly exponentialBackoff?: boolean
-  readonly jitter?: boolean
+  readonly maxAttempts: number;
+  readonly baseDelay: number;
+  readonly maxDelay?: number;
+  readonly exponentialBackoff?: boolean;
+  readonly jitter?: boolean;
 }
 
 // Retry API call
@@ -371,14 +371,14 @@ const data = await retry(() => fetch('/api/unstable-endpoint').then((r) => r.jso
   baseDelay: 1000,
   exponentialBackoff: true,
   jitter: true,
-})
+});
 
 // Retry with linear backoff
 const result = await retry(() => performUnreliableOperation(), {
   maxAttempts: 5,
   baseDelay: 500,
   exponentialBackoff: false,
-})
+});
 ```
 
 ### Validation Utilities
@@ -392,19 +392,19 @@ const result = validateNumber(userInput, 'volume', {
   min: 0,
   max: 1,
   finite: true,
-})
+});
 
 if (result.isValid) {
-  setVolume(result.value!)
+  setVolume(result.value!);
 } else {
-  showError(result.error)
+  showError(result.error);
 }
 
 // Integer validation
 const idResult = validateNumber(input, 'userId', {
   min: 1,
   integer: true,
-})
+});
 ```
 
 #### `validateString(value: unknown, name: string, options?): ValidationResult<string>`
@@ -416,13 +416,13 @@ const urlResult = validateString(input, 'videoUrl', {
   nonEmpty: true,
   pattern: /^https:\/\/www\.youtube\.com\/watch\?v=/,
   maxLength: 500,
-})
+});
 
 const nameResult = validateString(input, 'title', {
   minLength: 1,
   maxLength: 100,
   nonEmpty: true,
-})
+});
 ```
 
 ### String Utilities
@@ -432,9 +432,9 @@ const nameResult = validateString(input, 'title', {
 Sanitize string for safe HTML display.
 
 ```typescript
-const userInput = '<script>alert("xss")</script>'
-const safe = sanitizeString(userInput)
-console.log(safe) // "&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;"
+const userInput = '<script>alert("xss")</script>';
+const safe = sanitizeString(userInput);
+console.log(safe); // "&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;"
 ```
 
 #### `truncateString(str: string, maxLength: number, ellipsis?: string): string`
@@ -442,9 +442,9 @@ console.log(safe) // "&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;"
 Truncate string with customizable ellipsis.
 
 ```typescript
-truncateString('Very long video title here', 20) // "Very long video ..."
-truncateString('Short title', 20) // "Short title"
-truncateString('Custom ellipsis example', 15, ' [more]') // "Custom el [more]"
+truncateString('Very long video title here', 20); // "Very long video ..."
+truncateString('Short title', 20); // "Short title"
+truncateString('Custom ellipsis example', 15, ' [more]'); // "Custom el [more]"
 ```
 
 #### `safeJsonParse<T>(json: string): SafeParseResult<T>`
@@ -452,17 +452,17 @@ truncateString('Custom ellipsis example', 15, ' [more]') // "Custom el [more]"
 Safe JSON parsing with error handling.
 
 ```typescript
-const result = safeJsonParse<{ title: string }>('{"title":"Video"}')
+const result = safeJsonParse<{ title: string }>('{"title":"Video"}');
 if (result.success) {
-  console.log(result.data!.title) // "Video"
+  console.log(result.data!.title); // "Video"
 } else {
-  console.error('Parse error:', result.error)
+  console.error('Parse error:', result.error);
 }
 
 // Invalid JSON
-const badResult = safeJsonParse('invalid json')
-console.log(badResult.success) // false
-console.log(badResult.error) // "Unexpected token i in JSON at position 0"
+const badResult = safeJsonParse('invalid json');
+console.log(badResult.success); // false
+console.log(badResult.error); // "Unexpected token i in JSON at position 0"
 ```
 
 ### Object Utilities
@@ -475,11 +475,11 @@ Deep clone objects using JSON methods (for serializable objects).
 const original = {
   settings: { volume: 0.8, autoplay: true },
   history: [1, 2, 3],
-}
+};
 
-const cloned = deepClone(original)
-cloned.settings.volume = 0.5 // Original unchanged
-console.log(original.settings.volume) // 0.8
+const cloned = deepClone(original);
+cloned.settings.volume = 0.5; // Original unchanged
+console.log(original.settings.volume); // 0.8
 ```
 
 #### `isEmpty(obj: unknown): boolean`
@@ -487,14 +487,14 @@ console.log(original.settings.volume) // 0.8
 Check if various types are empty.
 
 ```typescript
-isEmpty(null) // true
-isEmpty(undefined) // true
-isEmpty([]) // true
-isEmpty({}) // true
-isEmpty('') // true
-isEmpty('  ') // true
-isEmpty([1, 2, 3]) // false
-isEmpty({ key: 'val' }) // false
+isEmpty(null); // true
+isEmpty(undefined); // true
+isEmpty([]); // true
+isEmpty({}); // true
+isEmpty(''); // true
+isEmpty('  '); // true
+isEmpty([1, 2, 3]); // false
+isEmpty({ key: 'val' }); // false
 ```
 
 #### `mergeObjects<T>(target: T, source: Partial<T>): T`
@@ -506,14 +506,14 @@ const defaults = {
   volume: 1.0,
   autoplay: false,
   quality: 'auto' as const,
-}
+};
 
 const userSettings = {
   volume: 0.7,
   autoplay: true,
-}
+};
 
-const merged = mergeObjects(defaults, userSettings)
+const merged = mergeObjects(defaults, userSettings);
 // Result: { volume: 0.7, autoplay: true, quality: 'auto' }
 ```
 

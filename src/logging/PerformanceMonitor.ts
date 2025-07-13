@@ -2,92 +2,92 @@
 // Performance Monitor for Chrome Extension
 // ========================================
 
-import { LogLevel, ComponentType, LogContext, PerformanceData } from './types'
-import { Logger } from './Logger'
+import { LogLevel, ComponentType, LogContext, PerformanceData } from './types';
+import { Logger } from './Logger';
 
 /**
  * Performance thresholds for different operation types
  */
 export interface PerformanceThresholds {
   readonly storage: {
-    readonly read: number // ms
-    readonly write: number // ms
-  }
+    readonly read: number; // ms
+    readonly write: number; // ms
+  };
   readonly network: {
-    readonly fetch: number // ms
-    readonly retry: number // ms
-  }
+    readonly fetch: number; // ms
+    readonly retry: number; // ms
+  };
   readonly ui: {
-    readonly render: number // ms
-    readonly interaction: number // ms
-  }
+    readonly render: number; // ms
+    readonly interaction: number; // ms
+  };
   readonly youtube: {
-    readonly playerQuery: number // ms
-    readonly subtitleParse: number // ms
-  }
+    readonly playerQuery: number; // ms
+    readonly subtitleParse: number; // ms
+  };
   readonly translation: {
-    readonly translate: number // ms
-    readonly cache: number // ms
-  }
+    readonly translate: number; // ms
+    readonly cache: number; // ms
+  };
 }
 
 /**
  * Operation metadata for performance tracking
  */
 export interface OperationMetadata {
-  readonly operationType: string
-  readonly component: ComponentType
-  readonly inputSize?: number
-  readonly outputSize?: number
-  readonly cacheHit?: boolean
-  readonly retryCount?: number
-  readonly networkState?: 'online' | 'offline' | 'slow'
-  readonly memoryBefore?: number
-  readonly memoryAfter?: number
-  readonly customData?: Record<string, any>
+  readonly operationType: string;
+  readonly component: ComponentType;
+  readonly inputSize?: number;
+  readonly outputSize?: number;
+  readonly cacheHit?: boolean;
+  readonly retryCount?: number;
+  readonly networkState?: 'online' | 'offline' | 'slow';
+  readonly memoryBefore?: number;
+  readonly memoryAfter?: number;
+  readonly customData?: Record<string, any>;
 }
 
 /**
  * Performance measurement result
  */
 export interface PerformanceMeasurement {
-  readonly name: string
-  readonly duration: number
-  readonly startTime: number
-  readonly endTime: number
-  readonly metadata: OperationMetadata
-  readonly isSlowOperation: boolean
-  readonly threshold: number
-  readonly memoryDelta?: number
-  readonly timestamp: string
+  readonly name: string;
+  readonly duration: number;
+  readonly startTime: number;
+  readonly endTime: number;
+  readonly metadata: OperationMetadata;
+  readonly isSlowOperation: boolean;
+  readonly threshold: number;
+  readonly memoryDelta?: number;
+  readonly timestamp: string;
 }
 
 /**
  * Performance analytics data
  */
 export interface PerformanceAnalytics {
-  readonly totalOperations: number
-  readonly slowOperations: number
-  readonly averageDuration: number
-  readonly p95Duration: number
-  readonly p99Duration: number
+  readonly totalOperations: number;
+  readonly slowOperations: number;
+  readonly averageDuration: number;
+  readonly p95Duration: number;
+  readonly p99Duration: number;
   readonly operationsByType: Record<
     string,
     {
-      readonly count: number
-      readonly avgDuration: number
-      readonly slowCount: number
+      readonly count: number;
+      readonly avgDuration: number;
+      readonly slowCount: number;
     }
-  >
+  >;
   readonly memoryStats: {
-    readonly averageUsage: number
-    readonly peakUsage: number
-    readonly totalAllocated: number
-  }
+    readonly averageUsage: number;
+    readonly peakUsage: number;
+    readonly totalAllocated: number;
+  };
   readonly timeRange: {
-    readonly start: string
-    readonly end: string
-  }
+    readonly start: string;
+    readonly end: string;
+  };
 }
 
 /**
@@ -114,35 +114,35 @@ export const DEFAULT_THRESHOLDS: PerformanceThresholds = {
     translate: 1000,
     cache: 10,
   },
-}
+};
 
 /**
  * Enhanced Performance Monitor for Chrome Extension
  * Integrates with Logger for comprehensive performance tracking
  */
 export class PerformanceMonitor {
-  private static instance: PerformanceMonitor | null = null
-  private logger: Logger | null = null
-  private thresholds: PerformanceThresholds
+  private static instance: PerformanceMonitor | null = null;
+  private logger: Logger | null = null;
+  private thresholds: PerformanceThresholds;
   private activeOperations: Map<
     string,
     {
-      startTime: number
-      metadata: OperationMetadata
-      memoryBefore?: number
+      startTime: number;
+      metadata: OperationMetadata;
+      memoryBefore?: number;
     }
-  > = new Map()
-  private measurements: PerformanceMeasurement[] = []
-  private memoryObserver: PerformanceObserver | null = null
-  private isEnabled: boolean = true
-  private maxMeasurements: number = 1000
-  private flushInterval: number = 30000 // 30 seconds
-  private flushTimer: number | null = null
+  > = new Map();
+  private measurements: PerformanceMeasurement[] = [];
+  private memoryObserver: PerformanceObserver | null = null;
+  private isEnabled: boolean = true;
+  private maxMeasurements: number = 1000;
+  private flushInterval: number = 30000; // 30 seconds
+  private flushTimer: number | null = null;
 
   private constructor(thresholds?: Partial<PerformanceThresholds>) {
-    this.logger = Logger.getInstance()
-    this.thresholds = { ...DEFAULT_THRESHOLDS, ...thresholds }
-    this.initialize()
+    this.logger = Logger.getInstance();
+    this.thresholds = { ...DEFAULT_THRESHOLDS, ...thresholds };
+    this.initialize();
   }
 
   /**
@@ -150,9 +150,9 @@ export class PerformanceMonitor {
    */
   public static getInstance(thresholds?: Partial<PerformanceThresholds>): PerformanceMonitor {
     if (!PerformanceMonitor.instance) {
-      PerformanceMonitor.instance = new PerformanceMonitor(thresholds)
+      PerformanceMonitor.instance = new PerformanceMonitor(thresholds);
     }
-    return PerformanceMonitor.instance
+    return PerformanceMonitor.instance;
   }
 
   /**
@@ -162,11 +162,11 @@ export class PerformanceMonitor {
     try {
       // Setup memory observer if available
       if (typeof PerformanceObserver !== 'undefined') {
-        this.setupMemoryObserver()
+        this.setupMemoryObserver();
       }
 
       // Setup periodic flush
-      this.setupFlushTimer()
+      this.setupFlushTimer();
 
       // Log initialization
       this.logger?.info('PerformanceMonitor initialized', {
@@ -176,7 +176,7 @@ export class PerformanceMonitor {
           thresholds: this.thresholds,
           maxMeasurements: this.maxMeasurements,
         },
-      })
+      });
     } catch (error) {
       this.logger?.error(
         'Failed to initialize PerformanceMonitor',
@@ -185,7 +185,7 @@ export class PerformanceMonitor {
           action: 'performance_monitor_init_error',
         },
         error as Error,
-      )
+      );
     }
   }
 
@@ -195,7 +195,7 @@ export class PerformanceMonitor {
   private setupMemoryObserver(): void {
     try {
       this.memoryObserver = new PerformanceObserver((list) => {
-        const entries = list.getEntries()
+        const entries = list.getEntries();
         for (const entry of entries) {
           if (entry.entryType === 'measure') {
             this.logger?.debug('Memory measurement detected', {
@@ -208,17 +208,17 @@ export class PerformanceMonitor {
                   end: entry.startTime + entry.duration,
                 },
               },
-            })
+            });
           }
         }
-      })
+      });
 
-      this.memoryObserver.observe({ entryTypes: ['measure', 'mark'] })
+      this.memoryObserver.observe({ entryTypes: ['measure', 'mark'] });
     } catch (error) {
       this.logger?.warn('Memory observer setup failed', {
         component: ComponentType.ERROR_HANDLER,
         action: 'memory_observer_setup_error',
-      })
+      });
     }
   }
 
@@ -227,30 +227,30 @@ export class PerformanceMonitor {
    */
   private setupFlushTimer(): void {
     this.flushTimer = window.setInterval(() => {
-      this.flushMeasurements()
-    }, this.flushInterval)
+      this.flushMeasurements();
+    }, this.flushInterval);
   }
 
   /**
    * Start measuring an operation
    */
   public startOperation(name: string, metadata: OperationMetadata): void {
-    if (!this.isEnabled) return
+    if (!this.isEnabled) return;
 
     try {
-      const startTime = performance.now()
-      const memoryBefore = this.getMemoryUsage()
+      const startTime = performance.now();
+      const memoryBefore = this.getMemoryUsage();
 
       // Store operation details
       this.activeOperations.set(name, {
         startTime,
         metadata,
         memoryBefore,
-      })
+      });
 
       // Create performance mark
       if (typeof performance.mark === 'function') {
-        performance.mark(`${name}-start`)
+        performance.mark(`${name}-start`);
       }
 
       this.logger?.debug(`Started operation: ${name}`, {
@@ -261,7 +261,7 @@ export class PerformanceMonitor {
           inputSize: metadata.inputSize,
           memoryBefore,
         },
-      })
+      });
     } catch (error) {
       this.logger?.error(
         `Failed to start operation: ${name}`,
@@ -270,7 +270,7 @@ export class PerformanceMonitor {
           action: 'performance_start_error',
         },
         error as Error,
-      )
+      );
     }
   }
 
@@ -281,30 +281,30 @@ export class PerformanceMonitor {
     name: string,
     additionalMetadata?: Partial<OperationMetadata>,
   ): PerformanceMeasurement | null {
-    if (!this.isEnabled) return null
+    if (!this.isEnabled) return null;
 
     try {
-      const operation = this.activeOperations.get(name)
+      const operation = this.activeOperations.get(name);
       if (!operation) {
         this.logger?.warn(`Operation not found: ${name}`, {
           component: ComponentType.ERROR_HANDLER,
           action: 'performance_end_not_found',
-        })
-        return null
+        });
+        return null;
       }
 
-      const endTime = performance.now()
-      const duration = endTime - operation.startTime
-      const memoryAfter = this.getMemoryUsage()
+      const endTime = performance.now();
+      const duration = endTime - operation.startTime;
+      const memoryAfter = this.getMemoryUsage();
       const memoryDelta =
         operation.memoryBefore !== undefined && memoryAfter !== undefined
           ? memoryAfter - operation.memoryBefore
-          : undefined
+          : undefined;
 
       // Create performance mark and measure
       if (typeof performance.mark === 'function' && typeof performance.measure === 'function') {
-        performance.mark(`${name}-end`)
-        performance.measure(name, `${name}-start`, `${name}-end`)
+        performance.mark(`${name}-end`);
+        performance.measure(name, `${name}-start`, `${name}-end`);
       }
 
       // Combine metadata
@@ -313,11 +313,11 @@ export class PerformanceMonitor {
         ...additionalMetadata,
         memoryBefore: operation.memoryBefore,
         memoryAfter,
-      }
+      };
 
       // Determine if operation is slow
-      const threshold = this.getThreshold(finalMetadata.operationType, finalMetadata.component)
-      const isSlowOperation = duration > threshold
+      const threshold = this.getThreshold(finalMetadata.operationType, finalMetadata.component);
+      const isSlowOperation = duration > threshold;
 
       // Create measurement record
       const measurement: PerformanceMeasurement = {
@@ -330,14 +330,14 @@ export class PerformanceMonitor {
         threshold,
         memoryDelta,
         timestamp: new Date().toISOString(),
-      }
+      };
 
       // Store measurement
-      this.measurements.push(measurement)
-      this.activeOperations.delete(name)
+      this.measurements.push(measurement);
+      this.activeOperations.delete(name);
 
       // Log performance data
-      const logLevel = isSlowOperation ? LogLevel.WARN : LogLevel.DEBUG
+      const logLevel = isSlowOperation ? LogLevel.WARN : LogLevel.DEBUG;
       const performanceData: PerformanceData = {
         duration,
         memoryUsage: memoryAfter,
@@ -347,7 +347,7 @@ export class PerformanceMonitor {
         },
         marks: [`${name}-start`, `${name}-end`],
         measures: [{ name, duration }],
-      }
+      };
 
       this.logger?.log(logLevel, `Operation completed: ${name}`, {
         component: finalMetadata.component,
@@ -360,17 +360,17 @@ export class PerformanceMonitor {
           memoryDelta,
           ...finalMetadata.customData,
         },
-      })
+      });
 
       // Handle slow operations
       if (isSlowOperation) {
-        this.handleSlowOperation(measurement)
+        this.handleSlowOperation(measurement);
       }
 
       // Enforce measurement limits
-      this.enforceLimits()
+      this.enforceLimits();
 
-      return measurement
+      return measurement;
     } catch (error) {
       this.logger?.error(
         `Failed to end operation: ${name}`,
@@ -379,8 +379,8 @@ export class PerformanceMonitor {
           action: 'performance_end_error',
         },
         error as Error,
-      )
-      return null
+      );
+      return null;
     }
   }
 
@@ -392,24 +392,24 @@ export class PerformanceMonitor {
     operation: () => Promise<T>,
     metadata: OperationMetadata,
   ): Promise<T> {
-    this.startOperation(name, metadata)
+    this.startOperation(name, metadata);
 
     try {
-      const result = await operation()
+      const result = await operation();
 
       // Add result metadata if possible
-      const resultSize = this.estimateSize(result)
+      const resultSize = this.estimateSize(result);
       this.endOperation(name, {
         outputSize: resultSize,
         customData: { success: true },
-      })
+      });
 
-      return result
+      return result;
     } catch (error) {
       this.endOperation(name, {
         customData: { success: false, error: (error as Error).message },
-      })
-      throw error
+      });
+      throw error;
     }
   }
 
@@ -417,24 +417,24 @@ export class PerformanceMonitor {
    * Measure a synchronous operation with automatic timing
    */
   public measureSync<T>(name: string, operation: () => T, metadata: OperationMetadata): T {
-    this.startOperation(name, metadata)
+    this.startOperation(name, metadata);
 
     try {
-      const result = operation()
+      const result = operation();
 
       // Add result metadata if possible
-      const resultSize = this.estimateSize(result)
+      const resultSize = this.estimateSize(result);
       this.endOperation(name, {
         outputSize: resultSize,
         customData: { success: true },
-      })
+      });
 
-      return result
+      return result;
     } catch (error) {
       this.endOperation(name, {
         customData: { success: false, error: (error as Error).message },
-      })
-      throw error
+      });
+      throw error;
     }
   }
 
@@ -445,14 +445,14 @@ export class PerformanceMonitor {
     try {
       // Try to get memory info from performance API
       if ('memory' in performance) {
-        const memory = (performance as any).memory
-        return memory.usedJSHeapSize
+        const memory = (performance as any).memory;
+        return memory.usedJSHeapSize;
       }
 
       // Fallback: estimate based on active operations and measurements
-      return this.activeOperations.size * 1024 + this.measurements.length * 512
+      return this.activeOperations.size * 1024 + this.measurements.length * 512;
     } catch {
-      return undefined
+      return undefined;
     }
   }
 
@@ -462,20 +462,20 @@ export class PerformanceMonitor {
   private estimateSize(data: any): number {
     try {
       if (typeof data === 'string') {
-        return data.length * 2 // UTF-16 encoding
+        return data.length * 2; // UTF-16 encoding
       }
       if (data instanceof ArrayBuffer) {
-        return data.byteLength
+        return data.byteLength;
       }
       if (Array.isArray(data)) {
-        return data.length * 8 // Rough estimate
+        return data.length * 8; // Rough estimate
       }
       if (typeof data === 'object' && data !== null) {
-        return JSON.stringify(data).length * 2
+        return JSON.stringify(data).length * 2;
       }
-      return 8 // Primitive types
+      return 8; // Primitive types
     } catch {
-      return 0
+      return 0;
     }
   }
 
@@ -487,7 +487,7 @@ export class PerformanceMonitor {
     if (operationType.includes('storage') || operationType.includes('cache')) {
       return operationType.includes('write')
         ? this.thresholds.storage.write
-        : this.thresholds.storage.read
+        : this.thresholds.storage.read;
     }
 
     if (
@@ -497,7 +497,7 @@ export class PerformanceMonitor {
     ) {
       return operationType.includes('retry')
         ? this.thresholds.network.retry
-        : this.thresholds.network.fetch
+        : this.thresholds.network.fetch;
     }
 
     if (
@@ -507,31 +507,31 @@ export class PerformanceMonitor {
     ) {
       return operationType.includes('interaction')
         ? this.thresholds.ui.interaction
-        : this.thresholds.ui.render
+        : this.thresholds.ui.render;
     }
 
     if (operationType.includes('youtube') || operationType.includes('player')) {
       return operationType.includes('subtitle')
         ? this.thresholds.youtube.subtitleParse
-        : this.thresholds.youtube.playerQuery
+        : this.thresholds.youtube.playerQuery;
     }
 
     if (operationType.includes('translation') || operationType.includes('translate')) {
       return operationType.includes('cache')
         ? this.thresholds.translation.cache
-        : this.thresholds.translation.translate
+        : this.thresholds.translation.translate;
     }
 
     // Default threshold based on component
     switch (component) {
       case ComponentType.STORAGE_SERVICE:
-        return this.thresholds.storage.read
+        return this.thresholds.storage.read;
       case ComponentType.TRANSLATION_SERVICE:
-        return this.thresholds.translation.translate
+        return this.thresholds.translation.translate;
       case ComponentType.YOUTUBE_INTEGRATION:
-        return this.thresholds.youtube.playerQuery
+        return this.thresholds.youtube.playerQuery;
       default:
-        return 100 // Default 100ms threshold
+        return 100; // Default 100ms threshold
     }
   }
 
@@ -559,7 +559,7 @@ export class PerformanceMonitor {
         retryCount: measurement.metadata.retryCount,
         networkState: measurement.metadata.networkState,
       },
-    })
+    });
 
     // Additional analysis for critical slow operations
     if (measurement.duration > measurement.threshold * 3) {
@@ -571,7 +571,7 @@ export class PerformanceMonitor {
           threshold: measurement.threshold,
           severity: 'critical',
         },
-      })
+      });
     }
   }
 
@@ -581,8 +581,8 @@ export class PerformanceMonitor {
   private enforceLimits(): void {
     if (this.measurements.length > this.maxMeasurements) {
       // Keep only the most recent measurements
-      const excess = this.measurements.length - this.maxMeasurements
-      this.measurements.splice(0, excess)
+      const excess = this.measurements.length - this.maxMeasurements;
+      this.measurements.splice(0, excess);
 
       this.logger?.debug('Performance measurement limit enforced', {
         component: ComponentType.ERROR_HANDLER,
@@ -591,7 +591,7 @@ export class PerformanceMonitor {
           removed: excess,
           remaining: this.measurements.length,
         },
-      })
+      });
     }
   }
 
@@ -599,11 +599,11 @@ export class PerformanceMonitor {
    * Flush measurements to persistent storage
    */
   private async flushMeasurements(): Promise<void> {
-    if (this.measurements.length === 0) return
+    if (this.measurements.length === 0) return;
 
     try {
       // Prepare analytics data
-      const analytics = this.generateAnalytics()
+      const analytics = this.generateAnalytics();
 
       // Log analytics summary
       this.logger?.info('Performance analytics', {
@@ -616,27 +616,27 @@ export class PerformanceMonitor {
           p95Duration: analytics.p95Duration,
           memoryStats: analytics.memoryStats,
         },
-      })
+      });
 
       // Store in Chrome storage for persistence
       try {
-        const storageKey = `performance_data_${Date.now()}`
+        const storageKey = `performance_data_${Date.now()}`;
         await chrome.storage.local.set({
           [storageKey]: {
             analytics,
             measurements: this.measurements.slice(-100), // Keep last 100 measurements
             timestamp: new Date().toISOString(),
           },
-        })
+        });
       } catch (storageError) {
         this.logger?.warn('Failed to store performance data', {
           component: ComponentType.ERROR_HANDLER,
           action: 'performance_storage_error',
-        })
+        });
       }
 
       // Clear measurements after flush
-      this.measurements = []
+      this.measurements = [];
     } catch (error) {
       this.logger?.error(
         'Failed to flush performance measurements',
@@ -645,7 +645,7 @@ export class PerformanceMonitor {
           action: 'performance_flush_error',
         },
         error as Error,
-      )
+      );
     }
   }
 
@@ -670,43 +670,43 @@ export class PerformanceMonitor {
           start: new Date().toISOString(),
           end: new Date().toISOString(),
         },
-      }
+      };
     }
 
-    const durations = this.measurements.map((m) => m.duration).sort((a, b) => a - b)
-    const slowOperations = this.measurements.filter((m) => m.isSlowOperation).length
+    const durations = this.measurements.map((m) => m.duration).sort((a, b) => a - b);
+    const slowOperations = this.measurements.filter((m) => m.isSlowOperation).length;
 
     // Calculate percentiles
-    const p95Index = Math.floor(durations.length * 0.95)
-    const p99Index = Math.floor(durations.length * 0.99)
+    const p95Index = Math.floor(durations.length * 0.95);
+    const p99Index = Math.floor(durations.length * 0.99);
 
     // Group by operation type
     const operationsByType: Record<
       string,
       { count: number; avgDuration: number; slowCount: number }
-    > = {}
+    > = {};
 
     for (const measurement of this.measurements) {
-      const type = measurement.metadata.operationType
+      const type = measurement.metadata.operationType;
       if (!operationsByType[type]) {
-        operationsByType[type] = { count: 0, avgDuration: 0, slowCount: 0 }
+        operationsByType[type] = { count: 0, avgDuration: 0, slowCount: 0 };
       }
 
-      operationsByType[type].count++
+      operationsByType[type].count++;
       operationsByType[type].avgDuration =
         (operationsByType[type].avgDuration * (operationsByType[type].count - 1) +
           measurement.duration) /
-        operationsByType[type].count
+        operationsByType[type].count;
 
       if (measurement.isSlowOperation) {
-        operationsByType[type].slowCount++
+        operationsByType[type].slowCount++;
       }
     }
 
     // Memory statistics
     const memoryUsages = this.measurements
       .map((m) => m.metadata.memoryAfter)
-      .filter((usage): usage is number => usage !== undefined)
+      .filter((usage): usage is number => usage !== undefined);
 
     const memoryStats = {
       averageUsage:
@@ -716,7 +716,7 @@ export class PerformanceMonitor {
         .map((m) => m.memoryDelta)
         .filter((delta): delta is number => delta !== undefined && delta > 0)
         .reduce((total, delta) => total + delta, 0),
-    }
+    };
 
     return {
       totalOperations: this.measurements.length,
@@ -730,50 +730,50 @@ export class PerformanceMonitor {
         start: this.measurements[0].timestamp,
         end: this.measurements[this.measurements.length - 1].timestamp,
       },
-    }
+    };
   }
 
   /**
    * Update performance thresholds
    */
   public updateThresholds(newThresholds: Partial<PerformanceThresholds>): void {
-    this.thresholds = { ...this.thresholds, ...newThresholds }
+    this.thresholds = { ...this.thresholds, ...newThresholds };
 
     this.logger?.info('Performance thresholds updated', {
       component: ComponentType.ERROR_HANDLER,
       action: 'performance_thresholds_updated',
       metadata: { thresholds: this.thresholds },
-    })
+    });
   }
 
   /**
    * Enable or disable performance monitoring
    */
   public setEnabled(enabled: boolean): void {
-    this.isEnabled = enabled
+    this.isEnabled = enabled;
 
     this.logger?.info(`Performance monitoring ${enabled ? 'enabled' : 'disabled'}`, {
       component: ComponentType.ERROR_HANDLER,
       action: 'performance_monitoring_toggle',
       metadata: { enabled },
-    })
+    });
   }
 
   /**
    * Get current performance statistics
    */
   public getStats(): {
-    activeOperations: number
-    totalMeasurements: number
-    isEnabled: boolean
-    thresholds: PerformanceThresholds
+    activeOperations: number;
+    totalMeasurements: number;
+    isEnabled: boolean;
+    thresholds: PerformanceThresholds;
   } {
     return {
       activeOperations: this.activeOperations.size,
       totalMeasurements: this.measurements.length,
       isEnabled: this.isEnabled,
       thresholds: this.thresholds,
-    }
+    };
   }
 
   /**
@@ -782,29 +782,29 @@ export class PerformanceMonitor {
   public destroy(): void {
     // Clear timers
     if (this.flushTimer) {
-      clearInterval(this.flushTimer)
-      this.flushTimer = null
+      clearInterval(this.flushTimer);
+      this.flushTimer = null;
     }
 
     // Disconnect memory observer
     if (this.memoryObserver) {
-      this.memoryObserver.disconnect()
-      this.memoryObserver = null
+      this.memoryObserver.disconnect();
+      this.memoryObserver = null;
     }
 
     // Final flush
-    this.flushMeasurements()
+    this.flushMeasurements();
 
     // Clear data
-    this.activeOperations.clear()
-    this.measurements = []
+    this.activeOperations.clear();
+    this.measurements = [];
 
     this.logger?.info('PerformanceMonitor destroyed', {
       component: ComponentType.ERROR_HANDLER,
       action: 'performance_monitor_destroy',
-    })
+    });
 
-    PerformanceMonitor.instance = null
+    PerformanceMonitor.instance = null;
   }
 }
 
@@ -821,30 +821,34 @@ export function measurePerformance(
     propertyName: string,
     descriptor: TypedPropertyDescriptor<T>,
   ) {
-    const method = descriptor.value!
+    const method = descriptor.value!;
 
     descriptor.value = async function (this: any, ...args: any[]) {
-      const monitor = PerformanceMonitor.getInstance()
-      const operationName = `${target.constructor.name}.${propertyName}`
+      const monitor = PerformanceMonitor.getInstance();
+      const operationName = `${target.constructor.name}.${propertyName}`;
 
       const operationMetadata: OperationMetadata = {
         operationType,
         component,
         inputSize: monitor['estimateSize'](args),
         ...metadata,
-      }
+      };
 
       if (method.constructor.name === 'AsyncFunction') {
         return monitor.measureAsync(
           operationName,
           () => method.apply(this, args),
           operationMetadata,
-        )
+        );
       } else {
-        return monitor.measureSync(operationName, () => method.apply(this, args), operationMetadata)
+        return monitor.measureSync(
+          operationName,
+          () => method.apply(this, args),
+          operationMetadata,
+        );
       }
-    } as any
+    } as any;
 
-    return descriptor
-  }
+    return descriptor;
+  };
 }

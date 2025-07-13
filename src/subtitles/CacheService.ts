@@ -11,58 +11,58 @@ import {
   CacheEntryMetadata,
   CacheStats,
   DEFAULT_CACHE_CONFIG,
-} from './types'
-import { Logger } from '../logging/Logger'
-import { ComponentType } from '../logging/types'
+} from './types';
+import { Logger } from '../logging/Logger';
+import { ComponentType } from '../logging/types';
 
 /**
  * Internal cache entry structure
  */
 interface InternalCacheEntry {
-  readonly data: string // Compressed/serialized subtitle file
-  readonly metadata: CacheEntryMetadata
-  readonly version: number // Cache format version
+  readonly data: string; // Compressed/serialized subtitle file
+  readonly metadata: CacheEntryMetadata;
+  readonly version: number; // Cache format version
 }
 
 /**
  * Cache statistics tracking
  */
 interface CacheStatsTracker {
-  hits: number
-  misses: number
-  evictions: number
-  lastCleanup: number
-  totalRequests: number
+  hits: number;
+  misses: number;
+  evictions: number;
+  lastCleanup: number;
+  totalRequests: number;
 }
 
 /**
  * Subtitle cache implementation using Chrome storage
  */
 export class SubtitleCacheService implements SubtitleCache {
-  private readonly config: CacheConfig
-  private readonly logger: Logger | null = null
-  private readonly statsTracker: CacheStatsTracker
-  private readonly memoryCache: Map<string, CacheEntry>
-  private cleanupTimer?: number
+  private readonly config: CacheConfig;
+  private readonly logger: Logger | null = null;
+  private readonly statsTracker: CacheStatsTracker;
+  private readonly memoryCache: Map<string, CacheEntry>;
+  private cleanupTimer?: number;
 
-  private static readonly CACHE_VERSION = 1
-  private static readonly CACHE_KEY_PREFIX = 'linguatube_subtitle_'
-  private static readonly STATS_KEY = 'linguatube_cache_stats'
-  private static readonly CONFIG_KEY = 'linguatube_cache_config'
+  private static readonly CACHE_VERSION = 1;
+  private static readonly CACHE_KEY_PREFIX = 'linguatube_subtitle_';
+  private static readonly STATS_KEY = 'linguatube_cache_stats';
+  private static readonly CONFIG_KEY = 'linguatube_cache_config';
 
   constructor(config: Partial<CacheConfig> = {}) {
-    this.config = { ...DEFAULT_CACHE_CONFIG, ...config }
-    this.logger = Logger.getInstance()
-    this.memoryCache = new Map()
+    this.config = { ...DEFAULT_CACHE_CONFIG, ...config };
+    this.logger = Logger.getInstance();
+    this.memoryCache = new Map();
     this.statsTracker = {
       hits: 0,
       misses: 0,
       evictions: 0,
       lastCleanup: Date.now(),
       totalRequests: 0,
-    }
+    };
 
-    this.initialize()
+    this.initialize();
   }
 
   // ========================================
@@ -76,29 +76,29 @@ export class SubtitleCacheService implements SubtitleCache {
     try {
       this.logger?.info('Initializing subtitle cache service...', {
         component: ComponentType.SUBTITLE_MANAGER,
-      })
+      });
 
       // Load existing statistics
-      await this.loadStats()
+      await this.loadStats();
 
       // Start cleanup timer
-      this.startCleanupTimer()
+      this.startCleanupTimer();
 
       // Perform initial cleanup if needed
-      const timeSinceLastCleanup = Date.now() - this.statsTracker.lastCleanup
+      const timeSinceLastCleanup = Date.now() - this.statsTracker.lastCleanup;
       if (timeSinceLastCleanup > this.config.cleanupInterval * 1000) {
-        await this.cleanup()
+        await this.cleanup();
       }
 
       this.logger?.info('Cache service initialized successfully', {
         component: ComponentType.SUBTITLE_MANAGER,
-      })
+      });
     } catch (error) {
       this.logger?.error(
         'Cache initialization failed',
         { component: ComponentType.SUBTITLE_MANAGER },
         error instanceof Error ? error : undefined,
-      )
+      );
     }
   }
 
@@ -107,12 +107,12 @@ export class SubtitleCacheService implements SubtitleCache {
    */
   private startCleanupTimer(): void {
     if (this.cleanupTimer) {
-      clearInterval(this.cleanupTimer)
+      clearInterval(this.cleanupTimer);
     }
 
     this.cleanupTimer = window.setInterval(async () => {
-      await this.cleanup()
-    }, this.config.cleanupInterval * 1000)
+      await this.cleanup();
+    }, this.config.cleanupInterval * 1000);
   }
 
   // ========================================
@@ -123,53 +123,53 @@ export class SubtitleCacheService implements SubtitleCache {
    * Get cached subtitle file
    */
   async get(key: string): Promise<CacheEntry | null> {
-    this.statsTracker.totalRequests++
+    this.statsTracker.totalRequests++;
 
     try {
       // Check memory cache first (if using hybrid storage)
       if (this.config.storageType === 'hybrid' && this.memoryCache.has(key)) {
-        const entry = this.memoryCache.get(key)!
+        const entry = this.memoryCache.get(key)!;
 
         // Check if entry is still valid
         if (entry.metadata.expiresAt > Date.now()) {
-          this.statsTracker.hits++
-          await this.updateAccessMetadata(entry)
-          return entry
+          this.statsTracker.hits++;
+          await this.updateAccessMetadata(entry);
+          return entry;
         } else {
           // Remove expired entry from memory
-          this.memoryCache.delete(key)
+          this.memoryCache.delete(key);
         }
       }
 
       // Check persistent storage
-      const cacheKey = this.buildCacheKey(key)
-      const stored = await this.getFromStorage(cacheKey)
+      const cacheKey = this.buildCacheKey(key);
+      const stored = await this.getFromStorage(cacheKey);
 
       if (!stored) {
-        this.statsTracker.misses++
-        return null
+        this.statsTracker.misses++;
+        return null;
       }
 
       // Validate and decompress entry
-      const entry = await this.deserializeCacheEntry(stored)
+      const entry = await this.deserializeCacheEntry(stored);
 
       if (!entry || entry.metadata.expiresAt <= Date.now()) {
         // Entry expired, remove it
-        await this.delete(key)
-        this.statsTracker.misses++
-        return null
+        await this.delete(key);
+        this.statsTracker.misses++;
+        return null;
       }
 
       // Update access metadata
-      await this.updateAccessMetadata(entry)
+      await this.updateAccessMetadata(entry);
 
       // Store in memory cache for faster access
       if (this.config.storageType === 'hybrid') {
-        this.memoryCache.set(key, entry)
+        this.memoryCache.set(key, entry);
       }
 
-      this.statsTracker.hits++
-      return entry
+      this.statsTracker.hits++;
+      return entry;
     } catch (error) {
       this.logger?.error(
         'Cache get error',
@@ -178,9 +178,9 @@ export class SubtitleCacheService implements SubtitleCache {
           metadata: { key },
         },
         error instanceof Error ? error : undefined,
-      )
-      this.statsTracker.misses++
-      return null
+      );
+      this.statsTracker.misses++;
+      return null;
     }
   }
 
@@ -189,8 +189,8 @@ export class SubtitleCacheService implements SubtitleCache {
    */
   async set(key: string, data: SubtitleFile, ttl?: number): Promise<void> {
     try {
-      const now = Date.now()
-      const expiresAt = now + (ttl || this.config.defaultTTL) * 1000
+      const now = Date.now();
+      const expiresAt = now + (ttl || this.config.defaultTTL) * 1000;
 
       // Create cache entry
       const entry: CacheEntry = {
@@ -205,26 +205,26 @@ export class SubtitleCacheService implements SubtitleCache {
           compressed: this.config.compressionEnabled,
           etag: data.cacheInfo?.etag,
         },
-      }
+      };
 
       // Check cache size limits
-      await this.ensureCacheSpace(entry.metadata.size)
+      await this.ensureCacheSpace(entry.metadata.size);
 
       // Serialize and store
-      const serialized = await this.serializeCacheEntry(entry)
-      const cacheKey = this.buildCacheKey(key)
+      const serialized = await this.serializeCacheEntry(entry);
+      const cacheKey = this.buildCacheKey(key);
 
-      await this.setInStorage(cacheKey, serialized)
+      await this.setInStorage(cacheKey, serialized);
 
       // Update memory cache
       if (this.config.storageType === 'hybrid') {
-        this.memoryCache.set(key, entry)
+        this.memoryCache.set(key, entry);
       }
 
       this.logger?.debug('Cached subtitle file', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: { key, size: entry.metadata.size },
-      })
+      });
     } catch (error) {
       this.logger?.error(
         'Cache set error',
@@ -233,8 +233,8 @@ export class SubtitleCacheService implements SubtitleCache {
           metadata: { key },
         },
         error instanceof Error ? error : undefined,
-      )
-      throw error
+      );
+      throw error;
     }
   }
 
@@ -243,22 +243,22 @@ export class SubtitleCacheService implements SubtitleCache {
    */
   async delete(key: string): Promise<boolean> {
     try {
-      const cacheKey = this.buildCacheKey(key)
+      const cacheKey = this.buildCacheKey(key);
 
       // Remove from persistent storage
-      const removed = await this.removeFromStorage(cacheKey)
+      const removed = await this.removeFromStorage(cacheKey);
 
       // Remove from memory cache
-      this.memoryCache.delete(key)
+      this.memoryCache.delete(key);
 
       if (removed) {
         this.logger?.debug('Deleted cached entry', {
           component: ComponentType.SUBTITLE_MANAGER,
           metadata: { key },
-        })
+        });
       }
 
-      return removed
+      return removed;
     } catch (error) {
       this.logger?.error(
         'Cache delete error',
@@ -267,8 +267,8 @@ export class SubtitleCacheService implements SubtitleCache {
           metadata: { key },
         },
         error instanceof Error ? error : undefined,
-      )
-      return false
+      );
+      return false;
     }
   }
 
@@ -277,37 +277,39 @@ export class SubtitleCacheService implements SubtitleCache {
    */
   async clear(): Promise<void> {
     try {
-      this.logger?.info('Clearing subtitle cache...', { component: ComponentType.SUBTITLE_MANAGER })
+      this.logger?.info('Clearing subtitle cache...', {
+        component: ComponentType.SUBTITLE_MANAGER,
+      });
 
       // Clear memory cache
-      this.memoryCache.clear()
+      this.memoryCache.clear();
 
       // Clear persistent storage
-      const allKeys = await this.getAllCacheKeys()
+      const allKeys = await this.getAllCacheKeys();
 
       if (allKeys.length > 0) {
-        await chrome.storage.local.remove(allKeys)
+        await chrome.storage.local.remove(allKeys);
       }
 
       // Reset statistics
-      this.statsTracker.hits = 0
-      this.statsTracker.misses = 0
-      this.statsTracker.evictions = 0
-      this.statsTracker.totalRequests = 0
+      this.statsTracker.hits = 0;
+      this.statsTracker.misses = 0;
+      this.statsTracker.evictions = 0;
+      this.statsTracker.totalRequests = 0;
 
-      await this.saveStats()
+      await this.saveStats();
 
       this.logger?.info('Cache cleared', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: { entriesRemoved: allKeys.length },
-      })
+      });
     } catch (error) {
       this.logger?.error(
         'Cache clear error',
         { component: ComponentType.SUBTITLE_MANAGER },
         error instanceof Error ? error : undefined,
-      )
-      throw error
+      );
+      throw error;
     }
   }
 
@@ -318,12 +320,12 @@ export class SubtitleCacheService implements SubtitleCache {
     const hitRate =
       this.statsTracker.totalRequests > 0
         ? this.statsTracker.hits / this.statsTracker.totalRequests
-        : 0
+        : 0;
 
     const missRate =
       this.statsTracker.totalRequests > 0
         ? this.statsTracker.misses / this.statsTracker.totalRequests
-        : 0
+        : 0;
 
     return {
       totalSize: this.calculateTotalSize(),
@@ -332,7 +334,7 @@ export class SubtitleCacheService implements SubtitleCache {
       missRate,
       evictionCount: this.statsTracker.evictions,
       lastCleanup: this.statsTracker.lastCleanup,
-    }
+    };
   }
 
   /**
@@ -340,64 +342,64 @@ export class SubtitleCacheService implements SubtitleCache {
    */
   async cleanup(): Promise<void> {
     try {
-      this.logger?.info('Starting cache cleanup...', { component: ComponentType.SUBTITLE_MANAGER })
+      this.logger?.info('Starting cache cleanup...', { component: ComponentType.SUBTITLE_MANAGER });
 
-      const now = Date.now()
-      let removedCount = 0
-      let freedSpace = 0
+      const now = Date.now();
+      let removedCount = 0;
+      let freedSpace = 0;
 
       // Get all cache entries
-      const allKeys = await this.getAllCacheKeys()
+      const allKeys = await this.getAllCacheKeys();
 
       for (const cacheKey of allKeys) {
         try {
-          const stored = await this.getFromStorage(cacheKey)
-          if (!stored) continue
+          const stored = await this.getFromStorage(cacheKey);
+          if (!stored) continue;
 
-          const entry = await this.deserializeCacheEntry(stored)
+          const entry = await this.deserializeCacheEntry(stored);
           if (!entry) {
             // Invalid entry, remove it
-            await chrome.storage.local.remove([cacheKey])
-            removedCount++
-            continue
+            await chrome.storage.local.remove([cacheKey]);
+            removedCount++;
+            continue;
           }
 
           // Remove expired entries
           if (entry.metadata.expiresAt <= now) {
-            await chrome.storage.local.remove([cacheKey])
-            this.memoryCache.delete(entry.key)
-            freedSpace += entry.metadata.size
-            removedCount++
-            this.statsTracker.evictions++
+            await chrome.storage.local.remove([cacheKey]);
+            this.memoryCache.delete(entry.key);
+            freedSpace += entry.metadata.size;
+            removedCount++;
+            this.statsTracker.evictions++;
           }
         } catch (error) {
           this.logger?.warn('Error processing cache entry during cleanup', {
             component: ComponentType.SUBTITLE_MANAGER,
             metadata: { cacheKey, error: error instanceof Error ? error.message : String(error) },
-          })
+          });
           // Remove problematic entry
-          await chrome.storage.local.remove([cacheKey])
-          removedCount++
+          await chrome.storage.local.remove([cacheKey]);
+          removedCount++;
         }
       }
 
       // Additional cleanup if cache is still too large
-      await this.enforceSizeLimits()
+      await this.enforceSizeLimits();
 
       // Update cleanup timestamp
-      this.statsTracker.lastCleanup = now
-      await this.saveStats()
+      this.statsTracker.lastCleanup = now;
+      await this.saveStats();
 
       this.logger?.info('Cache cleanup completed', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: { entriesRemoved: removedCount, bytesFreed: freedSpace },
-      })
+      });
     } catch (error) {
       this.logger?.error(
         'Cache cleanup failed',
         { component: ComponentType.SUBTITLE_MANAGER },
         error instanceof Error ? error : undefined,
-      )
+      );
     }
   }
 
@@ -410,8 +412,8 @@ export class SubtitleCacheService implements SubtitleCache {
    */
   private async getFromStorage(key: string): Promise<InternalCacheEntry | null> {
     try {
-      const result = await chrome.storage.local.get([key])
-      return result[key] || null
+      const result = await chrome.storage.local.get([key]);
+      return result[key] || null;
     } catch (error) {
       this.logger?.error(
         'Storage get error',
@@ -420,8 +422,8 @@ export class SubtitleCacheService implements SubtitleCache {
           metadata: { key },
         },
         error instanceof Error ? error : undefined,
-      )
-      return null
+      );
+      return null;
     }
   }
 
@@ -430,7 +432,7 @@ export class SubtitleCacheService implements SubtitleCache {
    */
   private async setInStorage(key: string, data: InternalCacheEntry): Promise<void> {
     try {
-      await chrome.storage.local.set({ [key]: data })
+      await chrome.storage.local.set({ [key]: data });
     } catch (error) {
       this.logger?.error(
         'Storage set error',
@@ -439,8 +441,8 @@ export class SubtitleCacheService implements SubtitleCache {
           metadata: { key },
         },
         error instanceof Error ? error : undefined,
-      )
-      throw error
+      );
+      throw error;
     }
   }
 
@@ -449,8 +451,8 @@ export class SubtitleCacheService implements SubtitleCache {
    */
   private async removeFromStorage(key: string): Promise<boolean> {
     try {
-      await chrome.storage.local.remove([key])
-      return true
+      await chrome.storage.local.remove([key]);
+      return true;
     } catch (error) {
       this.logger?.error(
         'Storage remove error',
@@ -459,8 +461,8 @@ export class SubtitleCacheService implements SubtitleCache {
           metadata: { key },
         },
         error instanceof Error ? error : undefined,
-      )
-      return false
+      );
+      return false;
     }
   }
 
@@ -469,17 +471,17 @@ export class SubtitleCacheService implements SubtitleCache {
    */
   private async getAllCacheKeys(): Promise<string[]> {
     try {
-      const allData = await chrome.storage.local.get(null)
+      const allData = await chrome.storage.local.get(null);
       return Object.keys(allData).filter((key) =>
         key.startsWith(SubtitleCacheService.CACHE_KEY_PREFIX),
-      )
+      );
     } catch (error) {
       this.logger?.error(
         'Error getting cache keys',
         { component: ComponentType.SUBTITLE_MANAGER },
         error instanceof Error ? error : undefined,
-      )
-      return []
+      );
+      return [];
     }
   }
 
@@ -491,18 +493,18 @@ export class SubtitleCacheService implements SubtitleCache {
    * Serialize cache entry for storage
    */
   private async serializeCacheEntry(entry: CacheEntry): Promise<InternalCacheEntry> {
-    let dataString = JSON.stringify(entry.data)
+    let dataString = JSON.stringify(entry.data);
 
     // Apply compression if enabled
     if (this.config.compressionEnabled) {
-      dataString = await this.compressData(dataString)
+      dataString = await this.compressData(dataString);
     }
 
     return {
       data: dataString,
       metadata: entry.metadata,
       version: SubtitleCacheService.CACHE_VERSION,
-    }
+    };
   }
 
   /**
@@ -510,28 +512,28 @@ export class SubtitleCacheService implements SubtitleCache {
    */
   private async deserializeCacheEntry(stored: InternalCacheEntry): Promise<CacheEntry | null> {
     try {
-      let dataString = stored.data
+      let dataString = stored.data;
 
       // Decompress if needed
       if (stored.metadata.compressed) {
-        dataString = await this.decompressData(dataString)
+        dataString = await this.decompressData(dataString);
       }
 
-      const subtitleFile: SubtitleFile = JSON.parse(dataString)
+      const subtitleFile: SubtitleFile = JSON.parse(dataString);
 
       // Reconstruct cache entry
       return {
         key: '', // Will be set by caller
         data: subtitleFile,
         metadata: stored.metadata,
-      }
+      };
     } catch (error) {
       this.logger?.error(
         'Cache entry deserialization failed',
         { component: ComponentType.SUBTITLE_MANAGER },
         error instanceof Error ? error : undefined,
-      )
-      return null
+      );
+      return null;
     }
   }
 
@@ -542,7 +544,7 @@ export class SubtitleCacheService implements SubtitleCache {
     // For now, just return the data as-is
     // In a real implementation, you might use compression algorithms
     // like LZ-string or built-in compression APIs
-    return data
+    return data;
   }
 
   /**
@@ -550,7 +552,7 @@ export class SubtitleCacheService implements SubtitleCache {
    */
   private async decompressData(data: string): Promise<string> {
     // Corresponding decompression for the compression method used
-    return data
+    return data;
   }
 
   // ========================================
@@ -561,17 +563,17 @@ export class SubtitleCacheService implements SubtitleCache {
    * Ensure cache has space for new entry
    */
   private async ensureCacheSpace(requiredSize: number): Promise<void> {
-    const stats = this.getStats()
+    const stats = this.getStats();
 
     // Check if we exceed file count limit
     if (stats.totalFiles >= this.config.maxFiles) {
-      await this.evictLeastRecentlyUsed(1)
+      await this.evictLeastRecentlyUsed(1);
     }
 
     // Check if we exceed size limit
     if (stats.totalSize + requiredSize > this.config.maxSize) {
-      const sizeToFree = stats.totalSize + requiredSize - this.config.maxSize
-      await this.evictBySize(sizeToFree)
+      const sizeToFree = stats.totalSize + requiredSize - this.config.maxSize;
+      await this.evictBySize(sizeToFree);
     }
   }
 
@@ -579,18 +581,18 @@ export class SubtitleCacheService implements SubtitleCache {
    * Enforce cache size limits
    */
   private async enforceSizeLimits(): Promise<void> {
-    const stats = this.getStats()
+    const stats = this.getStats();
 
     // Remove excess files
     if (stats.totalFiles > this.config.maxFiles) {
-      const filesToRemove = stats.totalFiles - this.config.maxFiles
-      await this.evictLeastRecentlyUsed(filesToRemove)
+      const filesToRemove = stats.totalFiles - this.config.maxFiles;
+      await this.evictLeastRecentlyUsed(filesToRemove);
     }
 
     // Remove excess size
     if (stats.totalSize > this.config.maxSize) {
-      const sizeToFree = stats.totalSize - this.config.maxSize
-      await this.evictBySize(sizeToFree)
+      const sizeToFree = stats.totalSize - this.config.maxSize;
+      await this.evictBySize(sizeToFree);
     }
   }
 
@@ -600,13 +602,13 @@ export class SubtitleCacheService implements SubtitleCache {
   private async evictLeastRecentlyUsed(count: number): Promise<void> {
     // This is a simplified implementation
     // In practice, you'd need to track access times across all entries
-    const entries = Array.from(this.memoryCache.entries())
-    entries.sort((a, b) => a[1].metadata.lastAccessed - b[1].metadata.lastAccessed)
+    const entries = Array.from(this.memoryCache.entries());
+    entries.sort((a, b) => a[1].metadata.lastAccessed - b[1].metadata.lastAccessed);
 
-    const toEvict = entries.slice(0, count)
+    const toEvict = entries.slice(0, count);
     for (const [key] of toEvict) {
-      await this.delete(key)
-      this.statsTracker.evictions++
+      await this.delete(key);
+      this.statsTracker.evictions++;
     }
   }
 
@@ -614,16 +616,16 @@ export class SubtitleCacheService implements SubtitleCache {
    * Evict entries by total size
    */
   private async evictBySize(targetSize: number): Promise<void> {
-    let freedSize = 0
-    const entries = Array.from(this.memoryCache.entries())
-    entries.sort((a, b) => a[1].metadata.lastAccessed - b[1].metadata.lastAccessed)
+    let freedSize = 0;
+    const entries = Array.from(this.memoryCache.entries());
+    entries.sort((a, b) => a[1].metadata.lastAccessed - b[1].metadata.lastAccessed);
 
     for (const [key, entry] of entries) {
-      if (freedSize >= targetSize) break
+      if (freedSize >= targetSize) break;
 
-      await this.delete(key)
-      freedSize += entry.metadata.size
-      this.statsTracker.evictions++
+      await this.delete(key);
+      freedSize += entry.metadata.size;
+      this.statsTracker.evictions++;
     }
   }
 
@@ -635,7 +637,7 @@ export class SubtitleCacheService implements SubtitleCache {
    * Build cache key for storage
    */
   private buildCacheKey(key: string): string {
-    return SubtitleCacheService.CACHE_KEY_PREFIX + this.hashKey(key)
+    return SubtitleCacheService.CACHE_KEY_PREFIX + this.hashKey(key);
   }
 
   /**
@@ -643,48 +645,48 @@ export class SubtitleCacheService implements SubtitleCache {
    */
   private hashKey(key: string): string {
     // Simple hash function for cache keys
-    let hash = 0
+    let hash = 0;
     for (let i = 0; i < key.length; i++) {
-      const char = key.charCodeAt(i)
-      hash = (hash << 5) - hash + char
-      hash = hash & hash // Convert to 32-bit integer
+      const char = key.charCodeAt(i);
+      hash = (hash << 5) - hash + char;
+      hash = hash & hash; // Convert to 32-bit integer
     }
-    return Math.abs(hash).toString(36)
+    return Math.abs(hash).toString(36);
   }
 
   /**
    * Calculate size of subtitle file
    */
   private calculateSize(subtitleFile: SubtitleFile): number {
-    return JSON.stringify(subtitleFile).length * 2 // Rough estimate in bytes
+    return JSON.stringify(subtitleFile).length * 2; // Rough estimate in bytes
   }
 
   /**
    * Calculate total cache size
    */
   private calculateTotalSize(): number {
-    let total = 0
+    let total = 0;
     for (const entry of this.memoryCache.values()) {
-      total += entry.metadata.size
+      total += entry.metadata.size;
     }
-    return total
+    return total;
   }
 
   /**
    * Update access metadata for cache entry
    */
   private async updateAccessMetadata(entry: CacheEntry): Promise<void> {
-    const now = Date.now()
+    const now = Date.now();
     const updatedMetadata = {
       ...entry.metadata,
       lastAccessed: now,
       accessCount: entry.metadata.accessCount + 1,
-    }
+    };
 
     // Update memory cache
     if (this.memoryCache.has(entry.key)) {
-      const updatedEntry = { ...entry, metadata: updatedMetadata }
-      this.memoryCache.set(entry.key, updatedEntry)
+      const updatedEntry = { ...entry, metadata: updatedMetadata };
+      this.memoryCache.set(entry.key, updatedEntry);
     }
   }
 
@@ -693,17 +695,17 @@ export class SubtitleCacheService implements SubtitleCache {
    */
   private async loadStats(): Promise<void> {
     try {
-      const result = await chrome.storage.local.get([SubtitleCacheService.STATS_KEY])
-      const stored = result[SubtitleCacheService.STATS_KEY]
+      const result = await chrome.storage.local.get([SubtitleCacheService.STATS_KEY]);
+      const stored = result[SubtitleCacheService.STATS_KEY];
 
       if (stored) {
-        Object.assign(this.statsTracker, stored)
+        Object.assign(this.statsTracker, stored);
       }
     } catch (error) {
       this.logger?.warn('Failed to load cache stats', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: { error: error instanceof Error ? error.message : String(error) },
-      })
+      });
     }
   }
 
@@ -714,12 +716,12 @@ export class SubtitleCacheService implements SubtitleCache {
     try {
       await chrome.storage.local.set({
         [SubtitleCacheService.STATS_KEY]: this.statsTracker,
-      })
+      });
     } catch (error) {
       this.logger?.warn('Failed to save cache stats', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: { error: error instanceof Error ? error.message : String(error) },
-      })
+      });
     }
   }
 
@@ -728,9 +730,9 @@ export class SubtitleCacheService implements SubtitleCache {
    */
   destroy(): void {
     if (this.cleanupTimer) {
-      clearInterval(this.cleanupTimer)
+      clearInterval(this.cleanupTimer);
     }
-    this.memoryCache.clear()
+    this.memoryCache.clear();
   }
 }
 
@@ -742,18 +744,18 @@ export class SubtitleCacheService implements SubtitleCache {
  * Create cache service instance
  */
 export function createSubtitleCache(config?: Partial<CacheConfig>): SubtitleCacheService {
-  return new SubtitleCacheService(config)
+  return new SubtitleCacheService(config);
 }
 
 /**
  * Generate cache key for subtitle URL
  */
 export function generateCacheKey(url: string, language?: string): string {
-  const base = new URL(url).href
-  return language ? `${base}:${language}` : base
+  const base = new URL(url).href;
+  return language ? `${base}:${language}` : base;
 }
 
 /**
  * Default cache service instance
  */
-export const subtitleCache = createSubtitleCache()
+export const subtitleCache = createSubtitleCache();

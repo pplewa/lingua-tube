@@ -3,52 +3,52 @@
  * Handles retry logic for failed subtitle fetch requests with exponential backoff and jitter
  */
 
-import { RetryConfig, SubtitleErrorCode, SubtitleFetchError, DEFAULT_RETRY_CONFIG } from './types'
-import { Logger } from '../logging/Logger'
-import { ComponentType } from '../logging/types'
+import { RetryConfig, SubtitleErrorCode, SubtitleFetchError, DEFAULT_RETRY_CONFIG } from './types';
+import { Logger } from '../logging/Logger';
+import { ComponentType } from '../logging/types';
 
 /**
  * Retry attempt information
  */
 export interface RetryAttempt {
-  readonly attemptNumber: number
-  readonly delay: number
-  readonly error: SubtitleFetchError
-  readonly timestamp: number
+  readonly attemptNumber: number;
+  readonly delay: number;
+  readonly error: SubtitleFetchError;
+  readonly timestamp: number;
 }
 
 /**
  * Retry result information
  */
 export interface RetryResult<T> {
-  readonly success: boolean
-  readonly result?: T
-  readonly error?: SubtitleFetchError
-  readonly totalAttempts: number
-  readonly totalTime: number
-  readonly attempts: RetryAttempt[]
+  readonly success: boolean;
+  readonly result?: T;
+  readonly error?: SubtitleFetchError;
+  readonly totalAttempts: number;
+  readonly totalTime: number;
+  readonly attempts: RetryAttempt[];
 }
 
 /**
  * Retry policy function type
  */
-export type RetryPolicy = (error: SubtitleFetchError, attempt: number) => boolean
+export type RetryPolicy = (error: SubtitleFetchError, attempt: number) => boolean;
 
 /**
  * Async operation function type
  */
-export type AsyncOperation<T> = () => Promise<T>
+export type AsyncOperation<T> = () => Promise<T>;
 
 /**
  * Retry service implementation
  */
 export class RetryService {
-  private readonly config: RetryConfig
-  private readonly logger: Logger | null = null
+  private readonly config: RetryConfig;
+  private readonly logger: Logger | null = null;
 
   constructor(config: Partial<RetryConfig> = {}) {
-    this.config = { ...DEFAULT_RETRY_CONFIG, ...config }
-    this.logger = Logger.getInstance()
+    this.config = { ...DEFAULT_RETRY_CONFIG, ...config };
+    this.logger = Logger.getInstance();
   }
 
   // ========================================
@@ -62,24 +62,24 @@ export class RetryService {
     operation: AsyncOperation<T>,
     customConfig?: Partial<RetryConfig>,
   ): Promise<RetryResult<T>> {
-    const config = customConfig ? { ...this.config, ...customConfig } : this.config
-    const startTime = Date.now()
-    const attempts: RetryAttempt[] = []
+    const config = customConfig ? { ...this.config, ...customConfig } : this.config;
+    const startTime = Date.now();
+    const attempts: RetryAttempt[] = [];
 
     for (let attempt = 1; attempt <= config.maxAttempts; attempt++) {
       try {
         this.logger?.debug('Retry attempt', {
           component: ComponentType.SUBTITLE_MANAGER,
           metadata: { attempt, maxAttempts: config.maxAttempts },
-        })
+        });
 
-        const result = await operation()
+        const result = await operation();
 
-        const totalTime = Date.now() - startTime
+        const totalTime = Date.now() - startTime;
         this.logger?.info('Operation succeeded', {
           component: ComponentType.SUBTITLE_MANAGER,
           metadata: { attempt, totalTime },
-        })
+        });
 
         return {
           success: true,
@@ -87,10 +87,10 @@ export class RetryService {
           totalAttempts: attempt,
           totalTime,
           attempts,
-        }
+        };
       } catch (error) {
-        const fetchError = this.normalizeError(error)
-        const timestamp = Date.now()
+        const fetchError = this.normalizeError(error);
+        const timestamp = Date.now();
 
         // Record attempt
         const attemptInfo: RetryAttempt = {
@@ -98,50 +98,50 @@ export class RetryService {
           delay: 0, // Will be set if we retry
           error: fetchError,
           timestamp,
-        }
+        };
 
-        attempts.push(attemptInfo)
+        attempts.push(attemptInfo);
 
         this.logger?.warn('Attempt failed', {
           component: ComponentType.SUBTITLE_MANAGER,
           metadata: { attempt, error: fetchError.message, errorCode: fetchError.code },
-        })
+        });
 
         // Check if we should retry
         if (attempt >= config.maxAttempts) {
           this.logger?.error('All retry attempts failed', {
             component: ComponentType.SUBTITLE_MANAGER,
             metadata: { maxAttempts: config.maxAttempts },
-          })
-          break
+          });
+          break;
         }
 
         if (!this.shouldRetry(fetchError, attempt, config)) {
           this.logger?.info('Not retrying due to error type', {
             component: ComponentType.SUBTITLE_MANAGER,
             metadata: { errorCode: fetchError.code, attempt },
-          })
-          break
+          });
+          break;
         }
 
         // Calculate delay and wait
-        const delay = this.calculateDelay(attempt, config)
+        const delay = this.calculateDelay(attempt, config);
 
         this.logger?.debug('Waiting before retry', {
           component: ComponentType.SUBTITLE_MANAGER,
           metadata: { delay, attempt },
-        })
-        await this.sleep(delay)
+        });
+        await this.sleep(delay);
 
         // Update the attempt info with the actual delay used
-        const updatedAttemptInfo = { ...attemptInfo, delay }
-        attempts[attempts.length - 1] = updatedAttemptInfo
+        const updatedAttemptInfo = { ...attemptInfo, delay };
+        attempts[attempts.length - 1] = updatedAttemptInfo;
       }
     }
 
     // All attempts failed
-    const totalTime = Date.now() - startTime
-    const lastError = attempts[attempts.length - 1]?.error || this.createUnknownError()
+    const totalTime = Date.now() - startTime;
+    const lastError = attempts[attempts.length - 1]?.error || this.createUnknownError();
 
     return {
       success: false,
@@ -149,7 +149,7 @@ export class RetryService {
       totalAttempts: attempts.length,
       totalTime,
       attempts,
-    }
+    };
   }
 
   /**
@@ -160,13 +160,13 @@ export class RetryService {
     retryPolicy: RetryPolicy,
     config?: Partial<RetryConfig>,
   ): Promise<RetryResult<T>> {
-    const mergedConfig = config ? { ...this.config, ...config } : this.config
-    const startTime = Date.now()
-    const attempts: RetryAttempt[] = []
+    const mergedConfig = config ? { ...this.config, ...config } : this.config;
+    const startTime = Date.now();
+    const attempts: RetryAttempt[] = [];
 
     for (let attempt = 1; attempt <= mergedConfig.maxAttempts; attempt++) {
       try {
-        const result = await operation()
+        const result = await operation();
 
         return {
           success: true,
@@ -174,30 +174,30 @@ export class RetryService {
           totalAttempts: attempt,
           totalTime: Date.now() - startTime,
           attempts,
-        }
+        };
       } catch (error) {
-        const fetchError = this.normalizeError(error)
+        const fetchError = this.normalizeError(error);
         const attemptInfo: RetryAttempt = {
           attemptNumber: attempt,
           delay: 0,
           error: fetchError,
           timestamp: Date.now(),
-        }
+        };
 
-        attempts.push(attemptInfo)
+        attempts.push(attemptInfo);
 
         // Check retry policy
         if (attempt >= mergedConfig.maxAttempts || !retryPolicy(fetchError, attempt)) {
-          break
+          break;
         }
 
         // Calculate delay and wait
-        const delay = this.calculateDelay(attempt, mergedConfig)
-        await this.sleep(delay)
+        const delay = this.calculateDelay(attempt, mergedConfig);
+        await this.sleep(delay);
 
         // Update the attempt info with the actual delay used
-        const updatedAttemptInfo = { ...attemptInfo, delay }
-        attempts[attempts.length - 1] = updatedAttemptInfo
+        const updatedAttemptInfo = { ...attemptInfo, delay };
+        attempts[attempts.length - 1] = updatedAttemptInfo;
       }
     }
 
@@ -207,7 +207,7 @@ export class RetryService {
       totalAttempts: attempts.length,
       totalTime: Date.now() - startTime,
       attempts,
-    }
+    };
   }
 
   // ========================================
@@ -220,13 +220,13 @@ export class RetryService {
   private shouldRetry(error: SubtitleFetchError, attempt: number, config: RetryConfig): boolean {
     // Check if error is retryable
     if (!error.retryable) {
-      return false
+      return false;
     }
 
     // Check HTTP status codes
     if (error.httpStatus && config.retryOn) {
       if (!config.retryOn.includes(error.httpStatus)) {
-        return false
+        return false;
       }
     }
 
@@ -238,18 +238,18 @@ export class RetryService {
       SubtitleErrorCode.INVALID_URL,
       SubtitleErrorCode.INVALID_FORMAT,
       SubtitleErrorCode.CORS_ERROR,
-    ]
+    ];
 
     if (nonRetryableErrors.includes(error.code)) {
-      return false
+      return false;
     }
 
     // Special handling for rate limiting
     if (error.code === SubtitleErrorCode.RATE_LIMITED) {
-      return attempt <= Math.floor(config.maxAttempts / 2) // Only retry first half of attempts for rate limiting
+      return attempt <= Math.floor(config.maxAttempts / 2); // Only retry first half of attempts for rate limiting
     }
 
-    return true
+    return true;
   }
 
   /**
@@ -263,10 +263,10 @@ export class RetryService {
         SubtitleErrorCode.TIMEOUT,
         SubtitleErrorCode.RATE_LIMITED,
         SubtitleErrorCode.SERVICE_UNAVAILABLE,
-      ]
+      ];
 
-      return error.retryable && retryableErrors.includes(error.code)
-    }
+      return error.retryable && retryableErrors.includes(error.code);
+    };
   }
 
   /**
@@ -278,10 +278,10 @@ export class RetryService {
       const retryableErrors: SubtitleErrorCode[] = [
         SubtitleErrorCode.NETWORK_ERROR,
         SubtitleErrorCode.TIMEOUT,
-      ]
+      ];
 
-      return attempt <= 2 && retryableErrors.includes(error.code)
-    }
+      return attempt <= 2 && retryableErrors.includes(error.code);
+    };
   }
 
   /**
@@ -296,10 +296,10 @@ export class RetryService {
         SubtitleErrorCode.FORBIDDEN,
         SubtitleErrorCode.INVALID_URL,
         SubtitleErrorCode.CORS_ERROR,
-      ]
+      ];
 
-      return !nonRetryableErrors.includes(error.code)
-    }
+      return !nonRetryableErrors.includes(error.code);
+    };
   }
 
   // ========================================
@@ -310,23 +310,23 @@ export class RetryService {
    * Calculate delay for next retry attempt
    */
   private calculateDelay(attempt: number, config: RetryConfig): number {
-    let delay: number
+    let delay: number;
 
     if (config.exponentialBackoff) {
       // Exponential backoff: baseDelay * 2^(attempt-1)
-      delay = config.baseDelay * Math.pow(2, attempt - 1)
+      delay = config.baseDelay * Math.pow(2, attempt - 1);
     } else {
       // Linear backoff
-      delay = config.baseDelay * attempt
+      delay = config.baseDelay * attempt;
     }
 
     // Apply maximum delay limit
-    delay = Math.min(delay, config.maxDelay)
+    delay = Math.min(delay, config.maxDelay);
 
     // Add jitter to prevent thundering herd
-    delay = this.addJitter(delay)
+    delay = this.addJitter(delay);
 
-    return Math.floor(delay)
+    return Math.floor(delay);
   }
 
   /**
@@ -334,16 +334,16 @@ export class RetryService {
    */
   private addJitter(delay: number): number {
     // Add up to 25% random jitter
-    const jitterRange = delay * 0.25
-    const jitter = Math.random() * jitterRange
-    return delay + jitter
+    const jitterRange = delay * 0.25;
+    const jitter = Math.random() * jitterRange;
+    return delay + jitter;
   }
 
   /**
    * Sleep for specified duration
    */
   private sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms))
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   // ========================================
@@ -355,14 +355,14 @@ export class RetryService {
    */
   private normalizeError(error: unknown): SubtitleFetchError {
     if (this.isSubtitleFetchError(error)) {
-      return error
+      return error;
     }
 
     if (error instanceof Error) {
-      return this.convertStandardError(error)
+      return this.convertStandardError(error);
     }
 
-    return this.createUnknownError(error)
+    return this.createUnknownError(error);
   }
 
   /**
@@ -375,42 +375,42 @@ export class RetryService {
       'code' in error &&
       'message' in error &&
       'retryable' in error
-    )
+    );
   }
 
   /**
    * Convert standard Error to SubtitleFetchError
    */
   private convertStandardError(error: Error): SubtitleFetchError {
-    let code: SubtitleErrorCode = SubtitleErrorCode.UNKNOWN_ERROR
-    let retryable = true
-    let httpStatus: number | undefined
+    let code: SubtitleErrorCode = SubtitleErrorCode.UNKNOWN_ERROR;
+    let retryable = true;
+    let httpStatus: number | undefined;
 
     // Analyze error message for common patterns
-    const message = error.message.toLowerCase()
+    const message = error.message.toLowerCase();
 
     if (message.includes('network') || message.includes('fetch')) {
-      code = SubtitleErrorCode.NETWORK_ERROR
+      code = SubtitleErrorCode.NETWORK_ERROR;
     } else if (message.includes('timeout')) {
-      code = SubtitleErrorCode.TIMEOUT
+      code = SubtitleErrorCode.TIMEOUT;
     } else if (message.includes('cors')) {
-      code = SubtitleErrorCode.CORS_ERROR
-      retryable = false
+      code = SubtitleErrorCode.CORS_ERROR;
+      retryable = false;
     } else if (message.includes('not found') || message.includes('404')) {
-      code = SubtitleErrorCode.NOT_FOUND
-      httpStatus = 404
-      retryable = false
+      code = SubtitleErrorCode.NOT_FOUND;
+      httpStatus = 404;
+      retryable = false;
     } else if (message.includes('unauthorized') || message.includes('401')) {
-      code = SubtitleErrorCode.UNAUTHORIZED
-      httpStatus = 401
-      retryable = false
+      code = SubtitleErrorCode.UNAUTHORIZED;
+      httpStatus = 401;
+      retryable = false;
     } else if (message.includes('forbidden') || message.includes('403')) {
-      code = SubtitleErrorCode.FORBIDDEN
-      httpStatus = 403
-      retryable = false
+      code = SubtitleErrorCode.FORBIDDEN;
+      httpStatus = 403;
+      retryable = false;
     } else if (message.includes('rate limit') || message.includes('429')) {
-      code = SubtitleErrorCode.RATE_LIMITED
-      httpStatus = 429
+      code = SubtitleErrorCode.RATE_LIMITED;
+      httpStatus = 429;
     }
 
     return {
@@ -419,7 +419,7 @@ export class RetryService {
       httpStatus,
       originalError: error,
       retryable,
-    }
+    };
   }
 
   /**
@@ -431,7 +431,7 @@ export class RetryService {
       message: 'An unknown error occurred',
       originalError,
       retryable: true,
-    }
+    };
   }
 
   // ========================================
@@ -442,43 +442,43 @@ export class RetryService {
    * Get current retry configuration
    */
   getConfig(): RetryConfig {
-    return { ...this.config }
+    return { ...this.config };
   }
 
   /**
    * Create new RetryService with updated configuration
    */
   withConfig(config: Partial<RetryConfig>): RetryService {
-    return new RetryService({ ...this.config, ...config })
+    return new RetryService({ ...this.config, ...config });
   }
 
   /**
    * Estimate total retry time
    */
   estimateRetryTime(config?: Partial<RetryConfig>): number {
-    const mergedConfig = config ? { ...this.config, ...config } : this.config
-    let totalTime = 0
+    const mergedConfig = config ? { ...this.config, ...config } : this.config;
+    let totalTime = 0;
 
     for (let attempt = 1; attempt < mergedConfig.maxAttempts; attempt++) {
-      totalTime += this.calculateDelayEstimate(attempt, mergedConfig)
+      totalTime += this.calculateDelayEstimate(attempt, mergedConfig);
     }
 
-    return totalTime
+    return totalTime;
   }
 
   /**
    * Calculate delay estimate without jitter
    */
   private calculateDelayEstimate(attempt: number, config: RetryConfig): number {
-    let delay: number
+    let delay: number;
 
     if (config.exponentialBackoff) {
-      delay = config.baseDelay * Math.pow(2, attempt - 1)
+      delay = config.baseDelay * Math.pow(2, attempt - 1);
     } else {
-      delay = config.baseDelay * attempt
+      delay = config.baseDelay * attempt;
     }
 
-    return Math.min(delay, config.maxDelay)
+    return Math.min(delay, config.maxDelay);
   }
 }
 
@@ -490,7 +490,7 @@ export class RetryService {
  * Create retry service with default configuration
  */
 export function createRetryService(config?: Partial<RetryConfig>): RetryService {
-  return new RetryService(config)
+  return new RetryService(config);
 }
 
 /**
@@ -503,7 +503,7 @@ export function createNetworkRetryService(): RetryService {
     maxDelay: 30000,
     exponentialBackoff: true,
     retryOn: [408, 429, 500, 502, 503, 504],
-  })
+  });
 }
 
 /**
@@ -516,7 +516,7 @@ export function createRateLimitRetryService(): RetryService {
     maxDelay: 60000,
     exponentialBackoff: true,
     retryOn: [429],
-  })
+  });
 }
 
 /**
@@ -526,17 +526,17 @@ export async function withRetry<T>(
   operation: AsyncOperation<T>,
   config?: Partial<RetryConfig>,
 ): Promise<T> {
-  const retryService = createRetryService(config)
-  const result = await retryService.execute(operation)
+  const retryService = createRetryService(config);
+  const result = await retryService.execute(operation);
 
   if (result.success && result.result !== undefined) {
-    return result.result
+    return result.result;
   }
 
-  throw result.error || new Error('Operation failed after all retry attempts')
+  throw result.error || new Error('Operation failed after all retry attempts');
 }
 
 /**
  * Default retry service instance
  */
-export const retryService = createRetryService()
+export const retryService = createRetryService();

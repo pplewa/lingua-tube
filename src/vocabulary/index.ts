@@ -4,14 +4,14 @@
  */
 
 // Export the main vocabulary manager
-export { VocabularyManager, vocabularyManager } from './VocabularyManager'
+export { VocabularyManager, vocabularyManager } from './VocabularyManager';
 
 // Export VocabularyObserver functionality
 export {
   VocabularyObserver,
   VocabularyEventType,
   createReactiveVocabularyComponent,
-} from './VocabularyObserver'
+} from './VocabularyObserver';
 export type {
   VocabularyEvent,
   VocabularyEventData,
@@ -23,7 +23,7 @@ export type {
   VocabularyObserverCallback,
   VocabularyObserverCallbacks,
   VocabularyUIComponent,
-} from './VocabularyObserver'
+} from './VocabularyObserver';
 
 // Export WordHighlightingService functionality
 export {
@@ -34,13 +34,13 @@ export {
   DEFAULT_HIGHLIGHT_CONFIG,
   SUBTITLE_HIGHLIGHT_CONFIG,
   WEBPAGE_HIGHLIGHT_CONFIG,
-} from '../ui/WordHighlightingService'
+} from '../ui/WordHighlightingService';
 export type {
   HighlightConfig as WordHighlightConfig,
   HighlightContext,
   HighlightStats,
   WordMatch,
-} from '../ui/WordHighlightingService'
+} from '../ui/WordHighlightingService';
 
 // Export types and interfaces
 export type {
@@ -48,10 +48,10 @@ export type {
   VocabularySortOptions,
   BatchOperationResult,
   HighlightConfig,
-} from './VocabularyManager'
+} from './VocabularyManager';
 
 // Re-export storage types for convenience
-export type { VocabularyItem } from '../storage'
+export type { VocabularyItem } from '../storage';
 
 // Export singleton instance as default
-export { vocabularyManager as default } from './VocabularyManager'
+export { vocabularyManager as default } from './VocabularyManager';

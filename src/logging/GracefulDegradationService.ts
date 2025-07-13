@@ -10,7 +10,7 @@ import {
   ErrorSeverity,
   LoggerConfig,
   isProduction,
-} from './types'
+} from './types';
 
 /**
  * Feature availability states
@@ -37,126 +37,126 @@ export enum DegradationLevel {
  * Feature configuration for graceful degradation
  */
 export interface FeatureConfig {
-  readonly name: string
-  readonly component: ComponentType
-  readonly priority: 'critical' | 'high' | 'medium' | 'low'
-  readonly dependencies: string[]
-  readonly fallbackOptions: FallbackOption[]
-  readonly recoveryStrategy: RecoveryStrategy
-  readonly healthCheckInterval: number
-  readonly maxDegradationTime: number
+  readonly name: string;
+  readonly component: ComponentType;
+  readonly priority: 'critical' | 'high' | 'medium' | 'low';
+  readonly dependencies: string[];
+  readonly fallbackOptions: FallbackOption[];
+  readonly recoveryStrategy: RecoveryStrategy;
+  readonly healthCheckInterval: number;
+  readonly maxDegradationTime: number;
 }
 
 /**
  * Fallback option configuration
  */
 export interface FallbackOption {
-  readonly name: string
-  readonly type: 'cache' | 'offline' | 'limited' | 'disabled' | 'alternative'
-  readonly implementation: () => Promise<boolean>
-  readonly userMessage?: string
-  readonly limitations?: string[]
-  readonly performanceImpact: 'none' | 'low' | 'medium' | 'high'
+  readonly name: string;
+  readonly type: 'cache' | 'offline' | 'limited' | 'disabled' | 'alternative';
+  readonly implementation: () => Promise<boolean>;
+  readonly userMessage?: string;
+  readonly limitations?: string[];
+  readonly performanceImpact: 'none' | 'low' | 'medium' | 'high';
 }
 
 /**
  * Recovery strategy configuration
  */
 export interface RecoveryStrategy {
-  readonly type: 'automatic' | 'manual' | 'scheduled' | 'conditional'
-  readonly interval?: number
-  readonly conditions?: (() => Promise<boolean>)[]
-  readonly maxAttempts?: number
-  readonly backoffMultiplier?: number
+  readonly type: 'automatic' | 'manual' | 'scheduled' | 'conditional';
+  readonly interval?: number;
+  readonly conditions?: (() => Promise<boolean>)[];
+  readonly maxAttempts?: number;
+  readonly backoffMultiplier?: number;
 }
 
 /**
  * Feature status information
  */
 export interface FeatureStatus {
-  readonly name: string
-  readonly state: FeatureState
-  readonly activeFallback?: string
-  readonly degradedSince?: number
-  readonly lastHealthCheck: number
-  readonly healthCheckResults: HealthCheckResult[]
-  readonly recoveryAttempts: number
-  readonly userNotified: boolean
-  readonly performanceImpact: number // 0-100 scale
+  readonly name: string;
+  readonly state: FeatureState;
+  readonly activeFallback?: string;
+  readonly degradedSince?: number;
+  readonly lastHealthCheck: number;
+  readonly healthCheckResults: HealthCheckResult[];
+  readonly recoveryAttempts: number;
+  readonly userNotified: boolean;
+  readonly performanceImpact: number; // 0-100 scale
 }
 
 /**
  * Health check result
  */
 export interface HealthCheckResult {
-  readonly timestamp: number
-  readonly success: boolean
-  readonly responseTime?: number
-  readonly error?: string
-  readonly details?: Record<string, any>
+  readonly timestamp: number;
+  readonly success: boolean;
+  readonly responseTime?: number;
+  readonly error?: string;
+  readonly details?: Record<string, any>;
 }
 
 /**
  * System health overview
  */
 export interface SystemHealth {
-  readonly overallLevel: DegradationLevel
-  readonly availableFeatures: number
-  readonly degradedFeatures: number
-  readonly unavailableFeatures: number
-  readonly estimatedPerformance: number // 0-100 scale
-  readonly userExperienceImpact: 'none' | 'minor' | 'moderate' | 'significant' | 'severe'
-  readonly recommendedActions: string[]
+  readonly overallLevel: DegradationLevel;
+  readonly availableFeatures: number;
+  readonly degradedFeatures: number;
+  readonly unavailableFeatures: number;
+  readonly estimatedPerformance: number; // 0-100 scale
+  readonly userExperienceImpact: 'none' | 'minor' | 'moderate' | 'significant' | 'severe';
+  readonly recommendedActions: string[];
 }
 
 /**
  * Degradation event for monitoring
  */
 export interface DegradationEvent {
-  readonly timestamp: number
-  readonly feature: string
-  readonly previousState: FeatureState
-  readonly newState: FeatureState
-  readonly reason: string
-  readonly fallbackUsed?: string
-  readonly expectedDuration?: number
-  readonly userImpact: 'none' | 'low' | 'medium' | 'high' | 'critical'
+  readonly timestamp: number;
+  readonly feature: string;
+  readonly previousState: FeatureState;
+  readonly newState: FeatureState;
+  readonly reason: string;
+  readonly fallbackUsed?: string;
+  readonly expectedDuration?: number;
+  readonly userImpact: 'none' | 'low' | 'medium' | 'high' | 'critical';
 }
 
 /**
  * User notification configuration
  */
 export interface UserNotificationConfig {
-  readonly enabled: boolean
-  readonly notifyOnDegradation: boolean
-  readonly notifyOnRecovery: boolean
-  readonly aggregateNotifications: boolean
-  readonly maxNotificationsPerMinute: number
-  readonly showPerformanceImpact: boolean
-  readonly showRecommendations: boolean
+  readonly enabled: boolean;
+  readonly notifyOnDegradation: boolean;
+  readonly notifyOnRecovery: boolean;
+  readonly aggregateNotifications: boolean;
+  readonly maxNotificationsPerMinute: number;
+  readonly showPerformanceImpact: boolean;
+  readonly showRecommendations: boolean;
 }
 
 /**
  * Graceful Degradation Service
  */
 export class GracefulDegradationService {
-  private static instance: GracefulDegradationService | null = null
-  private readonly features: Map<string, FeatureConfig> = new Map()
-  private readonly featureStatus: Map<string, FeatureStatus> = new Map()
-  private readonly healthCheckTimers: Map<string, number> = new Map()
-  private readonly recoveryTimers: Map<string, number> = new Map()
-  private readonly degradationHistory: DegradationEvent[] = []
-  private readonly notificationConfig: UserNotificationConfig
-  private notificationRateLimit: { count: number; resetTime: number } = { count: 0, resetTime: 0 }
+  private static instance: GracefulDegradationService | null = null;
+  private readonly features: Map<string, FeatureConfig> = new Map();
+  private readonly featureStatus: Map<string, FeatureStatus> = new Map();
+  private readonly healthCheckTimers: Map<string, number> = new Map();
+  private readonly recoveryTimers: Map<string, number> = new Map();
+  private readonly degradationHistory: DegradationEvent[] = [];
+  private readonly notificationConfig: UserNotificationConfig;
+  private notificationRateLimit: { count: number; resetTime: number } = { count: 0, resetTime: 0 };
 
   // System monitoring
-  private systemHealthCheckTimer: number | null = null
-  private lastSystemHealthCheck: number = 0
-  private currentDegradationLevel: DegradationLevel = DegradationLevel.NONE
+  private systemHealthCheckTimer: number | null = null;
+  private lastSystemHealthCheck: number = 0;
+  private currentDegradationLevel: DegradationLevel = DegradationLevel.NONE;
 
   // Performance tracking
-  private performanceBaseline: Map<string, number> = new Map()
-  private currentPerformance: Map<string, number> = new Map()
+  private performanceBaseline: Map<string, number> = new Map();
+  private currentPerformance: Map<string, number> = new Map();
 
   private constructor(config: { notifications?: Partial<UserNotificationConfig> } = {}) {
     this.notificationConfig = {
@@ -168,25 +168,25 @@ export class GracefulDegradationService {
       showPerformanceImpact: true,
       showRecommendations: true,
       ...config.notifications,
-    }
+    };
 
-    this.initializeDefaultFeatures()
-    this.startSystemHealthMonitoring()
+    this.initializeDefaultFeatures();
+    this.startSystemHealthMonitoring();
   }
 
   /**
    * Get singleton instance
    */
   public static getInstance(config?: {
-    notifications?: Partial<UserNotificationConfig>
+    notifications?: Partial<UserNotificationConfig>;
   }): GracefulDegradationService | null {
     if (typeof window === 'undefined') {
-      return null
+      return null;
     }
     if (!GracefulDegradationService.instance) {
-      GracefulDegradationService.instance = new GracefulDegradationService(config)
+      GracefulDegradationService.instance = new GracefulDegradationService(config);
     }
-    return GracefulDegradationService.instance
+    return GracefulDegradationService.instance;
   }
 
   /**
@@ -225,7 +225,7 @@ export class GracefulDegradationService {
       },
       healthCheckInterval: 60000, // 1 minute
       maxDegradationTime: 300000, // 5 minutes
-    })
+    });
 
     // Subtitle Fetching
     this.registerFeature({
@@ -259,7 +259,7 @@ export class GracefulDegradationService {
       },
       healthCheckInterval: 90000, // 1.5 minutes
       maxDegradationTime: 600000, // 10 minutes
-    })
+    });
 
     // Dictionary Service
     this.registerFeature({
@@ -293,7 +293,7 @@ export class GracefulDegradationService {
       },
       healthCheckInterval: 180000, // 3 minutes
       maxDegradationTime: 900000, // 15 minutes
-    })
+    });
 
     // Text-to-Speech Service
     this.registerFeature({
@@ -326,7 +326,7 @@ export class GracefulDegradationService {
       },
       healthCheckInterval: 300000, // 5 minutes
       maxDegradationTime: 1800000, // 30 minutes
-    })
+    });
 
     // Storage Service
     this.registerFeature({
@@ -360,7 +360,7 @@ export class GracefulDegradationService {
       },
       healthCheckInterval: 120000, // 2 minutes
       maxDegradationTime: 1800000, // 30 minutes
-    })
+    });
 
     // YouTube Integration
     this.registerFeature({
@@ -394,14 +394,14 @@ export class GracefulDegradationService {
       },
       healthCheckInterval: 45000, // 45 seconds
       maxDegradationTime: 300000, // 5 minutes
-    })
+    });
   }
 
   /**
    * Register a new feature for monitoring and degradation
    */
   public registerFeature(config: FeatureConfig): void {
-    this.features.set(config.name, config)
+    this.features.set(config.name, config);
     this.featureStatus.set(config.name, {
       name: config.name,
       state: FeatureState.AVAILABLE,
@@ -410,10 +410,10 @@ export class GracefulDegradationService {
       recoveryAttempts: 0,
       userNotified: false,
       performanceImpact: 0,
-    })
+    });
 
     // Start health checking for this feature
-    this.startFeatureHealthCheck(config.name)
+    this.startFeatureHealthCheck(config.name);
   }
 
   /**
@@ -423,27 +423,27 @@ export class GracefulDegradationService {
     featureName: string,
     error: Error,
     context?: {
-      severity?: ErrorSeverity
-      expectedRecoveryTime?: number
-      userImpact?: 'none' | 'low' | 'medium' | 'high' | 'critical'
+      severity?: ErrorSeverity;
+      expectedRecoveryTime?: number;
+      userImpact?: 'none' | 'low' | 'medium' | 'high' | 'critical';
     },
   ): Promise<void> {
-    const feature = this.features.get(featureName)
-    const status = this.featureStatus.get(featureName)
+    const feature = this.features.get(featureName);
+    const status = this.featureStatus.get(featureName);
 
     if (!feature || !status) {
-      console.warn(`[GracefulDegradation] Unknown feature reported failure: ${featureName}`)
-      return
+      console.warn(`[GracefulDegradation] Unknown feature reported failure: ${featureName}`);
+      return;
     }
 
-    const previousState = status.state
-    const userImpact = context?.userImpact || this.assessUserImpact(feature, error)
+    const previousState = status.state;
+    const userImpact = context?.userImpact || this.assessUserImpact(feature, error);
 
     // Determine appropriate degradation response
-    const degradationResponse = await this.determineDegradationResponse(feature, error, context)
+    const degradationResponse = await this.determineDegradationResponse(feature, error, context);
 
     // Apply degradation
-    const success = await this.applyDegradation(featureName, degradationResponse)
+    const success = await this.applyDegradation(featureName, degradationResponse);
 
     if (success) {
       // Update status
@@ -452,7 +452,7 @@ export class GracefulDegradationService {
         activeFallback: degradationResponse.fallbackUsed,
         degradedSince: Date.now(),
         performanceImpact: degradationResponse.performanceImpact,
-      })
+      });
 
       // Record degradation event
       this.recordDegradationEvent({
@@ -464,20 +464,20 @@ export class GracefulDegradationService {
         fallbackUsed: degradationResponse.fallbackUsed,
         expectedDuration: context?.expectedRecoveryTime,
         userImpact,
-      })
+      });
 
       // Notify user if appropriate
       if (this.shouldNotifyUser(feature, degradationResponse)) {
-        await this.notifyUserOfDegradation(feature, degradationResponse, userImpact)
+        await this.notifyUserOfDegradation(feature, degradationResponse, userImpact);
       }
 
       // Start recovery attempts if applicable
       if (degradationResponse.triggerRecovery) {
-        this.startRecoveryAttempts(featureName)
+        this.startRecoveryAttempts(featureName);
       }
 
       // Update system-wide degradation level
-      this.updateSystemDegradationLevel()
+      this.updateSystemDegradationLevel();
     }
   }
 
@@ -485,20 +485,20 @@ export class GracefulDegradationService {
    * Attempt feature recovery
    */
   public async attemptFeatureRecovery(featureName: string): Promise<boolean> {
-    const feature = this.features.get(featureName)
-    const status = this.featureStatus.get(featureName)
+    const feature = this.features.get(featureName);
+    const status = this.featureStatus.get(featureName);
 
     if (!feature || !status || status.state === FeatureState.AVAILABLE) {
-      return true
+      return true;
     }
 
     try {
       // Perform feature health check
-      const healthResult = await this.performHealthCheck(feature)
+      const healthResult = await this.performHealthCheck(feature);
 
       if (healthResult.success) {
         // Recovery successful
-        const previousState = status.state
+        const previousState = status.state;
 
         this.updateFeatureStatus(featureName, {
           state: FeatureState.AVAILABLE,
@@ -506,7 +506,7 @@ export class GracefulDegradationService {
           degradedSince: undefined,
           recoveryAttempts: 0,
           performanceImpact: 0,
-        })
+        });
 
         // Record recovery event
         this.recordDegradationEvent({
@@ -516,28 +516,28 @@ export class GracefulDegradationService {
           newState: FeatureState.AVAILABLE,
           reason: 'Automatic recovery successful',
           userImpact: 'none',
-        })
+        });
 
         // Notify user of recovery
         if (status.userNotified && this.notificationConfig.notifyOnRecovery) {
-          await this.notifyUserOfRecovery(feature)
+          await this.notifyUserOfRecovery(feature);
         }
 
         // Update system-wide degradation level
-        this.updateSystemDegradationLevel()
+        this.updateSystemDegradationLevel();
 
-        return true
+        return true;
       } else {
         // Recovery failed, increment attempt counter
         this.updateFeatureStatus(featureName, {
           recoveryAttempts: status.recoveryAttempts + 1,
-        })
+        });
 
-        return false
+        return false;
       }
     } catch (error) {
-      console.error(`[GracefulDegradation] Recovery attempt failed for ${featureName}:`, error)
-      return false
+      console.error(`[GracefulDegradation] Recovery attempt failed for ${featureName}:`, error);
+      return false;
     }
   }
 
@@ -545,45 +545,45 @@ export class GracefulDegradationService {
    * Get current system health overview
    */
   public getSystemHealth(): SystemHealth {
-    const features = Array.from(this.featureStatus.values())
-    const availableFeatures = features.filter((f) => f.state === FeatureState.AVAILABLE).length
+    const features = Array.from(this.featureStatus.values());
+    const availableFeatures = features.filter((f) => f.state === FeatureState.AVAILABLE).length;
     const degradedFeatures = features.filter(
       (f) => f.state === FeatureState.DEGRADED || f.state === FeatureState.FALLBACK,
-    ).length
-    const unavailableFeatures = features.filter((f) => f.state === FeatureState.UNAVAILABLE).length
+    ).length;
+    const unavailableFeatures = features.filter((f) => f.state === FeatureState.UNAVAILABLE).length;
 
     // Calculate estimated performance
-    const totalFeatures = features.length
+    const totalFeatures = features.length;
     const performanceScore =
       features.reduce((score, feature) => {
         switch (feature.state) {
           case FeatureState.AVAILABLE:
-            return score + 100
+            return score + 100;
           case FeatureState.DEGRADED:
-            return score + 70
+            return score + 70;
           case FeatureState.FALLBACK:
-            return score + 50
+            return score + 50;
           case FeatureState.UNAVAILABLE:
-            return score + 0
+            return score + 0;
           default:
-            return score + 50
+            return score + 50;
         }
-      }, 0) / totalFeatures
+      }, 0) / totalFeatures;
 
     // Determine user experience impact
-    let userExperienceImpact: SystemHealth['userExperienceImpact'] = 'none'
+    let userExperienceImpact: SystemHealth['userExperienceImpact'] = 'none';
     if (unavailableFeatures > 0 || this.currentDegradationLevel === DegradationLevel.CRITICAL) {
-      userExperienceImpact = 'severe'
+      userExperienceImpact = 'severe';
     } else if (degradedFeatures > 2 || this.currentDegradationLevel === DegradationLevel.SEVERE) {
-      userExperienceImpact = 'significant'
+      userExperienceImpact = 'significant';
     } else if (degradedFeatures > 1 || this.currentDegradationLevel === DegradationLevel.MODERATE) {
-      userExperienceImpact = 'moderate'
+      userExperienceImpact = 'moderate';
     } else if (degradedFeatures > 0 || this.currentDegradationLevel === DegradationLevel.MINOR) {
-      userExperienceImpact = 'minor'
+      userExperienceImpact = 'minor';
     }
 
     // Generate recommendations
-    const recommendations = this.generateRecommendations(features)
+    const recommendations = this.generateRecommendations(features);
 
     return {
       overallLevel: this.currentDegradationLevel,
@@ -593,7 +593,7 @@ export class GracefulDegradationService {
       estimatedPerformance: Math.round(performanceScore),
       userExperienceImpact,
       recommendedActions: recommendations,
-    }
+    };
   }
 
   /**
@@ -601,27 +601,27 @@ export class GracefulDegradationService {
    */
   public getFeatureStatus(featureName?: string): FeatureStatus | FeatureStatus[] {
     if (featureName) {
-      const status = this.featureStatus.get(featureName)
+      const status = this.featureStatus.get(featureName);
       if (!status) {
-        throw new Error(`Feature not found: ${featureName}`)
+        throw new Error(`Feature not found: ${featureName}`);
       }
-      return status
+      return status;
     }
 
-    return Array.from(this.featureStatus.values())
+    return Array.from(this.featureStatus.values());
   }
 
   /**
    * Get degradation history
    */
   public getDegradationHistory(featureName?: string, limit: number = 50): DegradationEvent[] {
-    let events = this.degradationHistory
+    let events = this.degradationHistory;
 
     if (featureName) {
-      events = events.filter((event) => event.feature === featureName)
+      events = events.filter((event) => event.feature === featureName);
     }
 
-    return events.sort((a, b) => b.timestamp - a.timestamp).slice(0, limit)
+    return events.sort((a, b) => b.timestamp - a.timestamp).slice(0, limit);
   }
 
   /**
@@ -632,30 +632,30 @@ export class GracefulDegradationService {
     state: FeatureState,
     fallbackName?: string,
   ): Promise<boolean> {
-    const feature = this.features.get(featureName)
+    const feature = this.features.get(featureName);
     if (!feature) {
-      return false
+      return false;
     }
 
-    const status = this.featureStatus.get(featureName)
+    const status = this.featureStatus.get(featureName);
     if (!status) {
-      return false
+      return false;
     }
 
-    const previousState = status.state
+    const previousState = status.state;
 
     // Apply the forced state
     if (state !== FeatureState.AVAILABLE && fallbackName) {
-      const fallback = feature.fallbackOptions.find((f) => f.name === fallbackName)
+      const fallback = feature.fallbackOptions.find((f) => f.name === fallbackName);
       if (fallback) {
         try {
-          await fallback.implementation()
+          await fallback.implementation();
         } catch (error) {
           console.error(
             `[GracefulDegradation] Failed to apply forced fallback ${fallbackName}:`,
             error,
-          )
-          return false
+          );
+          return false;
         }
       }
     }
@@ -664,7 +664,7 @@ export class GracefulDegradationService {
       state,
       activeFallback: fallbackName,
       degradedSince: state !== FeatureState.AVAILABLE ? Date.now() : undefined,
-    })
+    });
 
     // Record the forced change
     this.recordDegradationEvent({
@@ -675,127 +675,127 @@ export class GracefulDegradationService {
       reason: 'Manual override',
       fallbackUsed: fallbackName,
       userImpact: 'none',
-    })
+    });
 
-    this.updateSystemDegradationLevel()
-    return true
+    this.updateSystemDegradationLevel();
+    return true;
   }
 
   /**
    * Update system-wide degradation level
    */
   private updateSystemDegradationLevel(): void {
-    const features = Array.from(this.featureStatus.values())
+    const features = Array.from(this.featureStatus.values());
     const criticalFeatures = features.filter((f) => {
-      const config = this.features.get(f.name)
-      return config?.priority === 'critical'
-    })
+      const config = this.features.get(f.name);
+      return config?.priority === 'critical';
+    });
 
     const highFeatures = features.filter((f) => {
-      const config = this.features.get(f.name)
-      return config?.priority === 'high'
-    })
+      const config = this.features.get(f.name);
+      return config?.priority === 'high';
+    });
 
     // Count degraded/unavailable features by priority
     const criticalDegraded = criticalFeatures.filter(
       (f) => f.state !== FeatureState.AVAILABLE,
-    ).length
-    const highDegraded = highFeatures.filter((f) => f.state !== FeatureState.AVAILABLE).length
-    const totalDegraded = features.filter((f) => f.state !== FeatureState.AVAILABLE).length
+    ).length;
+    const highDegraded = highFeatures.filter((f) => f.state !== FeatureState.AVAILABLE).length;
+    const totalDegraded = features.filter((f) => f.state !== FeatureState.AVAILABLE).length;
 
     // Determine degradation level
-    let newLevel: DegradationLevel = DegradationLevel.NONE
+    let newLevel: DegradationLevel = DegradationLevel.NONE;
 
     if (criticalDegraded >= criticalFeatures.length) {
-      newLevel = DegradationLevel.CRITICAL
+      newLevel = DegradationLevel.CRITICAL;
     } else if (criticalDegraded > 0 || highDegraded >= highFeatures.length) {
-      newLevel = DegradationLevel.SEVERE
+      newLevel = DegradationLevel.SEVERE;
     } else if (highDegraded > 0 || totalDegraded >= features.length * 0.5) {
-      newLevel = DegradationLevel.MODERATE
+      newLevel = DegradationLevel.MODERATE;
     } else if (totalDegraded > 0) {
-      newLevel = DegradationLevel.MINOR
+      newLevel = DegradationLevel.MINOR;
     }
 
-    const previousLevel = this.currentDegradationLevel
-    this.currentDegradationLevel = newLevel
+    const previousLevel = this.currentDegradationLevel;
+    this.currentDegradationLevel = newLevel;
 
     // Log level changes
     if (newLevel !== previousLevel) {
       console.log(
         `[GracefulDegradation] System degradation level changed: ${previousLevel} → ${newLevel}`,
-      )
+      );
     }
   }
 
   // Helper methods for fallback implementations
   private async enableCacheOnlyTranslation(): Promise<boolean> {
     // Implementation would integrate with translation service to enable cache-only mode
-    console.log('[GracefulDegradation] Enabled cache-only translation mode')
-    return true
+    console.log('[GracefulDegradation] Enabled cache-only translation mode');
+    return true;
   }
 
   private async disableTranslation(): Promise<boolean> {
-    console.log('[GracefulDegradation] Disabled translation service')
-    return true
+    console.log('[GracefulDegradation] Disabled translation service');
+    return true;
   }
 
   private async useYouTubeAutoCaptions(): Promise<boolean> {
-    console.log('[GracefulDegradation] Switched to YouTube auto-captions')
-    return true
+    console.log('[GracefulDegradation] Switched to YouTube auto-captions');
+    return true;
   }
 
   private async disableSubtitles(): Promise<boolean> {
-    console.log('[GracefulDegradation] Disabled subtitle fetching')
-    return true
+    console.log('[GracefulDegradation] Disabled subtitle fetching');
+    return true;
   }
 
   private async useBasicTranslationOnly(): Promise<boolean> {
-    console.log('[GracefulDegradation] Using basic translation without dictionary')
-    return true
+    console.log('[GracefulDegradation] Using basic translation without dictionary');
+    return true;
   }
 
   private async disableDictionary(): Promise<boolean> {
-    console.log('[GracefulDegradation] Disabled dictionary service')
-    return true
+    console.log('[GracefulDegradation] Disabled dictionary service');
+    return true;
   }
 
   private async useBrowserTTS(): Promise<boolean> {
-    console.log('[GracefulDegradation] Switched to browser TTS')
-    return true
+    console.log('[GracefulDegradation] Switched to browser TTS');
+    return true;
   }
 
   private async disableTTS(): Promise<boolean> {
-    console.log('[GracefulDegradation] Disabled TTS service')
-    return true
+    console.log('[GracefulDegradation] Disabled TTS service');
+    return true;
   }
 
   private async useSessionStorage(): Promise<boolean> {
-    console.log('[GracefulDegradation] Switched to session storage')
-    return true
+    console.log('[GracefulDegradation] Switched to session storage');
+    return true;
   }
 
   private async useMemoryStorage(): Promise<boolean> {
-    console.log('[GracefulDegradation] Switched to memory storage')
-    return true
+    console.log('[GracefulDegradation] Switched to memory storage');
+    return true;
   }
 
   private async useLimitedYouTubeIntegration(): Promise<boolean> {
-    console.log('[GracefulDegradation] Using limited YouTube integration')
-    return true
+    console.log('[GracefulDegradation] Using limited YouTube integration');
+    return true;
   }
 
   private async disableYouTubeIntegration(): Promise<boolean> {
-    console.log('[GracefulDegradation] Disabled YouTube integration')
-    return true
+    console.log('[GracefulDegradation] Disabled YouTube integration');
+    return true;
   }
 
   private async checkAudioPermissions(): Promise<boolean> {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      stream.getTracks().forEach((track) => track.stop())
-      return true
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach((track) => track.stop());
+      return true;
     } catch {
-      return false
+      return false;
     }
   }
 
@@ -807,18 +807,18 @@ export class GracefulDegradationService {
    */
   private startSystemHealthMonitoring(): void {
     this.systemHealthCheckTimer = window.setInterval(() => {
-      this.performSystemHealthCheck()
-    }, 30000) // Every 30 seconds
+      this.performSystemHealthCheck();
+    }, 30000); // Every 30 seconds
   }
 
   /**
    * Perform system-wide health check
    */
   private async performSystemHealthCheck(): Promise<void> {
-    this.lastSystemHealthCheck = Date.now()
+    this.lastSystemHealthCheck = Date.now();
 
     // Check overall system performance
-    const systemHealth = this.getSystemHealth()
+    const systemHealth = this.getSystemHealth();
 
     // Log health status if degraded
     if (systemHealth.overallLevel !== DegradationLevel.NONE) {
@@ -830,7 +830,7 @@ export class GracefulDegradationService {
           unavailable: systemHealth.unavailableFeatures,
           performance: systemHealth.estimatedPerformance,
         },
-      )
+      );
     }
   }
 
@@ -838,47 +838,47 @@ export class GracefulDegradationService {
    * Start health checking for a specific feature
    */
   private startFeatureHealthCheck(featureName: string): void {
-    const feature = this.features.get(featureName)
-    if (!feature) return
+    const feature = this.features.get(featureName);
+    if (!feature) return;
 
     const timer = window.setInterval(async () => {
-      const healthResult = await this.performHealthCheck(feature)
-      this.updateHealthCheckResult(featureName, healthResult)
+      const healthResult = await this.performHealthCheck(feature);
+      this.updateHealthCheckResult(featureName, healthResult);
 
       // Trigger recovery if feature is degraded but health check passes
-      const status = this.featureStatus.get(featureName)
+      const status = this.featureStatus.get(featureName);
       if (status?.state !== FeatureState.AVAILABLE && healthResult.success) {
-        await this.attemptFeatureRecovery(featureName)
+        await this.attemptFeatureRecovery(featureName);
       }
-    }, feature.healthCheckInterval)
+    }, feature.healthCheckInterval);
 
-    this.healthCheckTimers.set(featureName, timer)
+    this.healthCheckTimers.set(featureName, timer);
   }
 
   /**
    * Perform health check for a specific feature
    */
   private async performHealthCheck(feature: FeatureConfig): Promise<HealthCheckResult> {
-    const startTime = performance.now()
+    const startTime = performance.now();
 
     try {
       // Basic health check implementation
       // In a real implementation, this would test feature-specific functionality
-      const success = await this.testFeatureHealth(feature.name)
-      const responseTime = performance.now() - startTime
+      const success = await this.testFeatureHealth(feature.name);
+      const responseTime = performance.now() - startTime;
 
       return {
         timestamp: Date.now(),
         success,
         responseTime,
-      }
+      };
     } catch (error) {
       return {
         timestamp: Date.now(),
         success: false,
         error: error instanceof Error ? error.message : String(error),
         responseTime: performance.now() - startTime,
-      }
+      };
     }
   }
 
@@ -890,85 +890,85 @@ export class GracefulDegradationService {
     // Real implementation would test feature-specific functionality
     switch (featureName) {
       case 'translation':
-        return this.testTranslationHealth()
+        return this.testTranslationHealth();
       case 'subtitles':
-        return this.testSubtitleHealth()
+        return this.testSubtitleHealth();
       case 'dictionary':
-        return this.testDictionaryHealth()
+        return this.testDictionaryHealth();
       case 'tts':
-        return this.testTTSHealth()
+        return this.testTTSHealth();
       case 'storage':
-        return this.testStorageHealth()
+        return this.testStorageHealth();
       case 'youtube':
-        return this.testYouTubeHealth()
+        return this.testYouTubeHealth();
       default:
-        return true
+        return true;
     }
   }
 
   // Feature-specific health test methods
   private async testTranslationHealth(): Promise<boolean> {
     // Test translation service availability
-    return true // Placeholder
+    return true; // Placeholder
   }
 
   private async testSubtitleHealth(): Promise<boolean> {
     // Test subtitle fetching capability
-    return true // Placeholder
+    return true; // Placeholder
   }
 
   private async testDictionaryHealth(): Promise<boolean> {
     // Test dictionary service
-    return true // Placeholder
+    return true; // Placeholder
   }
 
   private async testTTSHealth(): Promise<boolean> {
     // Test TTS service
-    return true // Placeholder
+    return true; // Placeholder
   }
 
   private async testStorageHealth(): Promise<boolean> {
     // Test storage accessibility
     try {
-      await chrome.storage.local.set({ 'health-check': Date.now() })
-      await chrome.storage.local.remove('health-check')
-      return true
+      await chrome.storage.local.set({ 'health-check': Date.now() });
+      await chrome.storage.local.remove('health-check');
+      return true;
     } catch {
-      return false
+      return false;
     }
   }
 
   private async testYouTubeHealth(): Promise<boolean> {
     // Test YouTube integration
-    return document.querySelector('video') !== null
+    return document.querySelector('video') !== null;
   }
 
   /**
    * Update health check result for a feature
    */
   private updateHealthCheckResult(featureName: string, result: HealthCheckResult): void {
-    const status = this.featureStatus.get(featureName)
-    if (!status) return
+    const status = this.featureStatus.get(featureName);
+    if (!status) return;
 
-    const updatedResults = [...status.healthCheckResults, result].slice(-10) // Keep last 10 results
+    const updatedResults = [...status.healthCheckResults, result].slice(-10); // Keep last 10 results
 
     this.updateFeatureStatus(featureName, {
       lastHealthCheck: result.timestamp,
       healthCheckResults: updatedResults,
-    })
+    });
   }
 
   /**
    * Update feature status
    */
   private updateFeatureStatus(featureName: string, updates: Partial<FeatureStatus>): void {
-    const current = this.featureStatus.get(featureName)
-    if (!current) return
+    const current = this.featureStatus.get(featureName);
+    if (!current) return;
 
     this.featureStatus.set(featureName, {
       ...current,
       ...updates,
-    })
+    });
   }
 
   // Placeholder methods for remaining functionality
@@ -979,15 +979,15 @@ export class GracefulDegradationService {
     // Assess impact based on feature priority and error type
     switch (feature.priority) {
       case 'critical':
-        return 'high'
+        return 'high';
       case 'high':
-        return 'medium'
+        return 'medium';
       case 'medium':
-        return 'low'
+        return 'low';
       case 'low':
-        return 'none'
+        return 'none';
       default:
-        return 'low'
+        return 'low';
     }
   }
 
@@ -996,44 +996,44 @@ export class GracefulDegradationService {
     error: Error,
     context?: any,
   ): Promise<{
-    newState: FeatureState
-    fallbackUsed?: string
-    performanceImpact: number
-    triggerRecovery: boolean
+    newState: FeatureState;
+    fallbackUsed?: string;
+    performanceImpact: number;
+    triggerRecovery: boolean;
   }> {
     // Determine best fallback option
-    const fallback = feature.fallbackOptions[0] // Use first fallback for now
+    const fallback = feature.fallbackOptions[0]; // Use first fallback for now
 
     return {
       newState: FeatureState.FALLBACK,
       fallbackUsed: fallback?.name,
       performanceImpact: this.calculatePerformanceImpact(fallback?.performanceImpact || 'none'),
       triggerRecovery: true,
-    }
+    };
   }
 
   private calculatePerformanceImpact(impact: 'none' | 'low' | 'medium' | 'high'): number {
     switch (impact) {
       case 'none':
-        return 0
+        return 0;
       case 'low':
-        return 10
+        return 10;
       case 'medium':
-        return 25
+        return 25;
       case 'high':
-        return 50
+        return 50;
       default:
-        return 0
+        return 0;
     }
   }
 
   private async applyDegradation(featureName: string, response: any): Promise<boolean> {
     // Apply the degradation response
-    return true // Placeholder
+    return true; // Placeholder
   }
 
   private shouldNotifyUser(feature: FeatureConfig, response: any): boolean {
-    return this.notificationConfig.enabled && this.notificationConfig.notifyOnDegradation
+    return this.notificationConfig.enabled && this.notificationConfig.notifyOnDegradation;
   }
 
   private async notifyUserOfDegradation(
@@ -1042,62 +1042,62 @@ export class GracefulDegradationService {
     userImpact: string,
   ): Promise<void> {
     // Send user notification about degradation
-    console.log(`[GracefulDegradation] User notification: ${feature.name} degraded`)
+    console.log(`[GracefulDegradation] User notification: ${feature.name} degraded`);
   }
 
   private async notifyUserOfRecovery(feature: FeatureConfig): Promise<void> {
     // Send user notification about recovery
-    console.log(`[GracefulDegradation] User notification: ${feature.name} recovered`)
+    console.log(`[GracefulDegradation] User notification: ${feature.name} recovered`);
   }
 
   private startRecoveryAttempts(featureName: string): void {
     // Start recovery timer
-    const feature = this.features.get(featureName)
-    if (!feature) return
+    const feature = this.features.get(featureName);
+    if (!feature) return;
 
-    const interval = feature.recoveryStrategy.interval || 60000
+    const interval = feature.recoveryStrategy.interval || 60000;
     const timer = window.setInterval(async () => {
-      const success = await this.attemptFeatureRecovery(featureName)
+      const success = await this.attemptFeatureRecovery(featureName);
       if (success) {
-        clearInterval(timer)
-        this.recoveryTimers.delete(featureName)
+        clearInterval(timer);
+        this.recoveryTimers.delete(featureName);
       }
-    }, interval)
+    }, interval);
 
-    this.recoveryTimers.set(featureName, timer)
+    this.recoveryTimers.set(featureName, timer);
   }
 
   private recordDegradationEvent(event: DegradationEvent): void {
-    this.degradationHistory.push(event)
+    this.degradationHistory.push(event);
 
     // Keep only last 1000 events
     if (this.degradationHistory.length > 1000) {
-      this.degradationHistory.shift()
+      this.degradationHistory.shift();
     }
   }
 
   private generateRecommendations(features: FeatureStatus[]): string[] {
-    const recommendations: string[] = []
+    const recommendations: string[] = [];
 
-    const degradedFeatures = features.filter((f) => f.state !== FeatureState.AVAILABLE)
+    const degradedFeatures = features.filter((f) => f.state !== FeatureState.AVAILABLE);
 
     if (degradedFeatures.length > 0) {
-      recommendations.push('Some features are experiencing issues')
+      recommendations.push('Some features are experiencing issues');
 
       if (degradedFeatures.some((f) => f.name === 'translation')) {
-        recommendations.push('Try refreshing the page to restore translation')
+        recommendations.push('Try refreshing the page to restore translation');
       }
 
       if (degradedFeatures.some((f) => f.name === 'subtitles')) {
-        recommendations.push('Check your internet connection for subtitle loading')
+        recommendations.push('Check your internet connection for subtitle loading');
       }
 
       if (degradedFeatures.length > 2) {
-        recommendations.push('Consider disabling other browser extensions temporarily')
+        recommendations.push('Consider disabling other browser extensions temporarily');
       }
     }
 
-    return recommendations
+    return recommendations;
   }
 
   /**
@@ -1106,23 +1106,23 @@ export class GracefulDegradationService {
   public destroy(): void {
     // Clear all timers
     if (this.systemHealthCheckTimer) {
-      clearInterval(this.systemHealthCheckTimer)
+      clearInterval(this.systemHealthCheckTimer);
     }
 
     for (const timer of this.healthCheckTimers.values()) {
-      clearInterval(timer)
+      clearInterval(timer);
     }
 
     for (const timer of this.recoveryTimers.values()) {
-      clearInterval(timer)
+      clearInterval(timer);
     }
 
     // Clear maps
-    this.features.clear()
-    this.featureStatus.clear()
-    this.healthCheckTimers.clear()
-    this.recoveryTimers.clear()
+    this.features.clear();
+    this.featureStatus.clear();
+    this.healthCheckTimers.clear();
+    this.recoveryTimers.clear();
 
-    GracefulDegradationService.instance = null
+    GracefulDegradationService.instance = null;
   }
 }

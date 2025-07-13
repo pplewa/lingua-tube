@@ -5,10 +5,10 @@
  * including configuration options, methods, events, and integration patterns.
  */
 
-import { DictionaryApiService } from '../translation/DictionaryApiService'
-import { TranslationApiService } from '../translation/TranslationApiService'
-import { TTSService } from '../translation/TTSService'
-import { StorageService } from '../storage'
+import { DictionaryApiService } from '../translation/DictionaryApiService';
+import { TranslationApiService } from '../translation/TranslationApiService';
+import { TTSService } from '../translation/TTSService';
+import { StorageService } from '../storage';
 
 // ========================================
 // Configuration Interface
@@ -17,60 +17,60 @@ import { StorageService } from '../storage'
 export interface WordLookupPopupConfig {
   // Visual Configuration
   readonly appearance: {
-    readonly maxWidth: number // pixels, default: 400
-    readonly maxHeight: number // pixels, default: 600
-    readonly borderRadius: number // pixels, default: 12
-    readonly backgroundColor: string // default: '#ffffff'
-    readonly textColor: string // default: '#2d3748'
-    readonly accentColor: string // default: '#4299e1'
-    readonly shadowColor: string // default: 'rgba(0, 0, 0, 0.15)'
-    readonly fontSize: number // pixels, default: 14
-    readonly padding: number // pixels, default: 20
-    readonly zIndex: number // default: 2147483647
-  }
+    readonly maxWidth: number; // pixels, default: 400
+    readonly maxHeight: number; // pixels, default: 600
+    readonly borderRadius: number; // pixels, default: 12
+    readonly backgroundColor: string; // default: '#ffffff'
+    readonly textColor: string; // default: '#2d3748'
+    readonly accentColor: string; // default: '#4299e1'
+    readonly shadowColor: string; // default: 'rgba(0, 0, 0, 0.15)'
+    readonly fontSize: number; // pixels, default: 14
+    readonly padding: number; // pixels, default: 20
+    readonly zIndex: number; // default: 2147483647
+  };
 
   // Animation Configuration
   readonly animations: {
-    readonly enabled: boolean // default: true
-    readonly duration: number // ms, default: 250
-    readonly easing: string // default: 'cubic-bezier(0.4, 0, 0.2, 1)'
-    readonly respectsReducedMotion: boolean // default: true
-  }
+    readonly enabled: boolean; // default: true
+    readonly duration: number; // ms, default: 250
+    readonly easing: string; // default: 'cubic-bezier(0.4, 0, 0.2, 1)'
+    readonly respectsReducedMotion: boolean; // default: true
+  };
 
   // Behavior Configuration
   readonly behavior: {
-    readonly autoHideDelay: number // ms, 0 = no auto-hide, default: 0
-    readonly clickOutsideToClose: boolean // default: true
-    readonly escapeKeyToClose: boolean // default: true
-    readonly focusTrapping: boolean // default: true
-    readonly loadingTimeout: number // ms, default: 15000
-  }
+    readonly autoHideDelay: number; // ms, 0 = no auto-hide, default: 0
+    readonly clickOutsideToClose: boolean; // default: true
+    readonly escapeKeyToClose: boolean; // default: true
+    readonly focusTrapping: boolean; // default: true
+    readonly loadingTimeout: number; // ms, default: 15000
+  };
 
   // Content Configuration
   readonly content: {
-    readonly showPhonetics: boolean // default: true
-    readonly showExamples: boolean // default: true
-    readonly maxDefinitions: number // default: 5
-    readonly maxExamples: number // default: 3
-    readonly contextWindow: number // words around target for context, default: 3
-  }
+    readonly showPhonetics: boolean; // default: true
+    readonly showExamples: boolean; // default: true
+    readonly maxDefinitions: number; // default: 5
+    readonly maxExamples: number; // default: 3
+    readonly contextWindow: number; // words around target for context, default: 3
+  };
 
   // Feature Configuration
   readonly features: {
-    readonly enableTTS: boolean // default: true
-    readonly enableVocabulary: boolean // default: true
-    readonly enableTranslation: boolean // default: true
-    readonly enableDefinitions: boolean // default: true
-    readonly enableProgressiveLoading: boolean // default: true
-  }
+    readonly enableTTS: boolean; // default: true
+    readonly enableVocabulary: boolean; // default: true
+    readonly enableTranslation: boolean; // default: true
+    readonly enableDefinitions: boolean; // default: true
+    readonly enableProgressiveLoading: boolean; // default: true
+  };
 
   // Accessibility Configuration
   readonly accessibility: {
-    readonly announceContent: boolean // default: true
-    readonly keyboardNavigation: boolean // default: true
-    readonly screenReaderSupport: boolean // default: true
-    readonly highContrastMode: boolean // default: false
-  }
+    readonly announceContent: boolean; // default: true
+    readonly keyboardNavigation: boolean; // default: true
+    readonly screenReaderSupport: boolean; // default: true
+    readonly highContrastMode: boolean; // default: false
+  };
 }
 
 // ========================================
@@ -78,49 +78,49 @@ export interface WordLookupPopupConfig {
 // ========================================
 
 export interface WordLookupData {
-  readonly word: string
-  readonly sourceLanguage: string
-  readonly targetLanguage: string
-  readonly context?: string
-  readonly position: PopupPosition
-  readonly timestamp?: number
+  readonly word: string;
+  readonly sourceLanguage: string;
+  readonly targetLanguage: string;
+  readonly context?: string;
+  readonly position: PopupPosition;
+  readonly timestamp?: number;
 }
 
 export interface PopupContent {
-  readonly word: string
-  readonly translation: string
-  readonly phonetic?: string
-  readonly definitions: Definition[]
-  readonly examples: Example[]
-  readonly partOfSpeech?: string
-  readonly sourceLanguage: string
-  readonly targetLanguage: string
-  readonly confidence?: number // 0-1 score for translation quality
-  readonly etymology?: string
-  readonly frequency?: 'common' | 'uncommon' | 'rare'
+  readonly word: string;
+  readonly translation: string;
+  readonly phonetic?: string;
+  readonly definitions: Definition[];
+  readonly examples: Example[];
+  readonly partOfSpeech?: string;
+  readonly sourceLanguage: string;
+  readonly targetLanguage: string;
+  readonly confidence?: number; // 0-1 score for translation quality
+  readonly etymology?: string;
+  readonly frequency?: 'common' | 'uncommon' | 'rare';
 }
 
 export interface Definition {
-  readonly text: string
-  readonly partOfSpeech?: string
-  readonly level?: 'beginner' | 'intermediate' | 'advanced'
-  readonly source?: string
-  readonly examples?: string[]
+  readonly text: string;
+  readonly partOfSpeech?: string;
+  readonly level?: 'beginner' | 'intermediate' | 'advanced';
+  readonly source?: string;
+  readonly examples?: string[];
 }
 
 export interface Example {
-  readonly text: string
-  readonly translation?: string
-  readonly source?: string
-  readonly context?: string
+  readonly text: string;
+  readonly translation?: string;
+  readonly source?: string;
+  readonly context?: string;
 }
 
 export interface PopupPosition {
-  readonly x: number
-  readonly y: number
-  readonly placement?: 'top' | 'bottom' | 'left' | 'right' | 'auto'
-  readonly offset?: number
-  readonly anchorElement?: HTMLElement
+  readonly x: number;
+  readonly y: number;
+  readonly placement?: 'top' | 'bottom' | 'left' | 'right' | 'auto';
+  readonly offset?: number;
+  readonly anchorElement?: HTMLElement;
 }
 
 // ========================================
@@ -128,54 +128,54 @@ export interface PopupPosition {
 // ========================================
 
 export interface PopupEventData {
-  readonly popup: WordLookupPopupAPI
-  readonly word: string
-  readonly timestamp: number
+  readonly popup: WordLookupPopupAPI;
+  readonly word: string;
+  readonly timestamp: number;
 }
 
 export interface PopupShowEventData extends PopupEventData {
-  readonly position: PopupPosition
-  readonly content?: PopupContent
+  readonly position: PopupPosition;
+  readonly content?: PopupContent;
 }
 
 export interface PopupHideEventData extends PopupEventData {
-  readonly reason: 'user' | 'timeout' | 'escape' | 'clickOutside' | 'programmatic'
-  readonly duration: number // ms popup was visible
+  readonly reason: 'user' | 'timeout' | 'escape' | 'clickOutside' | 'programmatic';
+  readonly duration: number; // ms popup was visible
 }
 
 export interface PopupContentEventData extends PopupEventData {
-  readonly content: PopupContent
-  readonly loadTime: number // ms
+  readonly content: PopupContent;
+  readonly loadTime: number; // ms
 }
 
 export interface PopupErrorEventData extends PopupEventData {
-  readonly error: Error
-  readonly context: string
-  readonly recoverable: boolean
+  readonly error: Error;
+  readonly context: string;
+  readonly recoverable: boolean;
 }
 
 export interface PopupActionEventData extends PopupEventData {
-  readonly action: 'tts' | 'save' | 'translate' | 'define' | 'copy'
-  readonly success: boolean
-  readonly data?: any
+  readonly action: 'tts' | 'save' | 'translate' | 'define' | 'copy';
+  readonly success: boolean;
+  readonly data?: any;
 }
 
 export interface PopupStateEventData extends PopupEventData {
-  readonly state: 'loading' | 'ready' | 'error' | 'hidden'
-  readonly previousState?: string
+  readonly state: 'loading' | 'ready' | 'error' | 'hidden';
+  readonly previousState?: string;
 }
 
 // Event handler types
-export type PopupEventHandler<T = PopupEventData> = (data: T) => void
+export type PopupEventHandler<T = PopupEventData> = (data: T) => void;
 
 export interface PopupEventHandlers {
-  onShow?: PopupEventHandler<PopupShowEventData>
-  onHide?: PopupEventHandler<PopupHideEventData>
-  onContentLoaded?: PopupEventHandler<PopupContentEventData>
-  onError?: PopupEventHandler<PopupErrorEventData>
-  onAction?: PopupEventHandler<PopupActionEventData>
-  onStateChange?: PopupEventHandler<PopupStateEventData>
-  onPositionChange?: PopupEventHandler<PopupShowEventData>
+  onShow?: PopupEventHandler<PopupShowEventData>;
+  onHide?: PopupEventHandler<PopupHideEventData>;
+  onContentLoaded?: PopupEventHandler<PopupContentEventData>;
+  onError?: PopupEventHandler<PopupErrorEventData>;
+  onAction?: PopupEventHandler<PopupActionEventData>;
+  onStateChange?: PopupEventHandler<PopupStateEventData>;
+  onPositionChange?: PopupEventHandler<PopupShowEventData>;
 }
 
 // ========================================
@@ -183,18 +183,18 @@ export interface PopupEventHandlers {
 // ========================================
 
 export interface PopupServiceDependencies {
-  readonly dictionaryService: DictionaryApiService
-  readonly translationService: TranslationApiService
-  readonly ttsService: TTSService
-  readonly storageService: StorageService
+  readonly dictionaryService: DictionaryApiService;
+  readonly translationService: TranslationApiService;
+  readonly ttsService: TTSService;
+  readonly storageService: StorageService;
 }
 
 export interface PopupServiceConfig {
-  readonly retryAttempts: number // default: 3
-  readonly retryDelay: number // ms, default: 1000
-  readonly cacheEnabled: boolean // default: true
-  readonly cacheTTL: number // ms, default: 3600000 (1 hour)
-  readonly batchRequests: boolean // default: false
+  readonly retryAttempts: number; // default: 3
+  readonly retryDelay: number; // ms, default: 1000
+  readonly cacheEnabled: boolean; // default: true
+  readonly cacheTTL: number; // ms, default: 3600000 (1 hour)
+  readonly batchRequests: boolean; // default: false
 }
 
 // ========================================
@@ -202,20 +202,20 @@ export interface PopupServiceConfig {
 // ========================================
 
 export interface PopupState {
-  readonly isVisible: boolean
-  readonly isLoading: boolean
-  readonly currentWord: string | null
-  readonly currentContent: PopupContent | null
-  readonly currentPosition: PopupPosition | null
-  readonly error: Error | null
-  readonly loadingActions: Set<string>
-  readonly focusedElement: HTMLElement | null
+  readonly isVisible: boolean;
+  readonly isLoading: boolean;
+  readonly currentWord: string | null;
+  readonly currentContent: PopupContent | null;
+  readonly currentPosition: PopupPosition | null;
+  readonly error: Error | null;
+  readonly loadingActions: Set<string>;
+  readonly focusedElement: HTMLElement | null;
 }
 
 export interface PopupStateManager {
-  getState(): PopupState
-  subscribe(listener: (state: PopupState) => void): () => void
-  emit(event: string, data: any): void
+  getState(): PopupState;
+  subscribe(listener: (state: PopupState) => void): () => void;
+  emit(event: string, data: any): void;
 }
 
 // ========================================
@@ -232,31 +232,31 @@ export interface WordLookupPopupAPI {
    * @param data - Word and position information
    * @returns Promise that resolves when popup is shown
    */
-  show(data: WordLookupData): Promise<void>
+  show(data: WordLookupData): Promise<void>;
 
   /**
    * Hide the popup
    * @param reason - Reason for hiding (default: 'programmatic')
    * @returns Promise that resolves when popup is hidden
    */
-  hide(reason?: 'user' | 'timeout' | 'escape' | 'clickOutside' | 'programmatic'): Promise<void>
+  hide(reason?: 'user' | 'timeout' | 'escape' | 'clickOutside' | 'programmatic'): Promise<void>;
 
   /**
    * Update popup content without re-showing
    * @param content - New content to display
    */
-  updateContent(content: PopupContent): void
+  updateContent(content: PopupContent): void;
 
   /**
    * Update popup position
    * @param position - New position
    */
-  updatePosition(position: PopupPosition): void
+  updatePosition(position: PopupPosition): void;
 
   /**
    * Destroy the popup and clean up resources
    */
-  destroy(): void
+  destroy(): void;
 
   // ========================================
   // State Management
@@ -265,27 +265,27 @@ export interface WordLookupPopupAPI {
   /**
    * Get current popup state
    */
-  getState(): PopupState
+  getState(): PopupState;
 
   /**
    * Check if popup is currently visible
    */
-  isVisible(): boolean
+  isVisible(): boolean;
 
   /**
    * Check if popup is currently loading
    */
-  isLoading(): boolean
+  isLoading(): boolean;
 
   /**
    * Get current word being looked up
    */
-  getCurrentWord(): string | null
+  getCurrentWord(): string | null;
 
   /**
    * Get current content
    */
-  getCurrentContent(): PopupContent | null
+  getCurrentContent(): PopupContent | null;
 
   // ========================================
   // Configuration Management
@@ -295,17 +295,17 @@ export interface WordLookupPopupAPI {
    * Update popup configuration
    * @param config - Partial configuration to merge
    */
-  updateConfig(config: Partial<WordLookupPopupConfig>): void
+  updateConfig(config: Partial<WordLookupPopupConfig>): void;
 
   /**
    * Get current configuration
    */
-  getConfig(): WordLookupPopupConfig
+  getConfig(): WordLookupPopupConfig;
 
   /**
    * Reset configuration to defaults
    */
-  resetConfig(): void
+  resetConfig(): void;
 
   // ========================================
   // Event Management
@@ -316,28 +316,28 @@ export interface WordLookupPopupAPI {
    * @param event - Event name
    * @param handler - Event handler function
    */
-  on<K extends keyof PopupEventHandlers>(event: K, handler: PopupEventHandlers[K]): void
+  on<K extends keyof PopupEventHandlers>(event: K, handler: PopupEventHandlers[K]): void;
 
   /**
    * Remove event listener
    * @param event - Event name
    * @param handler - Event handler function (optional, removes all if not provided)
    */
-  off<K extends keyof PopupEventHandlers>(event: K, handler?: PopupEventHandlers[K]): void
+  off<K extends keyof PopupEventHandlers>(event: K, handler?: PopupEventHandlers[K]): void;
 
   /**
    * Add one-time event listener
    * @param event - Event name
    * @param handler - Event handler function
    */
-  once<K extends keyof PopupEventHandlers>(event: K, handler: PopupEventHandlers[K]): void
+  once<K extends keyof PopupEventHandlers>(event: K, handler: PopupEventHandlers[K]): void;
 
   /**
    * Emit custom event
    * @param event - Event name
    * @param data - Event data
    */
-  emit(event: string, data: any): void
+  emit(event: string, data: any): void;
 
   // ========================================
   // Action Methods
@@ -347,24 +347,24 @@ export interface WordLookupPopupAPI {
    * Trigger text-to-speech for current word
    * @param options - TTS options
    */
-  playTTS(options?: TTSOptions): Promise<void>
+  playTTS(options?: TTSOptions): Promise<void>;
 
   /**
    * Save current word to vocabulary
    * @param options - Save options
    */
-  saveToVocabulary(options?: VocabularySaveOptions): Promise<void>
+  saveToVocabulary(options?: VocabularySaveOptions): Promise<void>;
 
   /**
    * Copy content to clipboard
    * @param content - Content to copy ('word', 'translation', 'definition', 'all')
    */
-  copyToClipboard(content: 'word' | 'translation' | 'definition' | 'all'): Promise<void>
+  copyToClipboard(content: 'word' | 'translation' | 'definition' | 'all'): Promise<void>;
 
   /**
    * Refresh content (re-fetch from services)
    */
-  refreshContent(): Promise<void>
+  refreshContent(): Promise<void>;
 
   // ========================================
   // Accessibility Methods
@@ -373,25 +373,25 @@ export interface WordLookupPopupAPI {
   /**
    * Set focus to popup
    */
-  focus(): void
+  focus(): void;
 
   /**
    * Enable/disable click-outside detection
    * @param enabled - Whether to enable click-outside
    */
-  setClickOutsideEnabled(enabled: boolean): void
+  setClickOutsideEnabled(enabled: boolean): void;
 
   /**
    * Enable/disable keyboard navigation
    * @param enabled - Whether to enable keyboard navigation
    */
-  setKeyboardNavigationEnabled(enabled: boolean): void
+  setKeyboardNavigationEnabled(enabled: boolean): void;
 
   /**
    * Announce content to screen readers
    * @param message - Message to announce
    */
-  announce(message: string): void
+  announce(message: string): void;
 
   // ========================================
   // Advanced Methods
@@ -402,22 +402,22 @@ export interface WordLookupPopupAPI {
    * @param word - Word to preload
    * @param languages - Source and target languages
    */
-  preloadWord(word: string, languages: { source: string; target: string }): Promise<void>
+  preloadWord(word: string, languages: { source: string; target: string }): Promise<void>;
 
   /**
    * Clear content cache
    */
-  clearCache(): void
+  clearCache(): void;
 
   /**
    * Get performance metrics
    */
-  getMetrics(): PopupMetrics
+  getMetrics(): PopupMetrics;
 
   /**
    * Export current state for debugging
    */
-  exportState(): any
+  exportState(): any;
 }
 
 // ========================================
@@ -425,26 +425,26 @@ export interface WordLookupPopupAPI {
 // ========================================
 
 export interface TTSOptions {
-  readonly rate?: number // 0.1-10, default: 1
-  readonly pitch?: number // 0-2, default: 1
-  readonly volume?: number // 0-1, default: 1
-  readonly voice?: string // voice name
-  readonly lang?: string // language code
+  readonly rate?: number; // 0.1-10, default: 1
+  readonly pitch?: number; // 0-2, default: 1
+  readonly volume?: number; // 0-1, default: 1
+  readonly voice?: string; // voice name
+  readonly lang?: string; // language code
 }
 
 export interface VocabularySaveOptions {
-  readonly difficulty?: 'easy' | 'medium' | 'hard'
-  readonly tags?: string[]
-  readonly notes?: string
-  readonly context?: string
+  readonly difficulty?: 'easy' | 'medium' | 'hard';
+  readonly tags?: string[];
+  readonly notes?: string;
+  readonly context?: string;
 }
 
 export interface PopupMetrics {
-  readonly showCount: number
-  readonly averageLoadTime: number
-  readonly errorRate: number
-  readonly cacheHitRate: number
-  readonly averageVisibilityDuration: number
+  readonly showCount: number;
+  readonly averageLoadTime: number;
+  readonly errorRate: number;
+  readonly cacheHitRate: number;
+  readonly averageVisibilityDuration: number;
 }
 
 // ========================================
@@ -452,32 +452,32 @@ export interface PopupMetrics {
 // ========================================
 
 export interface PopupBuilder {
-  withConfig(config: Partial<WordLookupPopupConfig>): PopupBuilder
-  withServices(services: PopupServiceDependencies): PopupBuilder
-  withEventHandlers(handlers: PopupEventHandlers): PopupBuilder
-  withTheme(theme: PopupTheme): PopupBuilder
-  build(): WordLookupPopupAPI
+  withConfig(config: Partial<WordLookupPopupConfig>): PopupBuilder;
+  withServices(services: PopupServiceDependencies): PopupBuilder;
+  withEventHandlers(handlers: PopupEventHandlers): PopupBuilder;
+  withTheme(theme: PopupTheme): PopupBuilder;
+  build(): WordLookupPopupAPI;
 }
 
 export interface PopupTheme {
-  readonly name: string
+  readonly name: string;
   readonly colors: {
-    readonly background: string
-    readonly text: string
-    readonly accent: string
-    readonly border: string
-    readonly shadow: string
-  }
+    readonly background: string;
+    readonly text: string;
+    readonly accent: string;
+    readonly border: string;
+    readonly shadow: string;
+  };
   readonly typography: {
-    readonly fontFamily: string
-    readonly fontSize: number
-    readonly lineHeight: number
-  }
+    readonly fontFamily: string;
+    readonly fontSize: number;
+    readonly lineHeight: number;
+  };
   readonly spacing: {
-    readonly padding: number
-    readonly margin: number
-    readonly borderRadius: number
-  }
+    readonly padding: number;
+    readonly margin: number;
+    readonly borderRadius: number;
+  };
 }
 
 // ========================================
@@ -485,18 +485,18 @@ export interface PopupTheme {
 // ========================================
 
 export interface IntegrationConfig {
-  readonly containerSelector?: string
-  readonly excludeSelectors?: string[]
-  readonly wordDetectionPattern?: RegExp
-  readonly autoAttach?: boolean
-  readonly delegatedEvents?: boolean
+  readonly containerSelector?: string;
+  readonly excludeSelectors?: string[];
+  readonly wordDetectionPattern?: RegExp;
+  readonly autoAttach?: boolean;
+  readonly delegatedEvents?: boolean;
 }
 
 export interface PopupIntegration {
-  attach(element: HTMLElement, config?: IntegrationConfig): void
-  detach(element: HTMLElement): void
-  isAttached(element: HTMLElement): boolean
-  getAttachedElements(): HTMLElement[]
+  attach(element: HTMLElement, config?: IntegrationConfig): void;
+  detach(element: HTMLElement): void;
+  isAttached(element: HTMLElement): boolean;
+  getAttachedElements(): HTMLElement[];
 }
 
 // ========================================
@@ -549,7 +549,7 @@ export const DEFAULT_POPUP_CONFIG: WordLookupPopupConfig = {
     screenReaderSupport: true,
     highContrastMode: false,
   },
-}
+};
 
 // ========================================
 // Usage Examples

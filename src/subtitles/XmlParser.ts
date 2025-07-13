@@ -12,27 +12,27 @@ import {
   SubtitleSegmentMetadata,
   SubtitleStyling,
   SubtitlePosition,
-} from './types'
-import { Logger } from '../logging/Logger'
-import { ComponentType } from '../logging/types'
+} from './types';
+import { Logger } from '../logging/Logger';
+import { ComponentType } from '../logging/types';
 
 /**
  * Raw XML element structure for YouTube subtitles
  */
 interface YouTubeXMLElement {
-  readonly tag: string
-  readonly attributes: Record<string, string>
-  readonly textContent: string
-  readonly children: YouTubeXMLElement[]
+  readonly tag: string;
+  readonly attributes: Record<string, string>;
+  readonly textContent: string;
+  readonly children: YouTubeXMLElement[];
 }
 
 /**
  * Time data parsed from XML attributes
  */
 interface ParsedTimeData {
-  readonly start: number
-  readonly duration?: number
-  readonly end?: number
+  readonly start: number;
+  readonly duration?: number;
+  readonly end?: number;
 }
 
 /**
@@ -47,9 +47,9 @@ export class YouTubeXMLParser {
    * Parse YouTube XML subtitle content
    */
   static parseXML(content: string, config: ParserConfig): ParseResult {
-    const logger = Logger.getInstance()
-    const startTime = performance.now()
-    const errors: ParseError[] = []
+    const logger = Logger.getInstance();
+    const startTime = performance.now();
+    const errors: ParseError[] = [];
 
     try {
       logger?.info('Parsing XML subtitle content', {
@@ -59,10 +59,10 @@ export class YouTubeXMLParser {
           configMaxSegmentGap: config.maxSegmentGap,
           preserveFormatting: config.preserveFormatting,
         },
-      })
+      });
 
       // Validate and clean content
-      const cleanedContent = this.preprocessXML(content)
+      const cleanedContent = this.preprocessXML(content);
       if (!cleanedContent) {
         return this.createErrorResult([
           {
@@ -70,42 +70,42 @@ export class YouTubeXMLParser {
             code: 'EMPTY_CONTENT',
             severity: 'error' as const,
           },
-        ])
+        ]);
       }
 
       // Detect specific YouTube XML format
-      const detectedFormat = this.detectYouTubeFormat(cleanedContent)
+      const detectedFormat = this.detectYouTubeFormat(cleanedContent);
       logger?.info('Detected YouTube XML format', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           format: detectedFormat,
           contentLength: cleanedContent.length,
         },
-      })
+      });
 
       // Parse based on detected format
-      let segments: SubtitleSegment[]
+      let segments: SubtitleSegment[];
 
       switch (detectedFormat) {
         case SubtitleFormat.YOUTUBE_XML:
         case SubtitleFormat.YOUTUBE_SRV1:
         case SubtitleFormat.YOUTUBE_SRV2:
         case SubtitleFormat.YOUTUBE_SRV3:
-          segments = this.parseYouTubeXML(cleanedContent, config, errors)
-          break
+          segments = this.parseYouTubeXML(cleanedContent, config, errors);
+          break;
 
         case SubtitleFormat.TTML:
-          segments = this.parseTTML(cleanedContent, config, errors)
-          break
+          segments = this.parseTTML(cleanedContent, config, errors);
+          break;
 
         default:
-          segments = this.parseGenericXML(cleanedContent, config, errors)
+          segments = this.parseGenericXML(cleanedContent, config, errors);
       }
 
       // Apply post-processing
-      segments = this.postProcessSegments(segments, config)
+      segments = this.postProcessSegments(segments, config);
 
-      const parseTime = performance.now() - startTime
+      const parseTime = performance.now() - startTime;
       logger?.info('XML parsing completed successfully', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
@@ -120,7 +120,7 @@ export class YouTubeXMLParser {
                 ).toFixed(2)
               : 0,
         },
-      })
+      });
 
       return {
         success: true,
@@ -135,7 +135,7 @@ export class YouTubeXMLParser {
           },
         },
         errors: errors.length > 0 ? errors : undefined,
-      }
+      };
     } catch (error) {
       logger?.error('XML parsing failed', {
         component: ComponentType.SUBTITLE_MANAGER,
@@ -143,15 +143,15 @@ export class YouTubeXMLParser {
           contentLength: content.length,
           error: error instanceof Error ? error.message : String(error),
         },
-      })
+      });
 
       const parseError: ParseError = {
         message: error instanceof Error ? error.message : 'Unknown parsing error',
         code: 'PARSE_ERROR',
         severity: 'error',
-      }
+      };
 
-      return this.createErrorResult([parseError])
+      return this.createErrorResult([parseError]);
     }
   }
 
@@ -167,34 +167,34 @@ export class YouTubeXMLParser {
     config: ParserConfig,
     errors: ParseError[],
   ): SubtitleSegment[] {
-    const segments: SubtitleSegment[] = []
+    const segments: SubtitleSegment[] = [];
 
     try {
       // Parse XML using DOMParser
-      const parser = new DOMParser()
-      const xmlDoc = parser.parseFromString(content, 'application/xml')
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(content, 'application/xml');
 
       // Check for parsing errors
-      const parseError = xmlDoc.querySelector('parsererror')
+      const parseError = xmlDoc.querySelector('parsererror');
       if (parseError) {
         errors.push({
           message: `XML parsing error: ${parseError.textContent}`,
           code: 'XML_PARSE_ERROR',
           severity: 'error',
-        })
-        return segments
+        });
+        return segments;
       }
 
       // Find text elements (YouTube uses <text> or <p> elements)
-      const textElements = xmlDoc.querySelectorAll('text, p')
+      const textElements = xmlDoc.querySelectorAll('text, p');
 
       for (let i = 0; i < textElements.length; i++) {
-        const element = textElements[i]
+        const element = textElements[i];
 
         try {
-          const segment = this.parseTextElement(element, i, config)
+          const segment = this.parseTextElement(element, i, config);
           if (segment) {
-            segments.push(segment)
+            segments.push(segment);
           }
         } catch (error) {
           errors.push({
@@ -202,7 +202,7 @@ export class YouTubeXMLParser {
             message: `Error parsing text element: ${error instanceof Error ? error.message : 'Unknown error'}`,
             code: 'ELEMENT_PARSE_ERROR',
             severity: 'warning',
-          })
+          });
         }
       }
     } catch (error) {
@@ -210,10 +210,10 @@ export class YouTubeXMLParser {
         message: `Failed to parse YouTube XML: ${error instanceof Error ? error.message : 'Unknown error'}`,
         code: 'YOUTUBE_XML_ERROR',
         severity: 'error',
-      })
+      });
     }
 
-    return segments
+    return segments;
   }
 
   /**
@@ -224,22 +224,22 @@ export class YouTubeXMLParser {
     config: ParserConfig,
     errors: ParseError[],
   ): SubtitleSegment[] {
-    const segments: SubtitleSegment[] = []
+    const segments: SubtitleSegment[] = [];
 
     try {
-      const parser = new DOMParser()
-      const xmlDoc = parser.parseFromString(content, 'application/xml')
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(content, 'application/xml');
 
       // TTML uses <p> elements within <body>
-      const paragraphs = xmlDoc.querySelectorAll('body p, div p')
+      const paragraphs = xmlDoc.querySelectorAll('body p, div p');
 
       for (let i = 0; i < paragraphs.length; i++) {
-        const p = paragraphs[i]
+        const p = paragraphs[i];
 
         try {
-          const segment = this.parseTTMLParagraph(p, i, config)
+          const segment = this.parseTTMLParagraph(p, i, config);
           if (segment) {
-            segments.push(segment)
+            segments.push(segment);
           }
         } catch (error) {
           errors.push({
@@ -247,7 +247,7 @@ export class YouTubeXMLParser {
             message: `Error parsing TTML paragraph: ${error instanceof Error ? error.message : 'Unknown error'}`,
             code: 'TTML_PARSE_ERROR',
             severity: 'warning',
-          })
+          });
         }
       }
     } catch (error) {
@@ -255,10 +255,10 @@ export class YouTubeXMLParser {
         message: `Failed to parse TTML: ${error instanceof Error ? error.message : 'Unknown error'}`,
         code: 'TTML_ERROR',
         severity: 'error',
-      })
+      });
     }
 
-    return segments
+    return segments;
   }
 
   /**
@@ -269,22 +269,22 @@ export class YouTubeXMLParser {
     config: ParserConfig,
     errors: ParseError[],
   ): SubtitleSegment[] {
-    const segments: SubtitleSegment[] = []
+    const segments: SubtitleSegment[] = [];
 
     try {
-      const parser = new DOMParser()
-      const xmlDoc = parser.parseFromString(content, 'application/xml')
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(content, 'application/xml');
 
       // Look for common subtitle elements
-      const elements = xmlDoc.querySelectorAll('subtitle, caption, cue, text, p, span')
+      const elements = xmlDoc.querySelectorAll('subtitle, caption, cue, text, p, span');
 
       for (let i = 0; i < elements.length; i++) {
-        const element = elements[i]
+        const element = elements[i];
 
         try {
-          const segment = this.parseGenericElement(element, i, config)
+          const segment = this.parseGenericElement(element, i, config);
           if (segment) {
-            segments.push(segment)
+            segments.push(segment);
           }
         } catch (error) {
           errors.push({
@@ -292,7 +292,7 @@ export class YouTubeXMLParser {
             message: `Error parsing generic element: ${error instanceof Error ? error.message : 'Unknown error'}`,
             code: 'GENERIC_PARSE_ERROR',
             severity: 'warning',
-          })
+          });
         }
       }
     } catch (error) {
@@ -300,10 +300,10 @@ export class YouTubeXMLParser {
         message: `Failed to parse generic XML: ${error instanceof Error ? error.message : 'Unknown error'}`,
         code: 'GENERIC_XML_ERROR',
         severity: 'error',
-      })
+      });
     }
 
-    return segments
+    return segments;
   }
 
   // ========================================
@@ -318,19 +318,19 @@ export class YouTubeXMLParser {
     index: number,
     config: ParserConfig,
   ): SubtitleSegment | null {
-    const timeData = this.parseTimeAttributes(element)
+    const timeData = this.parseTimeAttributes(element);
     if (!timeData) {
-      return null
+      return null;
     }
 
-    const text = this.extractTextContent(element, config)
+    const text = this.extractTextContent(element, config);
     if (!text.trim()) {
-      return null
+      return null;
     }
 
-    const styling = this.extractStyling(element)
-    const position = this.extractPosition(element)
-    const metadata = this.extractMetadata(element)
+    const styling = this.extractStyling(element);
+    const position = this.extractPosition(element);
+    const metadata = this.extractMetadata(element);
 
     return {
       id: this.generateSegmentId(index, timeData.start),
@@ -340,7 +340,7 @@ export class YouTubeXMLParser {
       styling,
       position,
       metadata,
-    }
+    };
   }
 
   /**
@@ -352,34 +352,34 @@ export class YouTubeXMLParser {
     config: ParserConfig,
   ): SubtitleSegment | null {
     // TTML uses begin/end attributes
-    const begin = element.getAttribute('begin')
-    const end = element.getAttribute('end')
-    const dur = element.getAttribute('dur')
+    const begin = element.getAttribute('begin');
+    const end = element.getAttribute('end');
+    const dur = element.getAttribute('dur');
 
     if (!begin) {
-      return null
+      return null;
     }
 
-    const startTime = this.parseTimeString(begin)
-    let endTime: number
+    const startTime = this.parseTimeString(begin);
+    let endTime: number;
 
     if (end) {
-      endTime = this.parseTimeString(end)
+      endTime = this.parseTimeString(end);
     } else if (dur) {
-      const duration = this.parseTimeString(dur)
-      endTime = startTime + duration
+      const duration = this.parseTimeString(dur);
+      endTime = startTime + duration;
     } else {
-      endTime = startTime + 3.0 // Default 3 seconds
+      endTime = startTime + 3.0; // Default 3 seconds
     }
 
-    const text = this.extractTextContent(element, config)
+    const text = this.extractTextContent(element, config);
     if (!text.trim()) {
-      return null
+      return null;
     }
 
-    const styling = this.extractStyling(element)
-    const position = this.extractPosition(element)
-    const metadata = this.extractMetadata(element)
+    const styling = this.extractStyling(element);
+    const position = this.extractPosition(element);
+    const metadata = this.extractMetadata(element);
 
     return {
       id: this.generateSegmentId(index, startTime),
@@ -389,7 +389,7 @@ export class YouTubeXMLParser {
       styling,
       position,
       metadata,
-    }
+    };
   }
 
   /**
@@ -401,14 +401,14 @@ export class YouTubeXMLParser {
     config: ParserConfig,
   ): SubtitleSegment | null {
     // Try various time attribute patterns
-    const timeData = this.parseTimeAttributes(element)
+    const timeData = this.parseTimeAttributes(element);
     if (!timeData) {
-      return null
+      return null;
     }
 
-    const text = this.extractTextContent(element, config)
+    const text = this.extractTextContent(element, config);
     if (!text.trim()) {
-      return null
+      return null;
     }
 
     return {
@@ -419,7 +419,7 @@ export class YouTubeXMLParser {
       styling: this.extractStyling(element),
       position: this.extractPosition(element),
       metadata: this.extractMetadata(element),
-    }
+    };
   }
 
   // ========================================
@@ -431,57 +431,57 @@ export class YouTubeXMLParser {
    */
   private static parseTimeAttributes(element: Element): ParsedTimeData | null {
     // YouTube format: t="start" d="duration"
-    const tAttr = element.getAttribute('t')
-    const dAttr = element.getAttribute('d')
+    const tAttr = element.getAttribute('t');
+    const dAttr = element.getAttribute('d');
 
     if (tAttr) {
-      const start = parseFloat(tAttr) / 1000 // YouTube uses milliseconds
-      const duration = dAttr ? parseFloat(dAttr) / 1000 : undefined
+      const start = parseFloat(tAttr) / 1000; // YouTube uses milliseconds
+      const duration = dAttr ? parseFloat(dAttr) / 1000 : undefined;
       return {
         start,
         duration,
         end: duration ? start + duration : undefined,
-      }
+      };
     }
 
     // TTML format: begin="time" end="time" dur="duration"
-    const begin = element.getAttribute('begin')
-    const end = element.getAttribute('end')
-    const dur = element.getAttribute('dur')
+    const begin = element.getAttribute('begin');
+    const end = element.getAttribute('end');
+    const dur = element.getAttribute('dur');
 
     if (begin) {
-      const start = this.parseTimeString(begin)
-      let endTime: number | undefined
+      const start = this.parseTimeString(begin);
+      let endTime: number | undefined;
 
       if (end) {
-        endTime = this.parseTimeString(end)
+        endTime = this.parseTimeString(end);
       } else if (dur) {
-        endTime = start + this.parseTimeString(dur)
+        endTime = start + this.parseTimeString(dur);
       }
 
       return {
         start,
         end: endTime,
         duration: endTime ? endTime - start : undefined,
-      }
+      };
     }
 
     // Generic format: start="time" duration="time"
-    const startAttr = element.getAttribute('start')
-    const durationAttr = element.getAttribute('duration')
+    const startAttr = element.getAttribute('start');
+    const durationAttr = element.getAttribute('duration');
 
     if (startAttr) {
-      const start = this.parseTimeString(startAttr)
-      const duration = durationAttr ? this.parseTimeString(durationAttr) : undefined
+      const start = this.parseTimeString(startAttr);
+      const duration = durationAttr ? this.parseTimeString(durationAttr) : undefined;
 
       return {
         start,
         duration,
         end: duration ? start + duration : undefined,
-      }
+      };
     }
 
-    return null
+    return null;
   }
 
   /**
@@ -490,41 +490,41 @@ export class YouTubeXMLParser {
   private static parseTimeString(timeStr: string): number {
     // Handle empty or invalid strings
     if (!timeStr || typeof timeStr !== 'string') {
-      return 0
+      return 0;
     }
 
-    timeStr = timeStr.trim()
+    timeStr = timeStr.trim();
 
     // Handle milliseconds (YouTube format)
     if (/^\d+$/.test(timeStr)) {
-      return parseInt(timeStr) / 1000
+      return parseInt(timeStr) / 1000;
     }
 
     // Handle seconds as decimal
     if (/^\d*\.?\d+s?$/.test(timeStr)) {
-      return parseFloat(timeStr.replace('s', ''))
+      return parseFloat(timeStr.replace('s', ''));
     }
 
     // Handle HH:MM:SS.mmm format
-    const timeMatch = timeStr.match(/^(?:(\d+):)?(?:(\d+):)?(\d+(?:\.\d+)?)s?$/)
+    const timeMatch = timeStr.match(/^(?:(\d+):)?(?:(\d+):)?(\d+(?:\.\d+)?)s?$/);
     if (timeMatch) {
-      const [, hours, minutes, seconds] = timeMatch
-      let totalSeconds = parseFloat(seconds || '0')
+      const [, hours, minutes, seconds] = timeMatch;
+      let totalSeconds = parseFloat(seconds || '0');
 
       if (minutes) {
-        totalSeconds += parseInt(minutes) * 60
+        totalSeconds += parseInt(minutes) * 60;
       }
 
       if (hours) {
-        totalSeconds += parseInt(hours) * 3600
+        totalSeconds += parseInt(hours) * 3600;
       }
 
-      return totalSeconds
+      return totalSeconds;
     }
 
     // Fallback: try to parse as float
-    const parsed = parseFloat(timeStr)
-    return isNaN(parsed) ? 0 : parsed
+    const parsed = parseFloat(timeStr);
+    return isNaN(parsed) ? 0 : parsed;
   }
 
   // ========================================
@@ -536,9 +536,9 @@ export class YouTubeXMLParser {
    */
   private static extractTextContent(element: Element, config: ParserConfig): string {
     if (config.preserveFormatting) {
-      return this.extractFormattedText(element)
+      return this.extractFormattedText(element);
     } else {
-      return element.textContent || ''
+      return element.textContent || '';
     }
   }
 
@@ -546,162 +546,162 @@ export class YouTubeXMLParser {
    * Extract formatted text preserving basic styling
    */
   private static extractFormattedText(element: Element): string {
-    let text = ''
+    let text = '';
 
     for (const node of element.childNodes) {
       if (node.nodeType === Node.TEXT_NODE) {
-        text += node.textContent || ''
+        text += node.textContent || '';
       } else if (node.nodeType === Node.ELEMENT_NODE) {
-        const childElement = node as Element
-        const childText = childElement.textContent || ''
+        const childElement = node as Element;
+        const childText = childElement.textContent || '';
 
         // Preserve basic formatting
         switch (childElement.tagName.toLowerCase()) {
           case 'br':
-            text += '\n'
-            break
+            text += '\n';
+            break;
           case 'b':
           case 'strong':
-            text += `**${childText}**`
-            break
+            text += `**${childText}**`;
+            break;
           case 'i':
           case 'em':
-            text += `*${childText}*`
-            break
+            text += `*${childText}*`;
+            break;
           case 'u':
-            text += `_${childText}_`
-            break
+            text += `_${childText}_`;
+            break;
           default:
-            text += childText
+            text += childText;
         }
       }
     }
 
-    return text
+    return text;
   }
 
   /**
    * Extract styling information from element
    */
   private static extractStyling(element: Element): SubtitleStyling | undefined {
-    const style = element.getAttribute('style')
-    const className = element.getAttribute('class')
+    const style = element.getAttribute('style');
+    const className = element.getAttribute('class');
 
     if (!style && !className) {
-      return undefined
+      return undefined;
     }
 
     const styling: Partial<{
-      bold?: boolean
-      italic?: boolean
-      underline?: boolean
-      color?: string
-      backgroundColor?: string
-      fontSize?: string
-      fontFamily?: string
-      alignment?: 'left' | 'center' | 'right'
-    }> = {}
+      bold?: boolean;
+      italic?: boolean;
+      underline?: boolean;
+      color?: string;
+      backgroundColor?: string;
+      fontSize?: string;
+      fontFamily?: string;
+      alignment?: 'left' | 'center' | 'right';
+    }> = {};
 
     // Parse inline styles
     if (style) {
-      const styleProps = style.split(';')
+      const styleProps = style.split(';');
       for (const prop of styleProps) {
-        const [key, value] = prop.split(':').map((s) => s.trim())
+        const [key, value] = prop.split(':').map((s) => s.trim());
         if (key && value) {
           switch (key.toLowerCase()) {
             case 'color':
-              styling.color = value
-              break
+              styling.color = value;
+              break;
             case 'background-color':
-              styling.backgroundColor = value
-              break
+              styling.backgroundColor = value;
+              break;
             case 'font-size':
-              styling.fontSize = value
-              break
+              styling.fontSize = value;
+              break;
             case 'font-family':
-              styling.fontFamily = value
-              break
+              styling.fontFamily = value;
+              break;
             case 'text-align':
-              styling.alignment = value as 'left' | 'center' | 'right'
-              break
+              styling.alignment = value as 'left' | 'center' | 'right';
+              break;
             case 'font-weight':
-              styling.bold = value === 'bold' || parseInt(value) >= 600
-              break
+              styling.bold = value === 'bold' || parseInt(value) >= 600;
+              break;
             case 'font-style':
-              styling.italic = value === 'italic'
-              break
+              styling.italic = value === 'italic';
+              break;
             case 'text-decoration':
-              styling.underline = value.includes('underline')
-              break
+              styling.underline = value.includes('underline');
+              break;
           }
         }
       }
     }
 
-    return Object.keys(styling).length > 0 ? (styling as SubtitleStyling) : undefined
+    return Object.keys(styling).length > 0 ? (styling as SubtitleStyling) : undefined;
   }
 
   /**
    * Extract position information from element
    */
   private static extractPosition(element: Element): SubtitlePosition | undefined {
-    const region = element.getAttribute('region')
-    const ttsExtent = element.getAttribute('tts:extent')
-    const ttsOrigin = element.getAttribute('tts:origin')
+    const region = element.getAttribute('region');
+    const ttsExtent = element.getAttribute('tts:extent');
+    const ttsOrigin = element.getAttribute('tts:origin');
 
     if (!region && !ttsExtent && !ttsOrigin) {
-      return undefined
+      return undefined;
     }
 
     const position: Partial<{
-      align?: 'start' | 'center' | 'end' | 'middle'
-      position?: 'before' | 'after'
-      line?: number | string
-    }> = {}
+      align?: 'start' | 'center' | 'end' | 'middle';
+      position?: 'before' | 'after';
+      line?: number | string;
+    }> = {};
 
     // Parse region information (TTML)
     if (region) {
       // This would need to be mapped from region definitions
-      position.align = 'middle'
+      position.align = 'middle';
     }
 
-    return Object.keys(position).length > 0 ? (position as SubtitlePosition) : undefined
+    return Object.keys(position).length > 0 ? (position as SubtitlePosition) : undefined;
   }
 
   /**
    * Extract metadata from element
    */
   private static extractMetadata(element: Element): SubtitleSegmentMetadata | undefined {
-    const speaker = element.getAttribute('speaker') || element.getAttribute('voice')
-    const region = element.getAttribute('region')
-    const confidence = element.getAttribute('confidence')
+    const speaker = element.getAttribute('speaker') || element.getAttribute('voice');
+    const region = element.getAttribute('region');
+    const confidence = element.getAttribute('confidence');
 
     if (!speaker && !region && !confidence) {
-      return undefined
+      return undefined;
     }
 
     const metadata: Partial<{
-      speaker?: string
-      region?: string
-      confidence?: number
-    }> = {}
+      speaker?: string;
+      region?: string;
+      confidence?: number;
+    }> = {};
 
     if (speaker) {
-      metadata.speaker = speaker
+      metadata.speaker = speaker;
     }
 
     if (region) {
-      metadata.region = region
+      metadata.region = region;
     }
 
     if (confidence) {
-      const conf = parseFloat(confidence)
+      const conf = parseFloat(confidence);
       if (!isNaN(conf)) {
-        metadata.confidence = Math.max(0, Math.min(1, conf))
+        metadata.confidence = Math.max(0, Math.min(1, conf));
       }
     }
 
-    return Object.keys(metadata).length > 0 ? (metadata as SubtitleSegmentMetadata) : undefined
+    return Object.keys(metadata).length > 0 ? (metadata as SubtitleSegmentMetadata) : undefined;
   }
 
   // ========================================
@@ -713,27 +713,27 @@ export class YouTubeXMLParser {
    */
   private static preprocessXML(content: string): string | null {
     if (!content || typeof content !== 'string') {
-      return null
+      return null;
     }
 
-    let cleaned = content.trim()
+    let cleaned = content.trim();
 
     // Remove BOM if present
     if (cleaned.charCodeAt(0) === 0xfeff) {
-      cleaned = cleaned.slice(1)
+      cleaned = cleaned.slice(1);
     }
 
     // Ensure XML declaration if missing
     if (!cleaned.startsWith('<?xml')) {
-      cleaned = '<?xml version="1.0" encoding="UTF-8"?>\n' + cleaned
+      cleaned = '<?xml version="1.0" encoding="UTF-8"?>\n' + cleaned;
     }
 
     // Fix common XML issues
     cleaned = cleaned
       .replace(/&(?!(?:amp|lt|gt|quot|apos);)/g, '&amp;') // Fix unescaped ampersands
-      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') // Remove control characters
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ''); // Remove control characters
 
-    return cleaned
+    return cleaned;
   }
 
   /**
@@ -741,34 +741,34 @@ export class YouTubeXMLParser {
    */
   private static detectYouTubeFormat(content: string): SubtitleFormat {
     if (content.includes('<transcript>') || content.includes('<text ')) {
-      return SubtitleFormat.YOUTUBE_XML
+      return SubtitleFormat.YOUTUBE_XML;
     }
 
     if (content.includes('srv1')) {
-      return SubtitleFormat.YOUTUBE_SRV1
+      return SubtitleFormat.YOUTUBE_SRV1;
     }
 
     if (content.includes('srv2')) {
-      return SubtitleFormat.YOUTUBE_SRV2
+      return SubtitleFormat.YOUTUBE_SRV2;
     }
 
     if (content.includes('srv3')) {
-      return SubtitleFormat.YOUTUBE_SRV3
+      return SubtitleFormat.YOUTUBE_SRV3;
     }
 
     if (content.includes('tt:') || content.includes('<tt ') || content.includes('ttml')) {
-      return SubtitleFormat.TTML
+      return SubtitleFormat.TTML;
     }
 
-    return SubtitleFormat.YOUTUBE_XML // Default
+    return SubtitleFormat.YOUTUBE_XML; // Default
   }
 
   /**
    * Extract language from XML content
    */
   private static extractLanguageFromXML(content: string): string {
-    const langMatch = content.match(/(?:xml:)?lang=["']([^"']+)["']/i)
-    return langMatch ? langMatch[1] : 'unknown'
+    const langMatch = content.match(/(?:xml:)?lang=["']([^"']+)["']/i);
+    return langMatch ? langMatch[1] : 'unknown';
   }
 
   /**
@@ -779,14 +779,14 @@ export class YouTubeXMLParser {
       content.includes('auto-generated') ||
       content.includes('automatic') ||
       content.includes('asr_langs')
-    )
+    );
   }
 
   /**
    * Generate unique segment ID
    */
   private static generateSegmentId(index: number, startTime: number): string {
-    return `seg_${index.toString().padStart(4, '0')}_${Math.floor(startTime * 1000)}`
+    return `seg_${index.toString().padStart(4, '0')}_${Math.floor(startTime * 1000)}`;
   }
 
   /**
@@ -796,20 +796,20 @@ export class YouTubeXMLParser {
     segments: SubtitleSegment[],
     config: ParserConfig,
   ): SubtitleSegment[] {
-    let processed = [...segments]
+    let processed = [...segments];
 
     // Sort by start time
-    processed.sort((a, b) => a.startTime - b.startTime)
+    processed.sort((a, b) => a.startTime - b.startTime);
 
     // Merge segments if configured
     if (config.mergeSegments && config.maxSegmentGap) {
-      processed = this.mergeAdjacentSegments(processed, config.maxSegmentGap)
+      processed = this.mergeAdjacentSegments(processed, config.maxSegmentGap);
     }
 
     // Validate and fix timing
-    processed = this.validateAndFixTiming(processed)
+    processed = this.validateAndFixTiming(processed);
 
-    return processed
+    return processed;
   }
 
   /**
@@ -819,10 +819,10 @@ export class YouTubeXMLParser {
     segments: SubtitleSegment[],
     maxGap: number,
   ): SubtitleSegment[] {
-    const merged: SubtitleSegment[] = []
+    const merged: SubtitleSegment[] = [];
 
     for (const segment of segments) {
-      const lastMerged = merged[merged.length - 1]
+      const lastMerged = merged[merged.length - 1];
 
       if (
         lastMerged &&
@@ -836,13 +836,13 @@ export class YouTubeXMLParser {
           ...lastMerged,
           endTime: segment.endTime,
           text: `${lastMerged.text} ${segment.text}`,
-        }
+        };
       } else {
-        merged.push(segment)
+        merged.push(segment);
       }
     }
 
-    return merged
+    return merged;
   }
 
   /**
@@ -850,25 +850,25 @@ export class YouTubeXMLParser {
    */
   private static validateAndFixTiming(segments: SubtitleSegment[]): SubtitleSegment[] {
     return segments.map((segment, index) => {
-      let { startTime, endTime } = segment
+      let { startTime, endTime } = segment;
 
       // Ensure positive duration
       if (endTime <= startTime) {
-        endTime = startTime + 1.0 // Minimum 1 second duration
+        endTime = startTime + 1.0; // Minimum 1 second duration
       }
 
       // Ensure no overlap with next segment
-      const nextSegment = segments[index + 1]
+      const nextSegment = segments[index + 1];
       if (nextSegment && endTime > nextSegment.startTime) {
-        endTime = nextSegment.startTime - 0.001 // Small gap
+        endTime = nextSegment.startTime - 0.001; // Small gap
       }
 
       return {
         ...segment,
         startTime,
         endTime,
-      }
-    })
+      };
+    });
   }
 
   /**
@@ -878,6 +878,6 @@ export class YouTubeXMLParser {
     return {
       success: false,
       errors,
-    }
+    };
   }
 }

@@ -10,7 +10,7 @@ import {
   ErrorSeverity,
   LoggerConfig,
   isProduction,
-} from './types'
+} from './types';
 
 /**
  * Recovery strategy types
@@ -43,147 +43,147 @@ export enum RecoveryResult {
  * Recovery attempt information
  */
 export interface RecoveryAttempt {
-  readonly id: string
-  readonly timestamp: number
-  readonly component: ComponentType
-  readonly errorType: ErrorType
-  readonly strategy: RecoveryStrategyType
-  readonly result: RecoveryResult
-  readonly duration: number
-  readonly error?: Error
-  readonly details?: Record<string, any>
-  readonly nextAttemptTime?: number
+  readonly id: string;
+  readonly timestamp: number;
+  readonly component: ComponentType;
+  readonly errorType: ErrorType;
+  readonly strategy: RecoveryStrategyType;
+  readonly result: RecoveryResult;
+  readonly duration: number;
+  readonly error?: Error;
+  readonly details?: Record<string, any>;
+  readonly nextAttemptTime?: number;
 }
 
 /**
  * Recovery strategy configuration
  */
 export interface RecoveryStrategy {
-  readonly type: RecoveryStrategyType
-  readonly component: ComponentType
-  readonly errorTypes: ErrorType[]
-  readonly maxAttempts: number
-  readonly initialDelay: number
-  readonly maxDelay: number
-  readonly backoffMultiplier: number
-  readonly timeoutMs: number
-  readonly prerequisites?: (() => Promise<boolean>)[]
+  readonly type: RecoveryStrategyType;
+  readonly component: ComponentType;
+  readonly errorTypes: ErrorType[];
+  readonly maxAttempts: number;
+  readonly initialDelay: number;
+  readonly maxDelay: number;
+  readonly backoffMultiplier: number;
+  readonly timeoutMs: number;
+  readonly prerequisites?: (() => Promise<boolean>)[];
   readonly implementation: (
     error: Error,
     attempt: number,
     context: RecoveryContext,
-  ) => Promise<RecoveryResult>
-  readonly onSuccess?: (context: RecoveryContext) => Promise<void>
-  readonly onFailure?: (context: RecoveryContext, finalError: Error) => Promise<void>
+  ) => Promise<RecoveryResult>;
+  readonly onSuccess?: (context: RecoveryContext) => Promise<void>;
+  readonly onFailure?: (context: RecoveryContext, finalError: Error) => Promise<void>;
 }
 
 /**
  * Recovery context information
  */
 export interface RecoveryContext {
-  readonly originalError: Error
-  readonly component: ComponentType
-  readonly errorType: ErrorType
-  readonly severity: ErrorSeverity
-  readonly attempt: number
-  readonly maxAttempts: number
-  readonly startTime: number
-  readonly metadata?: Record<string, any>
+  readonly originalError: Error;
+  readonly component: ComponentType;
+  readonly errorType: ErrorType;
+  readonly severity: ErrorSeverity;
+  readonly attempt: number;
+  readonly maxAttempts: number;
+  readonly startTime: number;
+  readonly metadata?: Record<string, any>;
 }
 
 /**
  * Recovery statistics
  */
 export interface RecoveryStats {
-  readonly totalAttempts: number
-  readonly successfulRecoveries: number
-  readonly failedRecoveries: number
-  readonly partialRecoveries: number
-  readonly successRate: number
-  readonly averageRecoveryTime: number
-  readonly strategiesUsed: Record<RecoveryStrategyType, number>
+  readonly totalAttempts: number;
+  readonly successfulRecoveries: number;
+  readonly failedRecoveries: number;
+  readonly partialRecoveries: number;
+  readonly successRate: number;
+  readonly averageRecoveryTime: number;
+  readonly strategiesUsed: Record<RecoveryStrategyType, number>;
   readonly componentStats: Record<
     ComponentType,
     {
-      attempts: number
-      successes: number
-      failures: number
-      averageTime: number
+      attempts: number;
+      successes: number;
+      failures: number;
+      averageTime: number;
     }
-  >
+  >;
   readonly errorTypeStats: Record<
     ErrorType,
     {
-      attempts: number
-      successes: number
-      failures: number
+      attempts: number;
+      successes: number;
+      failures: number;
     }
-  >
-  readonly recentAttempts: RecoveryAttempt[]
+  >;
+  readonly recentAttempts: RecoveryAttempt[];
 }
 
 /**
  * Internal mutable recovery statistics
  */
 interface MutableRecoveryStats {
-  totalAttempts: number
-  successfulRecoveries: number
-  failedRecoveries: number
-  partialRecoveries: number
-  successRate: number
-  averageRecoveryTime: number
-  strategiesUsed: Record<RecoveryStrategyType, number>
+  totalAttempts: number;
+  successfulRecoveries: number;
+  failedRecoveries: number;
+  partialRecoveries: number;
+  successRate: number;
+  averageRecoveryTime: number;
+  strategiesUsed: Record<RecoveryStrategyType, number>;
   componentStats: Record<
     ComponentType,
     {
-      attempts: number
-      successes: number
-      failures: number
-      averageTime: number
+      attempts: number;
+      successes: number;
+      failures: number;
+      averageTime: number;
     }
-  >
+  >;
   errorTypeStats: Record<
     ErrorType,
     {
-      attempts: number
-      successes: number
-      failures: number
+      attempts: number;
+      successes: number;
+      failures: number;
     }
-  >
-  recentAttempts: RecoveryAttempt[]
+  >;
+  recentAttempts: RecoveryAttempt[];
 }
 
 /**
  * Recovery configuration
  */
 export interface RecoveryConfig {
-  readonly enabled: boolean
-  readonly globalTimeout: number
-  readonly maxConcurrentRecoveries: number
-  readonly cleanupInterval: number
-  readonly historyRetention: number
-  readonly enablePreemptiveRecovery: boolean
-  readonly enableStatisticsTracking: boolean
-  readonly logLevel: LogLevel
+  readonly enabled: boolean;
+  readonly globalTimeout: number;
+  readonly maxConcurrentRecoveries: number;
+  readonly cleanupInterval: number;
+  readonly historyRetention: number;
+  readonly enablePreemptiveRecovery: boolean;
+  readonly enableStatisticsTracking: boolean;
+  readonly logLevel: LogLevel;
 }
 
 /**
  * Error Recovery Service
  */
 export class ErrorRecoveryService {
-  private static instance: ErrorRecoveryService | null = null
-  private readonly config: RecoveryConfig
-  private readonly strategies: Map<string, RecoveryStrategy> = new Map()
-  private readonly activeRecoveries: Map<string, Promise<RecoveryResult>> = new Map()
-  private readonly recoveryHistory: RecoveryAttempt[] = []
-  private readonly componentStates: Map<ComponentType, any> = new Map()
+  private static instance: ErrorRecoveryService | null = null;
+  private readonly config: RecoveryConfig;
+  private readonly strategies: Map<string, RecoveryStrategy> = new Map();
+  private readonly activeRecoveries: Map<string, Promise<RecoveryResult>> = new Map();
+  private readonly recoveryHistory: RecoveryAttempt[] = [];
+  private readonly componentStates: Map<ComponentType, any> = new Map();
 
   // Cleanup and maintenance
-  private cleanupTimer: number | null = null
-  private statsTimer: number | null = null
+  private cleanupTimer: number | null = null;
+  private statsTimer: number | null = null;
 
   // Statistics tracking
-  private stats: MutableRecoveryStats = this.initializeStats()
+  private stats: MutableRecoveryStats = this.initializeStats();
 
   private constructor(config: Partial<RecoveryConfig> = {}) {
     this.config = {
@@ -196,10 +196,10 @@ export class ErrorRecoveryService {
       enableStatisticsTracking: true,
       logLevel: isProduction() ? LogLevel.WARN : LogLevel.DEBUG,
       ...config,
-    }
+    };
 
-    this.initializeStrategies()
-    this.startMaintenanceTasks()
+    this.initializeStrategies();
+    this.startMaintenanceTasks();
   }
 
   /**
@@ -207,12 +207,12 @@ export class ErrorRecoveryService {
    */
   public static getInstance(config?: Partial<RecoveryConfig>): ErrorRecoveryService | null {
     if (typeof window === 'undefined') {
-      return null
+      return null;
     }
     if (!ErrorRecoveryService.instance) {
-      ErrorRecoveryService.instance = new ErrorRecoveryService(config)
+      ErrorRecoveryService.instance = new ErrorRecoveryService(config);
     }
-    return ErrorRecoveryService.instance
+    return ErrorRecoveryService.instance;
   }
 
   /**
@@ -230,9 +230,9 @@ export class ErrorRecoveryService {
       backoffMultiplier: 2,
       timeoutMs: 15000,
       implementation: async (error, attempt, context) => {
-        return this.performNetworkRetry(error, attempt, context)
+        return this.performNetworkRetry(error, attempt, context);
       },
-    })
+    });
 
     // Storage error recovery
     this.registerStrategy({
@@ -245,9 +245,9 @@ export class ErrorRecoveryService {
       backoffMultiplier: 2,
       timeoutMs: 5000,
       implementation: async (error, attempt, context) => {
-        return this.performStorageRepair(error, attempt, context)
+        return this.performStorageRepair(error, attempt, context);
       },
-    })
+    });
 
     // Permission error recovery
     this.registerStrategy({
@@ -260,9 +260,9 @@ export class ErrorRecoveryService {
       backoffMultiplier: 1,
       timeoutMs: 10000,
       implementation: async (error, attempt, context) => {
-        return this.performPermissionRequest(error, attempt, context)
+        return this.performPermissionRequest(error, attempt, context);
       },
-    })
+    });
 
     // Cache clear recovery
     this.registerStrategy({
@@ -275,9 +275,9 @@ export class ErrorRecoveryService {
       backoffMultiplier: 1,
       timeoutMs: 5000,
       implementation: async (error, attempt, context) => {
-        return this.performCacheClear(error, attempt, context)
+        return this.performCacheClear(error, attempt, context);
       },
-    })
+    });
 
     // State reset recovery
     this.registerStrategy({
@@ -290,9 +290,9 @@ export class ErrorRecoveryService {
       backoffMultiplier: 2,
       timeoutMs: 8000,
       implementation: async (error, attempt, context) => {
-        return this.performStateReset(error, attempt, context)
+        return this.performStateReset(error, attempt, context);
       },
-    })
+    });
 
     // Service restart recovery
     this.registerStrategy({
@@ -305,9 +305,9 @@ export class ErrorRecoveryService {
       backoffMultiplier: 1,
       timeoutMs: 10000,
       implementation: async (error, attempt, context) => {
-        return this.performServiceRestart(error, attempt, context)
+        return this.performServiceRestart(error, attempt, context);
       },
-    })
+    });
 
     // Configuration reset recovery
     this.registerStrategy({
@@ -320,9 +320,9 @@ export class ErrorRecoveryService {
       backoffMultiplier: 1,
       timeoutMs: 3000,
       implementation: async (error, attempt, context) => {
-        return this.performConfigurationReset(error, attempt, context)
+        return this.performConfigurationReset(error, attempt, context);
       },
-    })
+    });
 
     // Resource cleanup recovery
     this.registerStrategy({
@@ -335,21 +335,21 @@ export class ErrorRecoveryService {
       backoffMultiplier: 1,
       timeoutMs: 5000,
       implementation: async (error, attempt, context) => {
-        return this.performResourceCleanup(error, attempt, context)
+        return this.performResourceCleanup(error, attempt, context);
       },
-    })
+    });
   }
 
   /**
    * Register a new recovery strategy
    */
   public registerStrategy(strategy: RecoveryStrategy): void {
-    const key = this.getStrategyKey(strategy.component, strategy.type)
-    this.strategies.set(key, strategy)
+    const key = this.getStrategyKey(strategy.component, strategy.type);
+    this.strategies.set(key, strategy);
     this.log(
       LogLevel.DEBUG,
       `Registered recovery strategy: ${strategy.type} for ${strategy.component}`,
-    )
+    );
   }
 
   /**
@@ -363,21 +363,21 @@ export class ErrorRecoveryService {
     metadata?: Record<string, any>,
   ): Promise<RecoveryResult> {
     if (!this.config.enabled) {
-      return RecoveryResult.NOT_APPLICABLE
+      return RecoveryResult.NOT_APPLICABLE;
     }
 
     // Check if already recovering for this component
-    const recoveryKey = `${component}-${errorType}-${Date.now()}`
+    const recoveryKey = `${component}-${errorType}-${Date.now()}`;
     if (this.activeRecoveries.size >= this.config.maxConcurrentRecoveries) {
-      this.log(LogLevel.WARN, `Recovery limit reached, skipping recovery for ${component}`)
-      return RecoveryResult.FAILED
+      this.log(LogLevel.WARN, `Recovery limit reached, skipping recovery for ${component}`);
+      return RecoveryResult.FAILED;
     }
 
     // Find applicable recovery strategies
-    const applicableStrategies = this.findApplicableStrategies(component, errorType)
+    const applicableStrategies = this.findApplicableStrategies(component, errorType);
     if (applicableStrategies.length === 0) {
-      this.log(LogLevel.DEBUG, `No recovery strategies found for ${component}:${errorType}`)
-      return RecoveryResult.NOT_APPLICABLE
+      this.log(LogLevel.DEBUG, `No recovery strategies found for ${component}:${errorType}`);
+      return RecoveryResult.NOT_APPLICABLE;
     }
 
     // Try each strategy in order of priority
@@ -390,19 +390,19 @@ export class ErrorRecoveryService {
           errorType,
           severity,
           metadata,
-        )
+        );
 
         if (result === RecoveryResult.SUCCESS || result === RecoveryResult.PARTIAL_SUCCESS) {
-          this.log(LogLevel.INFO, `Recovery successful using ${strategy.type} for ${component}`)
-          return result
+          this.log(LogLevel.INFO, `Recovery successful using ${strategy.type} for ${component}`);
+          return result;
         }
       } catch (recoveryError) {
-        this.log(LogLevel.ERROR, `Recovery strategy ${strategy.type} failed:`, recoveryError)
+        this.log(LogLevel.ERROR, `Recovery strategy ${strategy.type} failed:`, recoveryError);
       }
     }
 
-    this.log(LogLevel.WARN, `All recovery strategies failed for ${component}:${errorType}`)
-    return RecoveryResult.FAILED
+    this.log(LogLevel.WARN, `All recovery strategies failed for ${component}:${errorType}`);
+    return RecoveryResult.FAILED;
   }
 
   /**
@@ -416,17 +416,17 @@ export class ErrorRecoveryService {
     severity: ErrorSeverity,
     metadata?: Record<string, any>,
   ): Promise<RecoveryResult> {
-    const startTime = Date.now()
-    let attempt = 1
+    const startTime = Date.now();
+    let attempt = 1;
 
     while (attempt <= strategy.maxAttempts) {
-      const attemptId = `${component}-${strategy.type}-${startTime}-${attempt}`
+      const attemptId = `${component}-${strategy.type}-${startTime}-${attempt}`;
 
       try {
         // Check prerequisites if any
         if (strategy.prerequisites) {
           for (const prerequisite of strategy.prerequisites) {
-            const prerequisiteMet = await prerequisite()
+            const prerequisiteMet = await prerequisite();
             if (!prerequisiteMet) {
               this.recordAttempt(
                 attemptId,
@@ -437,8 +437,8 @@ export class ErrorRecoveryService {
                 RecoveryResult.NOT_APPLICABLE,
                 Date.now() - startTime,
                 new Error('Prerequisites not met'),
-              )
-              return RecoveryResult.NOT_APPLICABLE
+              );
+              return RecoveryResult.NOT_APPLICABLE;
             }
           }
         }
@@ -452,15 +452,15 @@ export class ErrorRecoveryService {
           maxAttempts: strategy.maxAttempts,
           startTime,
           metadata,
-        }
+        };
 
         // Execute the recovery strategy with timeout
         const result = await this.withTimeout(
           strategy.implementation(error, attempt, context),
           strategy.timeoutMs,
-        )
+        );
 
-        const duration = Date.now() - startTime
+        const duration = Date.now() - startTime;
         this.recordAttempt(
           attemptId,
           startTime,
@@ -469,32 +469,32 @@ export class ErrorRecoveryService {
           strategy.type,
           result,
           duration,
-        )
+        );
 
         if (result === RecoveryResult.SUCCESS) {
           if (strategy.onSuccess) {
-            await strategy.onSuccess(context)
+            await strategy.onSuccess(context);
           }
-          this.updateStats(result, duration, strategy.type, component, errorType)
-          return result
+          this.updateStats(result, duration, strategy.type, component, errorType);
+          return result;
         } else if (result === RecoveryResult.PARTIAL_SUCCESS) {
-          this.updateStats(result, duration, strategy.type, component, errorType)
-          return result
+          this.updateStats(result, duration, strategy.type, component, errorType);
+          return result;
         } else if (result === RecoveryResult.REQUIRES_USER_ACTION) {
-          return result
+          return result;
         }
 
         // If failed and we have more attempts, wait before retrying
         if (attempt < strategy.maxAttempts) {
-          const delay = this.calculateDelay(attempt, strategy)
-          await this.sleep(delay)
+          const delay = this.calculateDelay(attempt, strategy);
+          await this.sleep(delay);
         }
 
-        attempt++
+        attempt++;
       } catch (strategyError) {
-        const duration = Date.now() - startTime
+        const duration = Date.now() - startTime;
         const errorToRecord =
-          strategyError instanceof Error ? strategyError : new Error(String(strategyError))
+          strategyError instanceof Error ? strategyError : new Error(String(strategyError));
         this.recordAttempt(
           attemptId,
           startTime,
@@ -504,7 +504,7 @@ export class ErrorRecoveryService {
           RecoveryResult.FAILED,
           duration,
           errorToRecord,
-        )
+        );
 
         if (attempt >= strategy.maxAttempts) {
           if (strategy.onFailure) {
@@ -520,17 +520,17 @@ export class ErrorRecoveryService {
                 metadata,
               },
               errorToRecord,
-            )
+            );
           }
-          this.updateStats(RecoveryResult.FAILED, duration, strategy.type, component, errorType)
-          break
+          this.updateStats(RecoveryResult.FAILED, duration, strategy.type, component, errorType);
+          break;
         }
 
-        attempt++
+        attempt++;
       }
     }
 
-    return RecoveryResult.FAILED
+    return RecoveryResult.FAILED;
   }
 
   /**
@@ -540,11 +540,11 @@ export class ErrorRecoveryService {
     component: ComponentType,
     errorType: ErrorType,
   ): RecoveryStrategy[] {
-    const strategies: RecoveryStrategy[] = []
+    const strategies: RecoveryStrategy[] = [];
 
     for (const strategy of this.strategies.values()) {
       if (strategy.component === component && strategy.errorTypes.includes(errorType)) {
-        strategies.push(strategy)
+        strategies.push(strategy);
       }
     }
 
@@ -559,13 +559,13 @@ export class ErrorRecoveryService {
       RecoveryStrategyType.CONFIGURATION_RESET,
       RecoveryStrategyType.SERVICE_RESTART,
       RecoveryStrategyType.API_FALLBACK,
-    ]
+    ];
 
     return strategies.sort((a, b) => {
-      const aPriority = priorityOrder.indexOf(a.type)
-      const bPriority = priorityOrder.indexOf(b.type)
-      return aPriority - bPriority
-    })
+      const aPriority = priorityOrder.indexOf(a.type);
+      const bPriority = priorityOrder.indexOf(b.type);
+      return aPriority - bPriority;
+    });
   }
 
   // Strategy implementations
@@ -581,31 +581,31 @@ export class ErrorRecoveryService {
     this.log(
       LogLevel.DEBUG,
       `Attempting network retry (attempt ${attempt}) for ${context.component}`,
-    )
+    );
 
     try {
       // Test network connectivity
       if (!navigator.onLine) {
-        return RecoveryResult.NOT_APPLICABLE
+        return RecoveryResult.NOT_APPLICABLE;
       }
 
       // For translation service, try a simple API health check
       if (context.component === ComponentType.TRANSLATION_SERVICE) {
         // This would test the translation API connectivity
-        await this.testTranslationApiConnectivity()
-        return RecoveryResult.SUCCESS
+        await this.testTranslationApiConnectivity();
+        return RecoveryResult.SUCCESS;
       }
 
       // For subtitle manager, test subtitle URL accessibility
       if (context.component === ComponentType.SUBTITLE_MANAGER) {
-        await this.testSubtitleConnectivity()
-        return RecoveryResult.SUCCESS
+        await this.testSubtitleConnectivity();
+        return RecoveryResult.SUCCESS;
       }
 
-      return RecoveryResult.SUCCESS
+      return RecoveryResult.SUCCESS;
     } catch (retryError) {
-      this.log(LogLevel.DEBUG, `Network retry failed:`, retryError)
-      return RecoveryResult.FAILED
+      this.log(LogLevel.DEBUG, `Network retry failed:`, retryError);
+      return RecoveryResult.FAILED;
     }
   }
 
@@ -617,34 +617,34 @@ export class ErrorRecoveryService {
     attempt: number,
     context: RecoveryContext,
   ): Promise<RecoveryResult> {
-    this.log(LogLevel.DEBUG, `Attempting storage repair (attempt ${attempt})`)
+    this.log(LogLevel.DEBUG, `Attempting storage repair (attempt ${attempt})`);
 
     try {
       // Test basic storage functionality
-      const testKey = 'recovery-test'
-      const testValue = { timestamp: Date.now() }
+      const testKey = 'recovery-test';
+      const testValue = { timestamp: Date.now() };
 
       // Try to write and read a test value
-      await chrome.storage.local.set({ [testKey]: testValue })
-      const result = await chrome.storage.local.get(testKey)
+      await chrome.storage.local.set({ [testKey]: testValue });
+      const result = await chrome.storage.local.get(testKey);
 
       if (result[testKey]?.timestamp === testValue.timestamp) {
         // Clean up test data
-        await chrome.storage.local.remove(testKey)
-        return RecoveryResult.SUCCESS
+        await chrome.storage.local.remove(testKey);
+        return RecoveryResult.SUCCESS;
       }
 
-      return RecoveryResult.FAILED
+      return RecoveryResult.FAILED;
     } catch (storageError) {
-      this.log(LogLevel.DEBUG, `Storage repair failed:`, storageError)
+      this.log(LogLevel.DEBUG, `Storage repair failed:`, storageError);
 
       // Try alternative storage if available
       try {
-        sessionStorage.setItem('recovery-test', JSON.stringify({ timestamp: Date.now() }))
-        sessionStorage.removeItem('recovery-test')
-        return RecoveryResult.PARTIAL_SUCCESS
+        sessionStorage.setItem('recovery-test', JSON.stringify({ timestamp: Date.now() }));
+        sessionStorage.removeItem('recovery-test');
+        return RecoveryResult.PARTIAL_SUCCESS;
       } catch {
-        return RecoveryResult.FAILED
+        return RecoveryResult.FAILED;
       }
     }
   }
@@ -657,19 +657,19 @@ export class ErrorRecoveryService {
     attempt: number,
     context: RecoveryContext,
   ): Promise<RecoveryResult> {
-    this.log(LogLevel.DEBUG, `Attempting permission request for ${context.component}`)
+    this.log(LogLevel.DEBUG, `Attempting permission request for ${context.component}`);
 
     try {
       if (context.component === ComponentType.TTS_SERVICE) {
         // Check if audio permissions are available
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-        stream.getTracks().forEach((track) => track.stop())
-        return RecoveryResult.SUCCESS
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach((track) => track.stop());
+        return RecoveryResult.SUCCESS;
       }
 
-      return RecoveryResult.NOT_APPLICABLE
+      return RecoveryResult.NOT_APPLICABLE;
     } catch (permissionError) {
-      return RecoveryResult.REQUIRES_USER_ACTION
+      return RecoveryResult.REQUIRES_USER_ACTION;
     }
   }
 
@@ -681,25 +681,25 @@ export class ErrorRecoveryService {
     attempt: number,
     context: RecoveryContext,
   ): Promise<RecoveryResult> {
-    this.log(LogLevel.DEBUG, `Attempting cache clear for ${context.component}`)
+    this.log(LogLevel.DEBUG, `Attempting cache clear for ${context.component}`);
 
     try {
       if (context.component === ComponentType.TRANSLATION_SERVICE) {
         // Clear translation cache
-        await this.clearTranslationCache()
-        return RecoveryResult.SUCCESS
+        await this.clearTranslationCache();
+        return RecoveryResult.SUCCESS;
       }
 
       if (context.component === ComponentType.SUBTITLE_MANAGER) {
         // Clear subtitle cache
-        await this.clearSubtitleCache()
-        return RecoveryResult.SUCCESS
+        await this.clearSubtitleCache();
+        return RecoveryResult.SUCCESS;
       }
 
-      return RecoveryResult.NOT_APPLICABLE
+      return RecoveryResult.NOT_APPLICABLE;
     } catch (cacheError) {
-      this.log(LogLevel.DEBUG, `Cache clear failed:`, cacheError)
-      return RecoveryResult.FAILED
+      this.log(LogLevel.DEBUG, `Cache clear failed:`, cacheError);
+      return RecoveryResult.FAILED;
     }
   }
 
@@ -711,29 +711,29 @@ export class ErrorRecoveryService {
     attempt: number,
     context: RecoveryContext,
   ): Promise<RecoveryResult> {
-    this.log(LogLevel.DEBUG, `Attempting state reset for ${context.component}`)
+    this.log(LogLevel.DEBUG, `Attempting state reset for ${context.component}`);
 
     try {
       // Reset component state
-      const currentState = this.componentStates.get(context.component)
+      const currentState = this.componentStates.get(context.component);
       if (currentState) {
         // Reset to initial state
         this.componentStates.set(
           context.component,
           this.getInitialComponentState(context.component),
-        )
+        );
       }
 
       if (context.component === ComponentType.YOUTUBE_INTEGRATION) {
         // Reset YouTube player state
-        await this.resetYouTubePlayerState()
-        return RecoveryResult.SUCCESS
+        await this.resetYouTubePlayerState();
+        return RecoveryResult.SUCCESS;
       }
 
-      return RecoveryResult.SUCCESS
+      return RecoveryResult.SUCCESS;
     } catch (resetError) {
-      this.log(LogLevel.DEBUG, `State reset failed:`, resetError)
-      return RecoveryResult.FAILED
+      this.log(LogLevel.DEBUG, `State reset failed:`, resetError);
+      return RecoveryResult.FAILED;
     }
   }
 
@@ -745,19 +745,19 @@ export class ErrorRecoveryService {
     attempt: number,
     context: RecoveryContext,
   ): Promise<RecoveryResult> {
-    this.log(LogLevel.DEBUG, `Attempting service restart for ${context.component}`)
+    this.log(LogLevel.DEBUG, `Attempting service restart for ${context.component}`);
 
     try {
       if (context.component === ComponentType.SUBTITLE_MANAGER) {
         // Simulate subtitle manager restart
-        await this.restartSubtitleManager()
-        return RecoveryResult.SUCCESS
+        await this.restartSubtitleManager();
+        return RecoveryResult.SUCCESS;
       }
 
-      return RecoveryResult.NOT_APPLICABLE
+      return RecoveryResult.NOT_APPLICABLE;
     } catch (restartError) {
-      this.log(LogLevel.DEBUG, `Service restart failed:`, restartError)
-      return RecoveryResult.FAILED
+      this.log(LogLevel.DEBUG, `Service restart failed:`, restartError);
+      return RecoveryResult.FAILED;
     }
   }
 
@@ -769,15 +769,15 @@ export class ErrorRecoveryService {
     attempt: number,
     context: RecoveryContext,
   ): Promise<RecoveryResult> {
-    this.log(LogLevel.DEBUG, `Attempting configuration reset for ${context.component}`)
+    this.log(LogLevel.DEBUG, `Attempting configuration reset for ${context.component}`);
 
     try {
       // Reset component configuration to defaults
-      await this.resetComponentConfiguration(context.component)
-      return RecoveryResult.SUCCESS
+      await this.resetComponentConfiguration(context.component);
+      return RecoveryResult.SUCCESS;
     } catch (configError) {
-      this.log(LogLevel.DEBUG, `Configuration reset failed:`, configError)
-      return RecoveryResult.FAILED
+      this.log(LogLevel.DEBUG, `Configuration reset failed:`, configError);
+      return RecoveryResult.FAILED;
     }
   }
 
@@ -789,20 +789,20 @@ export class ErrorRecoveryService {
     attempt: number,
     context: RecoveryContext,
   ): Promise<RecoveryResult> {
-    this.log(LogLevel.DEBUG, `Attempting resource cleanup for ${context.component}`)
+    this.log(LogLevel.DEBUG, `Attempting resource cleanup for ${context.component}`);
 
     try {
       // Clean up memory and resources
       if (typeof gc === 'function') {
-        gc() // Force garbage collection if available
+        gc(); // Force garbage collection if available
       }
 
       // Clean up event listeners and timers
-      await this.cleanupResources(context.component)
-      return RecoveryResult.SUCCESS
+      await this.cleanupResources(context.component);
+      return RecoveryResult.SUCCESS;
     } catch (cleanupError) {
-      this.log(LogLevel.DEBUG, `Resource cleanup failed:`, cleanupError)
-      return RecoveryResult.FAILED
+      this.log(LogLevel.DEBUG, `Resource cleanup failed:`, cleanupError);
+      return RecoveryResult.FAILED;
     }
   }
 
@@ -811,36 +811,36 @@ export class ErrorRecoveryService {
   private async testTranslationApiConnectivity(): Promise<void> {
     // Placeholder for translation API health check
     // In real implementation, this would test the translation service
-    await this.sleep(100) // Simulate API call
+    await this.sleep(100); // Simulate API call
   }
 
   private async testSubtitleConnectivity(): Promise<void> {
     // Placeholder for subtitle connectivity test
-    await this.sleep(100) // Simulate connectivity check
+    await this.sleep(100); // Simulate connectivity check
   }
 
   private async clearTranslationCache(): Promise<void> {
     // Clear translation-related cache entries
-    const keys = await chrome.storage.local.get(null)
-    const translationKeys = Object.keys(keys).filter((key) => key.startsWith('translation-'))
+    const keys = await chrome.storage.local.get(null);
+    const translationKeys = Object.keys(keys).filter((key) => key.startsWith('translation-'));
     if (translationKeys.length > 0) {
-      await chrome.storage.local.remove(translationKeys)
+      await chrome.storage.local.remove(translationKeys);
     }
   }
 
   private async clearSubtitleCache(): Promise<void> {
     // Clear subtitle-related cache entries
-    const keys = await chrome.storage.local.get(null)
-    const subtitleKeys = Object.keys(keys).filter((key) => key.startsWith('subtitle-'))
+    const keys = await chrome.storage.local.get(null);
+    const subtitleKeys = Object.keys(keys).filter((key) => key.startsWith('subtitle-'));
     if (subtitleKeys.length > 0) {
-      await chrome.storage.local.remove(subtitleKeys)
+      await chrome.storage.local.remove(subtitleKeys);
     }
   }
 
   private async resetYouTubePlayerState(): Promise<void> {
     // Reset YouTube player integration state
     // This would interact with the YouTube player service
-    const video = document.querySelector('video')
+    const video = document.querySelector('video');
     if (video) {
       // Reset video element state if needed
     }
@@ -853,8 +853,8 @@ export class ErrorRecoveryService {
 
   private async resetComponentConfiguration(component: ComponentType): Promise<void> {
     // Reset component configuration to defaults
-    const defaultConfig = this.getDefaultComponentConfiguration(component)
-    this.componentStates.set(component, defaultConfig)
+    const defaultConfig = this.getDefaultComponentConfiguration(component);
+    this.componentStates.set(component, defaultConfig);
   }
 
   private async cleanupResources(component: ComponentType): Promise<void> {
@@ -864,23 +864,23 @@ export class ErrorRecoveryService {
 
   private getInitialComponentState(component: ComponentType): any {
     // Return initial state for component
-    return {}
+    return {};
   }
 
   private getDefaultComponentConfiguration(component: ComponentType): any {
     // Return default configuration for component
-    return {}
+    return {};
   }
 
   // Utility methods
 
   private getStrategyKey(component: ComponentType, type: RecoveryStrategyType): string {
-    return `${component}-${type}`
+    return `${component}-${type}`;
   }
 
   private calculateDelay(attempt: number, strategy: RecoveryStrategy): number {
-    const delay = strategy.initialDelay * Math.pow(strategy.backoffMultiplier, attempt - 1)
-    return Math.min(delay, strategy.maxDelay)
+    const delay = strategy.initialDelay * Math.pow(strategy.backoffMultiplier, attempt - 1);
+    return Math.min(delay, strategy.maxDelay);
   }
 
   private async withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
@@ -889,11 +889,11 @@ export class ErrorRecoveryService {
       new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error('Recovery timeout')), timeoutMs),
       ),
-    ])
+    ]);
   }
 
   private sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms))
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   private recordAttempt(
@@ -917,13 +917,13 @@ export class ErrorRecoveryService {
       duration,
       error,
       details,
-    }
+    };
 
-    this.recoveryHistory.push(attempt)
+    this.recoveryHistory.push(attempt);
 
     // Keep history within limits
     if (this.recoveryHistory.length > this.config.historyRetention) {
-      this.recoveryHistory.shift()
+      this.recoveryHistory.shift();
     }
   }
 
@@ -934,24 +934,24 @@ export class ErrorRecoveryService {
     component: ComponentType,
     errorType: ErrorType,
   ): void {
-    if (!this.config.enableStatisticsTracking) return
+    if (!this.config.enableStatisticsTracking) return;
 
-    this.stats.totalAttempts++
+    this.stats.totalAttempts++;
 
     switch (result) {
       case RecoveryResult.SUCCESS:
-        this.stats.successfulRecoveries++
-        break
+        this.stats.successfulRecoveries++;
+        break;
       case RecoveryResult.PARTIAL_SUCCESS:
-        this.stats.partialRecoveries++
-        break
+        this.stats.partialRecoveries++;
+        break;
       case RecoveryResult.FAILED:
-        this.stats.failedRecoveries++
-        break
+        this.stats.failedRecoveries++;
+        break;
     }
 
     // Update strategy stats
-    this.stats.strategiesUsed[strategy] = (this.stats.strategiesUsed[strategy] || 0) + 1
+    this.stats.strategiesUsed[strategy] = (this.stats.strategiesUsed[strategy] || 0) + 1;
 
     // Update component stats
     if (!this.stats.componentStats[component]) {
@@ -960,32 +960,32 @@ export class ErrorRecoveryService {
         successes: 0,
         failures: 0,
         averageTime: 0,
-      }
+      };
     }
-    const componentStat = this.stats.componentStats[component]
-    componentStat.attempts++
+    const componentStat = this.stats.componentStats[component];
+    componentStat.attempts++;
     if (result === RecoveryResult.SUCCESS || result === RecoveryResult.PARTIAL_SUCCESS) {
-      componentStat.successes++
+      componentStat.successes++;
     } else {
-      componentStat.failures++
+      componentStat.failures++;
     }
-    componentStat.averageTime = (componentStat.averageTime + duration) / 2
+    componentStat.averageTime = (componentStat.averageTime + duration) / 2;
 
     // Update error type stats
     if (!this.stats.errorTypeStats[errorType]) {
-      this.stats.errorTypeStats[errorType] = { attempts: 0, successes: 0, failures: 0 }
+      this.stats.errorTypeStats[errorType] = { attempts: 0, successes: 0, failures: 0 };
     }
-    const errorStat = this.stats.errorTypeStats[errorType]
-    errorStat.attempts++
+    const errorStat = this.stats.errorTypeStats[errorType];
+    errorStat.attempts++;
     if (result === RecoveryResult.SUCCESS || result === RecoveryResult.PARTIAL_SUCCESS) {
-      errorStat.successes++
+      errorStat.successes++;
     } else {
-      errorStat.failures++
+      errorStat.failures++;
     }
 
     // Update overall statistics
-    this.stats.successRate = this.stats.successfulRecoveries / this.stats.totalAttempts
-    this.stats.averageRecoveryTime = (this.stats.averageRecoveryTime + duration) / 2
+    this.stats.successRate = this.stats.successfulRecoveries / this.stats.totalAttempts;
+    this.stats.averageRecoveryTime = (this.stats.averageRecoveryTime + duration) / 2;
   }
 
   private initializeStats(): MutableRecoveryStats {
@@ -1000,27 +1000,27 @@ export class ErrorRecoveryService {
       componentStats: {} as Record<ComponentType, any>,
       errorTypeStats: {} as Record<ErrorType, any>,
       recentAttempts: [],
-    }
+    };
   }
 
   private startMaintenanceTasks(): void {
     // Cleanup old history entries
     this.cleanupTimer = window.setInterval(() => {
-      const cutoff = Date.now() - 24 * 60 * 60 * 1000 // 24 hours
+      const cutoff = Date.now() - 24 * 60 * 60 * 1000; // 24 hours
       this.recoveryHistory.splice(
         0,
         this.recoveryHistory.findIndex((attempt) => attempt.timestamp > cutoff),
-      )
+      );
 
       // Update recent attempts in stats
-      this.stats.recentAttempts = this.recoveryHistory.slice(-50) // Last 50 attempts
-    }, this.config.cleanupInterval)
+      this.stats.recentAttempts = this.recoveryHistory.slice(-50); // Last 50 attempts
+    }, this.config.cleanupInterval);
 
     // Update statistics periodically
     if (this.config.enableStatisticsTracking) {
       this.statsTimer = window.setInterval(() => {
-        this.calculateAdvancedStats()
-      }, 60000) // Every minute
+        this.calculateAdvancedStats();
+      }, 60000); // Every minute
     }
   }
 
@@ -1028,7 +1028,7 @@ export class ErrorRecoveryService {
     // Calculate more detailed statistics
     const recentAttempts = this.recoveryHistory.filter(
       (attempt) => attempt.timestamp > Date.now() - 60 * 60 * 1000, // Last hour
-    )
+    );
 
     // Update success rate for recent attempts
     if (recentAttempts.length > 0) {
@@ -1036,7 +1036,7 @@ export class ErrorRecoveryService {
         (attempt) =>
           attempt.result === RecoveryResult.SUCCESS ||
           attempt.result === RecoveryResult.PARTIAL_SUCCESS,
-      ).length
+      ).length;
 
       // Update rolling statistics
     }
@@ -1051,9 +1051,9 @@ export class ErrorRecoveryService {
             ? console.warn
             : level === LogLevel.DEBUG
               ? console.debug
-              : console.log
+              : console.log;
 
-      logMethod(`[ErrorRecovery] ${message}`, ...args)
+      logMethod(`[ErrorRecovery] ${message}`, ...args);
     }
   }
 
@@ -1064,29 +1064,29 @@ export class ErrorRecoveryService {
       [LogLevel.WARN]: 2,
       [LogLevel.ERROR]: 3,
       [LogLevel.CRITICAL]: 4,
-    }
+    };
 
-    return levelPriority[level] >= levelPriority[this.config.logLevel]
+    return levelPriority[level] >= levelPriority[this.config.logLevel];
   }
 
   /**
    * Get current recovery statistics
    */
   public getStats(): RecoveryStats {
-    return { ...this.stats }
+    return { ...this.stats };
   }
 
   /**
    * Get recovery history
    */
   public getHistory(component?: ComponentType, limit: number = 100): RecoveryAttempt[] {
-    let history = [...this.recoveryHistory]
+    let history = [...this.recoveryHistory];
 
     if (component) {
-      history = history.filter((attempt) => attempt.component === component)
+      history = history.filter((attempt) => attempt.component === component);
     }
 
-    return history.sort((a, b) => b.timestamp - a.timestamp).slice(0, limit)
+    return history.sort((a, b) => b.timestamp - a.timestamp).slice(0, limit);
   }
 
   /**
@@ -1095,17 +1095,17 @@ export class ErrorRecoveryService {
   public isRecovering(component: ComponentType): boolean {
     for (const key of this.activeRecoveries.keys()) {
       if (key.startsWith(component)) {
-        return true
+        return true;
       }
     }
-    return false
+    return false;
   }
 
   /**
    * Update recovery configuration
    */
   public updateConfig(updates: Partial<RecoveryConfig>): void {
-    Object.assign(this.config, updates)
+    Object.assign(this.config, updates);
   }
 
   /**
@@ -1113,19 +1113,19 @@ export class ErrorRecoveryService {
    */
   public destroy(): void {
     if (this.cleanupTimer) {
-      clearInterval(this.cleanupTimer)
-      this.cleanupTimer = null
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = null;
     }
 
     if (this.statsTimer) {
-      clearInterval(this.statsTimer)
-      this.statsTimer = null
+      clearInterval(this.statsTimer);
+      this.statsTimer = null;
     }
 
-    this.strategies.clear()
-    this.activeRecoveries.clear()
-    this.componentStates.clear()
+    this.strategies.clear();
+    this.activeRecoveries.clear();
+    this.componentStates.clear();
 
-    ErrorRecoveryService.instance = null
+    ErrorRecoveryService.instance = null;
   }
 }

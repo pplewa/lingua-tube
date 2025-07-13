@@ -3,9 +3,9 @@
  * Handles cross-origin requests for subtitle files with multiple fallback strategies
  */
 
-import { SubtitleErrorCode, SubtitleFetchError, FetchConfig } from './types'
-import { Logger } from '../logging/Logger'
-import { ComponentType } from '../logging/types'
+import { SubtitleErrorCode, SubtitleFetchError, FetchConfig } from './types';
+import { Logger } from '../logging/Logger';
+import { ComponentType } from '../logging/types';
 
 /**
  * CORS handling strategy
@@ -15,30 +15,30 @@ export type CorsStrategy =
   | 'background' // Use background script to make request
   | 'proxy' // Use proxy service (if available)
   | 'content_script' // Use content script to make request from YouTube context
-  | 'direct' // Direct fetch (may fail due to CORS)
+  | 'direct'; // Direct fetch (may fail due to CORS)
 
 /**
  * CORS configuration
  */
 export interface CorsConfig {
-  readonly strategies: CorsStrategy[]
-  readonly timeout: number
-  readonly retryOnCorsError: boolean
-  readonly enableLogging: boolean
-  readonly proxyEndpoint?: string
+  readonly strategies: CorsStrategy[];
+  readonly timeout: number;
+  readonly retryOnCorsError: boolean;
+  readonly enableLogging: boolean;
+  readonly proxyEndpoint?: string;
 }
 
 /**
  * CORS request result
  */
 export interface CorsRequestResult {
-  readonly success: boolean
-  readonly data?: string
-  readonly error?: SubtitleFetchError
-  readonly strategy: CorsStrategy
-  readonly url: string
-  readonly responseHeaders?: Record<string, string>
-  readonly statusCode?: number
+  readonly success: boolean;
+  readonly data?: string;
+  readonly error?: SubtitleFetchError;
+  readonly strategy: CorsStrategy;
+  readonly url: string;
+  readonly responseHeaders?: Record<string, string>;
+  readonly statusCode?: number;
 }
 
 /**
@@ -49,17 +49,17 @@ export const DEFAULT_CORS_CONFIG: CorsConfig = {
   timeout: 30000,
   retryOnCorsError: true,
   enableLogging: true,
-}
+};
 
 /**
  * CORS handler implementation
  */
 export class CorsHandler {
-  private readonly config: CorsConfig
-  private readonly logger = Logger.getInstance()
+  private readonly config: CorsConfig;
+  private readonly logger = Logger.getInstance();
 
   constructor(config: Partial<CorsConfig> = {}) {
-    this.config = { ...DEFAULT_CORS_CONFIG, ...config }
+    this.config = { ...DEFAULT_CORS_CONFIG, ...config };
   }
 
   // ========================================
@@ -73,12 +73,12 @@ export class CorsHandler {
     url: string,
     options: Partial<FetchConfig> = {},
   ): Promise<CorsRequestResult> {
-    const startTime = Date.now()
+    const startTime = Date.now();
     this.logger?.info('Fetching with CORS handling', {
       component: ComponentType.SUBTITLE_MANAGER,
       url,
       metadata: { strategies: this.config.strategies },
-    })
+    });
 
     for (const strategy of this.config.strategies) {
       try {
@@ -86,12 +86,12 @@ export class CorsHandler {
           component: ComponentType.SUBTITLE_MANAGER,
           url,
           metadata: { strategy },
-        })
+        });
 
-        const result = await this.executeStrategy(strategy, url, options)
+        const result = await this.executeStrategy(strategy, url, options);
 
         if (result.success) {
-          const duration = Date.now() - startTime
+          const duration = Date.now() - startTime;
           this.logger?.info('CORS strategy succeeded', {
             component: ComponentType.SUBTITLE_MANAGER,
             url,
@@ -101,8 +101,8 @@ export class CorsHandler {
               statusCode: result.statusCode,
               dataLength: result.data?.length,
             },
-          })
-          return result
+          });
+          return result;
         }
 
         // Log failure but continue to next strategy
@@ -115,11 +115,11 @@ export class CorsHandler {
             errorMessage: result.error?.message,
             retryable: result.error?.retryable,
           },
-        })
+        });
 
         // If this was a CORS error and we should retry, continue
         if (result.error?.code === SubtitleErrorCode.CORS_ERROR && this.config.retryOnCorsError) {
-          continue
+          continue;
         }
 
         // For other errors that aren't retryable, break
@@ -132,8 +132,8 @@ export class CorsHandler {
               errorCode: result.error.code,
               errorMessage: result.error.message,
             },
-          })
-          return result
+          });
+          return result;
         }
       } catch (error) {
         this.logger?.error('CORS strategy threw error', {
@@ -143,15 +143,15 @@ export class CorsHandler {
             strategy,
             error: error instanceof Error ? error.message : String(error),
           },
-        })
+        });
 
         // Continue to next strategy
-        continue
+        continue;
       }
     }
 
     // All strategies failed
-    const totalDuration = Date.now() - startTime
+    const totalDuration = Date.now() - startTime;
     this.logger?.error('All CORS strategies failed', {
       component: ComponentType.SUBTITLE_MANAGER,
       url,
@@ -160,7 +160,7 @@ export class CorsHandler {
         strategiesAttempted: this.config.strategies.length,
         strategies: this.config.strategies,
       },
-    })
+    });
 
     return {
       success: false,
@@ -171,7 +171,7 @@ export class CorsHandler {
       },
       strategy: 'direct',
       url,
-    }
+    };
   }
 
   // ========================================
@@ -188,22 +188,22 @@ export class CorsHandler {
   ): Promise<CorsRequestResult> {
     switch (strategy) {
       case 'extension':
-        return this.fetchWithExtensionPermissions(url, options)
+        return this.fetchWithExtensionPermissions(url, options);
 
       case 'background':
-        return this.fetchWithBackgroundScript(url, options)
+        return this.fetchWithBackgroundScript(url, options);
 
       case 'content_script':
-        return this.fetchWithContentScript(url, options)
+        return this.fetchWithContentScript(url, options);
 
       case 'proxy':
-        return this.fetchWithProxy(url, options)
+        return this.fetchWithProxy(url, options);
 
       case 'direct':
-        return this.fetchDirect(url, options)
+        return this.fetchDirect(url, options);
 
       default:
-        throw new Error(`Unknown CORS strategy: ${strategy}`)
+        throw new Error(`Unknown CORS strategy: ${strategy}`);
     }
   }
 
@@ -215,8 +215,8 @@ export class CorsHandler {
     options: Partial<FetchConfig>,
   ): Promise<CorsRequestResult> {
     try {
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), this.config.timeout)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
 
       const response = await fetch(url, {
         method: 'GET',
@@ -230,9 +230,9 @@ export class CorsHandler {
         },
         credentials: 'omit', // Don't send cookies for CORS
         mode: 'cors', // Explicitly request CORS
-      })
+      });
 
-      clearTimeout(timeoutId)
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         return {
@@ -247,11 +247,11 @@ export class CorsHandler {
           strategy: 'extension',
           url,
           statusCode: response.status,
-        }
+        };
       }
 
-      const data = await response.text()
-      const responseHeaders = this.extractHeaders(response)
+      const data = await response.text();
+      const responseHeaders = this.extractHeaders(response);
 
       return {
         success: true,
@@ -260,14 +260,14 @@ export class CorsHandler {
         url,
         responseHeaders,
         statusCode: response.status,
-      }
+      };
     } catch (error) {
       return {
         success: false,
         error: this.convertFetchError(error),
         strategy: 'extension',
         url,
-      }
+      };
     }
   }
 
@@ -287,7 +287,7 @@ export class CorsHandler {
           timeout: this.config.timeout,
           headers: options.headers,
         },
-      })
+      });
 
       if (response.success) {
         return {
@@ -297,14 +297,14 @@ export class CorsHandler {
           url,
           responseHeaders: response.headers,
           statusCode: response.statusCode,
-        }
+        };
       } else {
         return {
           success: false,
           error: response.error,
           strategy: 'background',
           url,
-        }
+        };
       }
     } catch (error) {
       return {
@@ -317,7 +317,7 @@ export class CorsHandler {
         },
         strategy: 'background',
         url,
-      }
+      };
     }
   }
 
@@ -369,10 +369,10 @@ export class CorsHandler {
             };
           }
         })();
-      `
+      `;
 
       // Execute in page context
-      const result = await this.executeInPageContext(script)
+      const result = await this.executeInPageContext(script);
 
       return {
         success: result.success,
@@ -381,7 +381,7 @@ export class CorsHandler {
         strategy: 'content_script',
         url,
         statusCode: result.statusCode,
-      }
+      };
     } catch (error) {
       return {
         success: false,
@@ -393,7 +393,7 @@ export class CorsHandler {
         },
         strategy: 'content_script',
         url,
-      }
+      };
     }
   }
 
@@ -414,14 +414,14 @@ export class CorsHandler {
         },
         strategy: 'proxy',
         url,
-      }
+      };
     }
 
     try {
-      const proxyUrl = `${this.config.proxyEndpoint}?url=${encodeURIComponent(url)}`
+      const proxyUrl = `${this.config.proxyEndpoint}?url=${encodeURIComponent(url)}`;
 
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), this.config.timeout)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
 
       const response = await fetch(proxyUrl, {
         method: 'GET',
@@ -430,9 +430,9 @@ export class CorsHandler {
           Accept: 'text/plain,application/json,*/*',
           ...options.headers,
         },
-      })
+      });
 
-      clearTimeout(timeoutId)
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         return {
@@ -445,10 +445,10 @@ export class CorsHandler {
           },
           strategy: 'proxy',
           url,
-        }
+        };
       }
 
-      const data = await response.text()
+      const data = await response.text();
 
       return {
         success: true,
@@ -456,14 +456,14 @@ export class CorsHandler {
         strategy: 'proxy',
         url,
         statusCode: response.status,
-      }
+      };
     } catch (error) {
       return {
         success: false,
         error: this.convertFetchError(error),
         strategy: 'proxy',
         url,
-      }
+      };
     }
   }
 
@@ -475,8 +475,8 @@ export class CorsHandler {
     options: Partial<FetchConfig>,
   ): Promise<CorsRequestResult> {
     try {
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), this.config.timeout)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
 
       const response = await fetch(url, {
         method: 'GET',
@@ -486,9 +486,9 @@ export class CorsHandler {
           ...options.headers,
         },
         mode: 'cors',
-      })
+      });
 
-      clearTimeout(timeoutId)
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         return {
@@ -503,11 +503,11 @@ export class CorsHandler {
           strategy: 'direct',
           url,
           statusCode: response.status,
-        }
+        };
       }
 
-      const data = await response.text()
-      const responseHeaders = this.extractHeaders(response)
+      const data = await response.text();
+      const responseHeaders = this.extractHeaders(response);
 
       return {
         success: true,
@@ -516,14 +516,14 @@ export class CorsHandler {
         url,
         responseHeaders,
         statusCode: response.status,
-      }
+      };
     } catch (error) {
       return {
         success: false,
         error: this.convertFetchError(error),
         strategy: 'direct',
         url,
-      }
+      };
     }
   }
 
@@ -536,7 +536,7 @@ export class CorsHandler {
    */
   private async executeInPageContext(script: string): Promise<any> {
     return new Promise((resolve, reject) => {
-      const scriptElement = document.createElement('script')
+      const scriptElement = document.createElement('script');
       scriptElement.textContent = `
         (async function() {
           try {
@@ -555,45 +555,45 @@ export class CorsHandler {
             }, '*');
           }
         })();
-      `
+      `;
 
       const messageHandler = (event: MessageEvent) => {
         if (event.data?.type === 'LINGUA_TUBE_FETCH_RESULT') {
-          window.removeEventListener('message', messageHandler)
-          document.head.removeChild(scriptElement)
+          window.removeEventListener('message', messageHandler);
+          document.head.removeChild(scriptElement);
 
           if (event.data.error) {
-            reject(new Error(event.data.error.message))
+            reject(new Error(event.data.error.message));
           } else {
-            resolve(event.data.result)
+            resolve(event.data.result);
           }
         }
-      }
+      };
 
-      window.addEventListener('message', messageHandler)
+      window.addEventListener('message', messageHandler);
 
       // Timeout after 30 seconds
       setTimeout(() => {
-        window.removeEventListener('message', messageHandler)
-        document.head.removeChild(scriptElement)
-        reject(new Error('Script execution timeout'))
-      }, 30000)
+        window.removeEventListener('message', messageHandler);
+        document.head.removeChild(scriptElement);
+        reject(new Error('Script execution timeout'));
+      }, 30000);
 
-      document.head.appendChild(scriptElement)
-    })
+      document.head.appendChild(scriptElement);
+    });
   }
 
   /**
    * Extract headers from Response object
    */
   private extractHeaders(response: Response): Record<string, string> {
-    const headers: Record<string, string> = {}
+    const headers: Record<string, string> = {};
 
     response.headers.forEach((value, key) => {
-      headers[key.toLowerCase()] = value
-    })
+      headers[key.toLowerCase()] = value;
+    });
 
-    return headers
+    return headers;
   }
 
   /**
@@ -601,18 +601,18 @@ export class CorsHandler {
    */
   private convertFetchError(error: unknown): SubtitleFetchError {
     if (error instanceof Error) {
-      let code = SubtitleErrorCode.NETWORK_ERROR
-      let retryable = true
+      let code = SubtitleErrorCode.NETWORK_ERROR;
+      let retryable = true;
 
-      const message = error.message.toLowerCase()
+      const message = error.message.toLowerCase();
 
       if (message.includes('cors')) {
-        code = SubtitleErrorCode.CORS_ERROR
-        retryable = false
+        code = SubtitleErrorCode.CORS_ERROR;
+        retryable = false;
       } else if (message.includes('abort')) {
-        code = SubtitleErrorCode.TIMEOUT
+        code = SubtitleErrorCode.TIMEOUT;
       } else if (message.includes('network')) {
-        code = SubtitleErrorCode.NETWORK_ERROR
+        code = SubtitleErrorCode.NETWORK_ERROR;
       }
 
       return {
@@ -620,7 +620,7 @@ export class CorsHandler {
         message: error.message,
         originalError: error,
         retryable,
-      }
+      };
     }
 
     return {
@@ -628,21 +628,21 @@ export class CorsHandler {
       message: 'Unknown fetch error',
       originalError: error,
       retryable: true,
-    }
+    };
   }
 
   /**
    * Get CORS configuration
    */
   getConfig(): CorsConfig {
-    return { ...this.config }
+    return { ...this.config };
   }
 
   /**
    * Create new CORS handler with updated configuration
    */
   withConfig(config: Partial<CorsConfig>): CorsHandler {
-    return new CorsHandler({ ...this.config, ...config })
+    return new CorsHandler({ ...this.config, ...config });
   }
 
   /**
@@ -652,25 +652,25 @@ export class CorsHandler {
     strategy: CorsStrategy,
     url: string,
   ): Promise<{ success: boolean; error?: string; timing: number }> {
-    const startTime = Date.now()
+    const startTime = Date.now();
 
     try {
-      const result = await this.executeStrategy(strategy, url, {})
-      const timing = Date.now() - startTime
+      const result = await this.executeStrategy(strategy, url, {});
+      const timing = Date.now() - startTime;
 
       return {
         success: result.success,
         error: result.error?.message,
         timing,
-      }
+      };
     } catch (error) {
-      const timing = Date.now() - startTime
+      const timing = Date.now() - startTime;
 
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
         timing,
-      }
+      };
     }
   }
 }
@@ -683,7 +683,7 @@ export class CorsHandler {
  * Create CORS handler with default configuration
  */
 export function createCorsHandler(config?: Partial<CorsConfig>): CorsHandler {
-  return new CorsHandler(config)
+  return new CorsHandler(config);
 }
 
 /**
@@ -695,7 +695,7 @@ export function createExtensionCorsHandler(): CorsHandler {
     timeout: 15000,
     retryOnCorsError: false,
     enableLogging: true,
-  })
+  });
 }
 
 /**
@@ -708,24 +708,24 @@ export function createComprehensiveCorsHandler(proxyEndpoint?: string): CorsHand
     retryOnCorsError: true,
     enableLogging: true,
     proxyEndpoint,
-  })
+  });
 }
 
 /**
  * Quick CORS fetch function
  */
 export async function corsAwareFetch(url: string, options?: Partial<FetchConfig>): Promise<string> {
-  const corsHandler = createExtensionCorsHandler()
-  const result = await corsHandler.fetchWithCorsHandling(url, options)
+  const corsHandler = createExtensionCorsHandler();
+  const result = await corsHandler.fetchWithCorsHandling(url, options);
 
   if (result.success && result.data) {
-    return result.data
+    return result.data;
   }
 
-  throw result.error || new Error('CORS fetch failed')
+  throw result.error || new Error('CORS fetch failed');
 }
 
 /**
  * Default CORS handler instance
  */
-export const corsHandler = createExtensionCorsHandler()
+export const corsHandler = createExtensionCorsHandler();

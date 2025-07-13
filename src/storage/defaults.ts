@@ -15,7 +15,7 @@ import {
   KeyboardShortcuts,
   StorageSchema,
   STORAGE_CONFIG,
-} from './types'
+} from './types';
 
 // ========================================
 // Default Language Settings
@@ -26,7 +26,7 @@ export const DEFAULT_LANGUAGE_SETTINGS: LanguageSettings = {
   nativeLanguage: 'en', // Will be detected/set by user
   autoDetectSource: true,
   fallbackLanguage: 'en',
-}
+};
 
 // ========================================
 // Default Subtitle Settings
@@ -43,7 +43,7 @@ export const DEFAULT_SUBTITLE_SETTINGS: SubtitleSettings = {
   opacity: 0.9,
   wordSpacing: 1.0,
   lineHeight: 1.4,
-}
+};
 
 // ========================================
 // Default Playback Settings
@@ -55,7 +55,7 @@ export const DEFAULT_PLAYBACK_SETTINGS: PlaybackSettings = {
   enableAutoReplay: false,
   pauseOnClick: true,
   skipSilence: false,
-}
+};
 
 // ========================================
 // Default Vocabulary Settings
@@ -68,7 +68,7 @@ export const DEFAULT_VOCABULARY_SETTINGS: VocabularySettings = {
   maxSavedWords: STORAGE_CONFIG.MAX_VOCABULARY_ITEMS,
   exportFormat: 'json',
   reviewReminders: true,
-}
+};
 
 // ========================================
 // Default Keyboard Shortcuts
@@ -81,7 +81,7 @@ export const DEFAULT_KEYBOARD_SHORTCUTS: KeyboardShortcuts = {
   replay: 'KeyR',
   saveWord: 'KeyW',
   showDefinition: 'KeyD',
-}
+};
 
 // ========================================
 // Default UI Settings
@@ -93,7 +93,7 @@ export const DEFAULT_UI_SETTINGS: UISettings = {
   showTooltips: true,
   animationsEnabled: true,
   keyboardShortcuts: DEFAULT_KEYBOARD_SHORTCUTS,
-}
+};
 
 // ========================================
 // Default Privacy Settings
@@ -106,7 +106,7 @@ export const DEFAULT_PRIVACY_SETTINGS: PrivacySettings = {
   maxCacheSize: STORAGE_CONFIG.MAX_CACHE_SIZE_MB,
   autoDeleteOldData: true,
   dataRetentionDays: 365,
-}
+};
 
 // ========================================
 // Default Developer Settings
@@ -121,7 +121,7 @@ export const DEFAULT_DEVELOPER_SETTINGS: DeveloperSettings = {
   consoleLogLevel: 'info',
   enabledComponents: [], // All components enabled when empty
   autoExportDebugData: false,
-}
+};
 
 // ========================================
 // Complete Default User Settings
@@ -136,7 +136,7 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   ui: DEFAULT_UI_SETTINGS,
   privacy: DEFAULT_PRIVACY_SETTINGS,
   developer: DEFAULT_DEVELOPER_SETTINGS,
-}
+};
 
 // ========================================
 // Default Storage Schema
@@ -146,7 +146,7 @@ export const DEFAULT_STORAGE_SCHEMA: StorageSchema = {
   version: STORAGE_CONFIG.SCHEMA_VERSION,
   lastMigration: Date.now(),
   migrationHistory: [],
-}
+};
 
 // ========================================
 // Helper Functions for Default Values
@@ -156,8 +156,8 @@ export const DEFAULT_STORAGE_SCHEMA: StorageSchema = {
  * Generates a unique ID for vocabulary items
  */
 export const generateVocabularyId = (): string => {
-  return `vocab_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-}
+  return `vocab_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+};
 
 /**
  * Creates default settings with user-specific overrides
@@ -198,16 +198,16 @@ export const createDefaultSettings = (overrides: Partial<UserSettings> = {}): Us
       ...DEFAULT_USER_SETTINGS.developer,
       ...overrides.developer,
     },
-  }
-}
+  };
+};
 
 /**
  * Validates user settings against the schema
  */
 export const validateUserSettings = (settings: unknown): settings is UserSettings => {
-  if (!settings || typeof settings !== 'object') return false
+  if (!settings || typeof settings !== 'object') return false;
 
-  const s = settings as Record<string, unknown>
+  const s = settings as Record<string, unknown>;
 
   return (
     typeof s.version === 'number' &&
@@ -218,8 +218,8 @@ export const validateUserSettings = (settings: unknown): settings is UserSetting
     typeof s.ui === 'object' &&
     typeof s.privacy === 'object' &&
     typeof s.developer === 'object'
-  )
-}
+  );
+};
 
 /**
  * Language code mapping for common languages
@@ -237,6 +237,6 @@ export const LANGUAGE_CODES = {
   zh: '中文',
   ar: 'العربية',
   hi: 'हिन्दी',
-} as const
+} as const;
 
-export type SupportedLanguageCode = keyof typeof LANGUAGE_CODES
+export type SupportedLanguageCode = keyof typeof LANGUAGE_CODES;
