@@ -81,8 +81,6 @@ export class TranslationApiService {
         region: this.config.region || 'global',
       }
       this.client = createClient(this.config.endpoint, credential)
-
-      console.log('Microsoft Translator API client initialized successfully')
     } catch (error) {
       this.client = null
       this.config = null

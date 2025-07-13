@@ -11,6 +11,8 @@ import {
   LanguageInfo,
   YOUTUBE_LANGUAGE_MAP,
 } from './types'
+import { Logger } from '../logging'
+import { ComponentType } from '../logging/types'
 
 /**
  * Processor for converting YouTube subtitle data
@@ -20,13 +22,18 @@ export class SubtitleTrackProcessor {
    * Process raw captions data into normalized subtitle tracks
    */
   static processSubtitleTracks(captionsData: YTPlayerCaptions): SubtitleTrack[] {
+    const logger = Logger.getInstance()
     try {
-      console.log('[LinguaTube] Processing subtitle tracks...')
+      logger.info('Processing subtitle tracks', {
+        component: ComponentType.YOUTUBE_INTEGRATION
+      })
 
       const rawTracks = captionsData.playerCaptionsTracklistRenderer?.captionTracks
 
       if (!rawTracks || rawTracks.length === 0) {
-        console.log('[LinguaTube] No caption tracks found')
+        logger.warn('No caption tracks found', {
+          component: ComponentType.YOUTUBE_INTEGRATION
+        })
         return []
       }
 
@@ -34,19 +41,32 @@ export class SubtitleTrackProcessor {
 
       for (const rawTrack of rawTracks) {
         try {
-          const track = this.processIndividualTrack(rawTrack)
+          const track = SubtitleTrackProcessor.processIndividualTrack(rawTrack)
           if (track) {
             processedTracks.push(track)
           }
         } catch (error) {
-          console.warn('[LinguaTube] Failed to process track:', rawTrack, error)
+          logger.warn('Failed to process track', {
+            component: ComponentType.YOUTUBE_INTEGRATION,
+            metadata: {
+              rawTrack,
+              error: error instanceof Error ? error.message : String(error)
+            }
+          })
         }
       }
 
-      console.log(`[LinguaTube] Processed ${processedTracks.length} subtitle tracks`)
-      return this.sortAndDeduplicate(processedTracks)
+      logger.info(`Processed ${processedTracks.length} subtitle tracks`, {
+        component: ComponentType.YOUTUBE_INTEGRATION
+      })
+      return SubtitleTrackProcessor.sortAndDeduplicate(processedTracks)
     } catch (error) {
-      console.error('[LinguaTube] Subtitle track processing failed:', error)
+      logger.error('Subtitle track processing failed', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error)
+        }
+      })
       return []
     }
   }

@@ -6,6 +6,7 @@ import { configService } from './ConfigService'
 import { translationCacheService } from './TranslationCacheService'
 import { rateLimitService } from './RateLimitService'
 
+
 // ============================================================================
 // Monitoring Types
 // ============================================================================
@@ -152,6 +153,7 @@ export class MonitoringService {
   private readonly METRICS_UPDATE_INTERVAL = 30000 // 30 seconds
   private readonly ANALYTICS_UPDATE_INTERVAL = 300000 // 5 minutes
   private readonly PERFORMANCE_CALCULATION_WINDOW = 3600000 // 1 hour
+
 
   // Storage keys
   private readonly STORAGE_KEYS = {

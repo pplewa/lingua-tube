@@ -13,6 +13,8 @@ import { StorageService } from '../storage'
 import { UserSettings } from '../storage/types'
 import { VocabularyManager } from '../vocabulary/VocabularyManager'
 import { SentenceLoopingService, SentenceLoop, LoopEvent } from './SentenceLoopingService'
+import { Logger } from '../logging'
+import { ComponentType } from '../logging/types'
 
 // ========================================
 // Types and Interfaces
@@ -866,6 +868,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
   private playerEventHandlers: Map<string, (event: any) => void> = new Map()
   private keyboardShortcuts: Map<string, () => void> = new Map()
   private keyboardEventHandler: (event: KeyboardEvent) => void
+  private readonly logger = Logger.getInstance()
 
   constructor(
     playerService: PlayerInteractionService,
@@ -912,21 +915,27 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
   public async initialize(): Promise<boolean> {
     try {
       if (this.isInitialized) {
-        console.warn('[EnhancedPlaybackControls] Already initialized')
+        this.logger.warn('Already initialized', {
+          component: ComponentType.YOUTUBE_INTEGRATION
+        })
         return true
       }
 
       // Find YouTube player container
       const playerContainer = this.findPlayerContainer()
       if (!playerContainer) {
-        console.error('[EnhancedPlaybackControls] Could not find YouTube player container')
+        this.logger.error('Could not find YouTube player container', {
+          component: ComponentType.YOUTUBE_INTEGRATION
+        })
         return false
       }
 
       // Create container element
       this.container = this.createContainer()
       if (!this.container) {
-        console.error('[EnhancedPlaybackControls] Failed to create container')
+        this.logger.error('Failed to create container', {
+          component: ComponentType.YOUTUBE_INTEGRATION
+        })
         return false
       }
 
@@ -948,7 +957,9 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       // Initialize sentence looping service
       const loopServiceInitialized = await this.sentenceLoopingService.initialize()
       if (!loopServiceInitialized) {
-        console.warn('[EnhancedPlaybackControls] Failed to initialize sentence looping service')
+        this.logger.warn('Failed to initialize sentence looping service', {
+          component: ComponentType.YOUTUBE_INTEGRATION
+        })
       }
 
       // Set up sentence looping event listeners
@@ -965,10 +976,17 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       this.updateStateIndicators()
 
       this.isInitialized = true
-      console.log('[EnhancedPlaybackControls] Initialized successfully')
+      this.logger.info('Initialized successfully', {
+        component: ComponentType.YOUTUBE_INTEGRATION
+      })
       return true
     } catch (error) {
-      console.error('[EnhancedPlaybackControls] Initialization failed:', error)
+      this.logger.error('Initialization failed', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error)
+        }
+      })
       return false
     }
   }
@@ -1020,9 +1038,16 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       await this.saveState()
 
       this.isInitialized = false
-      console.log('[EnhancedPlaybackControls] Destroyed successfully')
+      this.logger.info('Destroyed successfully', {
+        component: ComponentType.YOUTUBE_INTEGRATION
+      })
     } catch (error) {
-      console.error('[EnhancedPlaybackControls] Destroy failed:', error)
+      this.logger.error('Destroy failed', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error)
+        }
+      })
     }
   }
 
@@ -1470,7 +1495,12 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
         this.updateConfigFromSettings(result.data)
       }
     } catch (error) {
-      console.warn('[EnhancedPlaybackControls] Failed to load config from storage:', error)
+      this.logger.warn('Failed to load config from storage', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error)
+        }
+      })
     }
   }
 
@@ -1567,7 +1597,13 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
         timestamp: Date.now(),
       })
     } catch (error) {
-      console.error('[EnhancedPlaybackControls] Failed to set playback speed:', error)
+      this.logger.error('Failed to set playback speed', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          speed,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      })
       this.showActionToast('Failed to change speed', 'error')
     }
   }
@@ -1623,7 +1659,13 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
         timestamp: Date.now(),
       })
     } catch (error) {
-      console.error('[EnhancedPlaybackControls] Failed to create loop:', error)
+      this.logger.error('Failed to create loop', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          currentTime: this.playerService.getCurrentTime(),
+          error: error instanceof Error ? error.message : String(error)
+        }
+      })
       this.showActionToast('Failed to create loop', 'error')
     }
   }
@@ -1647,7 +1689,10 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
         timestamp: Date.now(),
       })
     } catch (error) {
-      console.error('[EnhancedPlaybackControls] Failed to clear loop:', error)
+      this.logger.error('Failed to clear loop in clearLoop method', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: { error: error instanceof Error ? error.message : String(error) }
+      })
       this.showActionToast('Failed to remove loop', 'error')
     }
   }
@@ -1741,7 +1786,13 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
         timestamp: Date.now(),
       })
     } catch (error) {
-      console.error('[EnhancedPlaybackControls] Failed to navigate sentence:', error)
+              this.logger.error('Failed to navigate sentence', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: { 
+            direction,
+            error: error instanceof Error ? error.message : String(error)
+          }
+        })
       this.showActionToast('Navigation failed', 'error')
     }
   }
@@ -1765,7 +1816,13 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
         timestamp: Date.now(),
       })
     } catch (error) {
-      console.error('[EnhancedPlaybackControls] Failed to skip time:', error)
+              this.logger.error('Failed to skip time', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: { 
+            seconds,
+            error: error instanceof Error ? error.message : String(error)
+          }
+        })
     }
   }
 
@@ -1821,7 +1878,12 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
         timestamp: Date.now(),
       })
     } catch (error) {
-      console.error('[EnhancedPlaybackControls] Failed to replay sentence:', error)
+              this.logger.error('Failed to replay sentence', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: { 
+            error: error instanceof Error ? error.message : String(error)
+          }
+        })
       this.showActionToast('Replay failed', 'error')
     }
   }
@@ -1829,7 +1891,10 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
   private navigateToSubtitle(subtitleId: string): void {
     try {
       if (!this.sentenceLoopingService || !this.isInitialized) {
-        console.warn('[EnhancedPlaybackControls] Sentence looping service not available')
+        this.logger.warn('Sentence looping service not available', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {}
+      })
         return
       }
 
@@ -1857,7 +1922,13 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
         })
       }
     } catch (error) {
-      console.error('[EnhancedPlaybackControls] Failed to navigate to subtitle:', error)
+              this.logger.error('Failed to navigate to subtitle', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: { 
+            subtitleId,
+            error: error instanceof Error ? error.message : String(error)
+          }
+        })
     }
   }
 
@@ -1880,7 +1951,13 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
         timestamp: Date.now(),
       })
     } catch (error) {
-      console.error('[EnhancedPlaybackControls] Failed to jump to percentage:', error)
+              this.logger.error('Failed to jump to percentage', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: { 
+            percentage,
+            error: error instanceof Error ? error.message : String(error)
+          }
+        })
     }
   }
 
@@ -1998,7 +2075,13 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
           break
 
         case 'loop_completed':
-          console.log('[EnhancedPlaybackControls] Loop completed:', event.loop.text)
+          this.logger.debug('Loop completed', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: { 
+            loopText: event.loop.text,
+            loopId: event.loop.id
+          }
+        })
           break
       }
     })
@@ -2358,7 +2441,10 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
         endTime !== undefined ? Math.min(duration, endTime) : Math.min(duration, currentTime + 5)
 
       if (loopEnd <= loopStart) {
-        console.warn('[EnhancedPlaybackControls] Invalid loop times:', { loopStart, loopEnd })
+        this.logger.warn('Invalid loop times', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: { loopStart, loopEnd }
+      })
         return null
       }
 
@@ -2381,7 +2467,14 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
 
       return this.currentLoop
     } catch (error) {
-      console.error('[EnhancedPlaybackControls] Failed to create loop:', error)
+        this.logger.error('Failed to create loop', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: { 
+            startTime,
+            endTime,
+            error: error instanceof Error ? error.message : String(error)
+          }
+        })
       return null
     }
   }
@@ -2400,7 +2493,10 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
 
       return true
     } catch (error) {
-      console.error('[EnhancedPlaybackControls] Failed to clear loop:', error)
+      this.logger.error('Failed to clear loop in removeLoop method', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: { error: error instanceof Error ? error.message : String(error) }
+      })
       return false
     }
   }

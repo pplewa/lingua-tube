@@ -8,8 +8,9 @@ import {
   YTPlayerCaptions,
   YTVideoDetails,
   YouTubePageContext,
-  SubtitleErrorCode,
 } from './types'
+import { Logger } from '../logging/Logger'
+import { ComponentType } from '../logging/types'
 
 /**
  * Parser for extracting YouTube player response data
@@ -18,13 +19,16 @@ export class YouTubePlayerResponseParser {
   private static readonly RETRY_ATTEMPTS = 3
   private static readonly RETRY_DELAY = 500
   private static readonly PARSER_TIMEOUT = 5000
+  private static readonly logger = Logger.getInstance()
 
   /**
    * Main method to extract and parse ytInitialPlayerResponse
    */
   static async parsePlayerResponse(): Promise<PlayerResponseParseResult> {
     try {
-      console.log('[LinguaTube] Starting YouTube player response parsing...')
+      this.logger.info('Starting YouTube player response parsing...', {
+        component: ComponentType.YOUTUBE_INTEGRATION
+      })
 
       // Verify we're on a YouTube video page
       const pageContext = this.getPageContext()
@@ -48,15 +52,23 @@ export class YouTubePlayerResponseParser {
       // Parse the response
       const parseResult = this.parseResponseData(playerResponse)
 
-      console.log('[LinguaTube] Player response parsed successfully:', {
-        videoId: parseResult.videoDetails?.videoId,
-        captionTracks:
-          parseResult.captions?.playerCaptionsTracklistRenderer?.captionTracks?.length || 0,
+      this.logger.info('Player response parsed successfully', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          videoId: parseResult.videoDetails?.videoId,
+          captionTracks:
+            parseResult.captions?.playerCaptionsTracklistRenderer?.captionTracks?.length || 0,
+        }
       })
 
       return parseResult
     } catch (error) {
-      console.error('[LinguaTube] Player response parsing failed:', error)
+      this.logger.error('Player response parsing failed', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error)
+        }
+      })
       return {
         success: false,
         error: `Parsing failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -70,16 +82,18 @@ export class YouTubePlayerResponseParser {
    */
   private static async extractPlayerResponseWithRetry(): Promise<any> {
     for (let attempt = 1; attempt <= this.RETRY_ATTEMPTS; attempt++) {
-      console.log(
-        `[LinguaTube] Player response extraction attempt ${attempt}/${this.RETRY_ATTEMPTS}`,
-      )
+      this.logger.info(`Player response extraction attempt ${attempt}/${this.RETRY_ATTEMPTS}`, {
+        component: ComponentType.YOUTUBE_INTEGRATION
+      })
 
       // Try different extraction methods
       const playerResponse =
         this.extractFromWindow() || this.extractFromScripts() || (await this.extractWithDelay())
 
       if (playerResponse) {
-        console.log('[LinguaTube] Player response extracted successfully')
+        this.logger.info('Player response extracted successfully', {
+          component: ComponentType.YOUTUBE_INTEGRATION
+        })
         return playerResponse
       }
 
@@ -99,12 +113,19 @@ export class YouTubePlayerResponseParser {
     try {
       // @ts-ignore - YouTube's global variable
       if (window.ytInitialPlayerResponse) {
-        console.log('[LinguaTube] Found ytInitialPlayerResponse on window object')
+        this.logger.info('Found ytInitialPlayerResponse on window object', {
+          component: ComponentType.YOUTUBE_INTEGRATION
+        })
         // @ts-ignore
         return window.ytInitialPlayerResponse
       }
     } catch (error) {
-      console.log('[LinguaTube] Window extraction failed:', error)
+      this.logger.error('Window extraction failed', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error)
+        }
+      })
     }
     return null
   }
@@ -122,26 +143,37 @@ export class YouTubePlayerResponseParser {
         // Look for ytInitialPlayerResponse assignment
         const match = content.match(/var\s+ytInitialPlayerResponse\s*=\s*({.+?});/)
         if (match) {
-          console.log('[LinguaTube] Found ytInitialPlayerResponse in script tag')
+          this.logger.info('Found ytInitialPlayerResponse in script tag', {
+            component: ComponentType.YOUTUBE_INTEGRATION
+          })
           return JSON.parse(match[1])
         }
 
         // Alternative pattern
         const match2 = content.match(/ytInitialPlayerResponse\s*=\s*({.+?});/)
         if (match2) {
-          console.log('[LinguaTube] Found ytInitialPlayerResponse (alternative pattern)')
+          this.logger.info('Found ytInitialPlayerResponse (alternative pattern)', {
+            component: ComponentType.YOUTUBE_INTEGRATION
+          })
           return JSON.parse(match2[1])
         }
 
         // Another common pattern
         const match3 = content.match(/"ytInitialPlayerResponse":\s*({.+?})(?:,"webPageType")/)
         if (match3) {
-          console.log('[LinguaTube] Found ytInitialPlayerResponse (JSON pattern)')
+          this.logger.info('Found ytInitialPlayerResponse (JSON pattern)', {
+            component: ComponentType.YOUTUBE_INTEGRATION
+          })
           return JSON.parse(match3[1])
         }
       }
     } catch (error) {
-      console.log('[LinguaTube] Script extraction failed:', error)
+      this.logger.error('Script extraction failed', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error)
+        }
+      })
     }
     return null
   }
@@ -202,15 +234,24 @@ export class YouTubePlayerResponseParser {
 
       for (const captions of possiblePaths) {
         if (captions?.playerCaptionsTracklistRenderer) {
-          console.log('[LinguaTube] Found captions data')
+          this.logger.info('Found captions data', {
+            component: ComponentType.YOUTUBE_INTEGRATION
+          })
           return captions as YTPlayerCaptions
         }
       }
 
-      console.log('[LinguaTube] No captions data found in player response')
+      this.logger.info('No captions data found in player response', {
+        component: ComponentType.YOUTUBE_INTEGRATION
+      })
       return undefined
     } catch (error) {
-      console.error('[LinguaTube] Captions extraction failed:', error)
+      this.logger.error('Captions extraction failed', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error)
+        }
+      });
       return undefined
     }
   }
@@ -223,7 +264,9 @@ export class YouTubePlayerResponseParser {
       const videoDetails = response.videoDetails || response.playerResponse?.videoDetails
 
       if (!videoDetails) {
-        console.log('[LinguaTube] No video details found in player response')
+        this.logger.info('No video details found in player response', {
+          component: ComponentType.YOUTUBE_INTEGRATION
+        })
         return undefined
       }
 
@@ -236,7 +279,12 @@ export class YouTubePlayerResponseParser {
         isUpcoming: videoDetails.isUpcoming || false,
       }
     } catch (error) {
-      console.error('[LinguaTube] Video details extraction failed:', error)
+      this.logger.error('Video details extraction failed', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error)
+        }
+      })
       return undefined
     }
   }
@@ -368,6 +416,8 @@ export class YouTubePlayerResponseParser {
    */
   static clearCache(): void {
     // Clear any internal caches if needed
-    console.log('[LinguaTube] Player response parser cache cleared')
+    this.logger.info('Player response parser cache cleared', {
+      component: ComponentType.YOUTUBE_INTEGRATION
+    })
   }
 }

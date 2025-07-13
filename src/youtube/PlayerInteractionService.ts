@@ -5,6 +5,10 @@
  */
 
 import { YouTubePageContext, SubtitleDiscoveryEvent } from './types'
+import { Logger } from '../logging/Logger'
+import { ComponentType } from '../logging/types'
+
+const logger = Logger.getInstance()
 
 // ========================================
 // Player Interaction Types
@@ -365,9 +369,9 @@ export interface YouTubeSubtitleData {
 export const DEFAULT_SUBTITLE_SYNC_CONFIG: SubtitleSyncConfig = {
   enabled: true,
   timeOffset: 0,
-  lookAheadTime: 0, 
-  lookBehindTime: 0, 
-  timingTolerance: 0, 
+  lookAheadTime: 0,
+  lookBehindTime: 0,
+  timingTolerance: 0,
   autoCorrectTiming: true,
   enableSmoothing: true,
   maxConcurrentCues: 3,
@@ -948,11 +952,14 @@ export class MediaElementProxy {
     this.clearCache()
 
     if (this.config.enableLogging) {
-      console.log('[MediaElementProxy] Element updated:', {
-        hasElement: !!element,
-        elementType: element?.tagName,
-        readyState: element?.readyState,
-        quirks: this.quirks,
+      logger.info('Element updated', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          hasElement: !!element,
+          elementType: element?.tagName,
+          readyState: element?.readyState,
+          quirks: this.quirks,
+        },
       })
     }
   }
@@ -1016,7 +1023,12 @@ export class MediaElementProxy {
       const result = await this.withTimeout(operation(), this.config.operationTimeoutMs)
 
       if (this.config.enableLogging) {
-        console.log(`[MediaElementProxy] Operation "${operationName}" succeeded:`, result)
+        logger.info(`Operation "${operationName}" succeeded`, {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: {
+            result,
+          },
+        })
       }
 
       return {
@@ -1041,7 +1053,12 @@ export class MediaElementProxy {
             )
 
       if (this.config.enableLogging) {
-        console.error(`[MediaElementProxy] Operation "${operationName}" failed:`, operationError)
+        logger.error(`Operation "${operationName}" failed`, {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: {
+            operationError,
+          },
+        })
       }
 
       // Try fallback if available
@@ -1154,7 +1171,12 @@ export class MediaElementProxy {
       this.cacheProperty(property, value)
 
       if (this.config.enableLogging) {
-        console.log(`[MediaElementProxy] Set property "${property}" to:`, value)
+        logger.info(`Set property "${property}" to`, {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: {
+            value,
+          },
+        })
       }
 
       return {
@@ -1419,11 +1441,15 @@ export class NavigationHandler {
    */
   public initialize(): void {
     if (this.isInitialized) {
-      console.warn('[NavigationHandler] Already initialized')
+      logger.warn('Already initialized', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+      })
       return
     }
 
-    console.log('[NavigationHandler] Initializing navigation detection')
+    logger.info('Initializing navigation detection', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+    })
 
     try {
       if (this.config.enableUrlTracking) {
@@ -1442,9 +1468,16 @@ export class NavigationHandler {
       this.currentVideoId = this.extractVideoId(this.currentUrl)
       this.isInitialized = true
 
-      console.log('[NavigationHandler] Navigation detection initialized successfully')
+      logger.info('Navigation detection initialized successfully', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+      })
     } catch (error) {
-      console.error('[NavigationHandler] Initialization failed:', error)
+      logger.error('Initialization failed', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      })
       throw new PlayerOperationError(
         PlayerErrorCode.OBSERVER_FAILURE,
         'Failed to initialize navigation handler',
@@ -1457,7 +1490,9 @@ export class NavigationHandler {
    * Shutdown navigation tracking and cleanup resources
    */
   public shutdown(): void {
-    console.log('[NavigationHandler] Shutting down navigation detection')
+    logger.info('Shutting down navigation detection', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+    })
 
     // Clear debounce timeout
     if (this.debounceTimeout !== null) {
@@ -1488,7 +1523,12 @@ export class NavigationHandler {
       try {
         cleanup()
       } catch (error) {
-        console.warn('[NavigationHandler] Cleanup function failed:', error)
+        logger.warn('Cleanup function failed', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        })
       }
     })
     this.cleanupFunctions = []
@@ -1499,7 +1539,9 @@ export class NavigationHandler {
     this.preservedStates.clear()
     this.isInitialized = false
 
-    console.log('[NavigationHandler] Navigation detection shut down successfully')
+    logger.info('Navigation detection shut down successfully', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+    })
   }
 
   /**
@@ -1579,7 +1621,9 @@ export class NavigationHandler {
     this.config = { ...this.config, ...newConfig }
 
     if (requiresReinitialization && this.isInitialized) {
-      console.log('[NavigationHandler] Configuration changed, reinitializing...')
+      logger.info('Configuration changed, reinitializing...', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+      })
       this.shutdown()
       this.initialize()
     }
@@ -1866,7 +1910,12 @@ export class NavigationHandler {
       try {
         callback(event)
       } catch (error) {
-        console.error('[NavigationHandler] Navigation callback failed:', error)
+        logger.error('Navigation callback failed', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        })
         callbackSuccess = false
       }
     })
@@ -1885,12 +1934,15 @@ export class NavigationHandler {
       this.navigationHistory = this.navigationHistory.slice(-this.config.maxNavigationHistory)
     }
 
-    console.log('[NavigationHandler] Navigation event emitted:', {
-      type: event.type,
-      fromUrl: event.fromUrl?.substring(0, 100),
-      toUrl: event.toUrl?.substring(0, 100),
-      videoId: event.videoId,
-      preserveState: event.preserveState,
+    logger.info('Navigation event emitted:', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+      metadata: {
+        type: event.type,
+        fromUrl: event.fromUrl?.substring(0, 100),
+        toUrl: event.toUrl?.substring(0, 100),
+        videoId: event.videoId,
+        preserveState: event.preserveState,
+      },
     })
   }
 
@@ -2070,7 +2122,9 @@ export class PlayerInteractionService {
    */
   public async initialize(): Promise<boolean> {
     try {
-      console.log('[PlayerInteractionService] Initializing...')
+      logger.info('Initializing...', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+      })
 
       this.isInitialized = true
 
@@ -2087,7 +2141,12 @@ export class PlayerInteractionService {
       // If not found, wait for it to appear
       return this.waitForVideoElement()
     } catch (error) {
-      console.error('[PlayerInteractionService] Initialization failed:', error)
+      logger.error('Initialization failed', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      })
       this.notifyError(PlayerErrorCode.UNKNOWN_ERROR, 'Failed to initialize player service', {
         error,
       })
@@ -2099,7 +2158,9 @@ export class PlayerInteractionService {
    * Shutdown the service and clean up resources
    */
   public async shutdown(): Promise<void> {
-    console.log('[PlayerInteractionService] Shutting down...')
+    logger.info('Shutting down...', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+    })
 
     this.isInitialized = false
 
@@ -2179,11 +2240,18 @@ export class PlayerInteractionService {
       try {
         const element = document.querySelector(selector) as HTMLVideoElement
         if (element && this.isValidVideoElement(element)) {
-          console.log(`[PlayerInteractionService] Found video element with selector: ${selector}`)
+          logger.info(`Found video element with selector: ${selector}`, {
+            component: ComponentType.YOUTUBE_INTEGRATION,
+          })
           return element
         }
       } catch (error) {
-        console.warn(`[PlayerInteractionService] Error with selector "${selector}":`, error)
+        logger.warn(`Error with selector "${selector}":`, {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        })
       }
     }
 
@@ -2213,9 +2281,9 @@ export class PlayerInteractionService {
 
       const tryFind = async () => {
         attempts++
-        console.log(
-          `[PlayerInteractionService] Attempt ${attempts}/${this.config.retryAttempts} to find video element`,
-        )
+        logger.info(`Attempt ${attempts}/${this.config.retryAttempts} to find video element`, {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+        })
 
         const element = await this.findVideoElement()
         if (element) {
@@ -2225,7 +2293,9 @@ export class PlayerInteractionService {
         }
 
         if (attempts >= this.config.retryAttempts) {
-          console.warn('[PlayerInteractionService] Max retry attempts reached')
+          logger.warn('Max retry attempts reached', {
+            component: ComponentType.YOUTUBE_INTEGRATION,
+          })
           this.notifyError(
             PlayerErrorCode.VIDEO_ELEMENT_NOT_FOUND,
             'Video element not found after maximum retry attempts',
@@ -2263,10 +2333,14 @@ export class PlayerInteractionService {
     if (this.videoElement) {
       await this.addVideoElementListeners()
       this.updatePlayerState()
-      console.log('[PlayerInteractionService] Video element set and ready, proxy updated')
+      logger.info('Video element set and ready, proxy updated', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+      })
     } else {
       this.lastKnownState = null
-      console.log('[PlayerInteractionService] Video element cleared, proxy cleared')
+      logger.info('Video element cleared, proxy cleared', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+      })
     }
 
     // Notify listeners of change
@@ -2302,9 +2376,16 @@ export class PlayerInteractionService {
         characterDataOldValue: false,
       })
 
-      console.log('[PlayerInteractionService] Started observing DOM changes')
+      logger.info('Started observing DOM changes', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+      })
     } catch (error) {
-      console.error('[PlayerInteractionService] Failed to start observing:', error)
+      logger.error('Failed to start observing', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      })
     }
   }
 
@@ -2314,7 +2395,9 @@ export class PlayerInteractionService {
   private stopObserving(): void {
     if (this.mutationObserver) {
       this.mutationObserver.disconnect()
-      console.log('[PlayerInteractionService] Stopped observing DOM changes')
+      logger.info('Stopped observing DOM changes', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+      })
     }
   }
 
@@ -2360,20 +2443,28 @@ export class PlayerInteractionService {
   private async recheckVideoElement(): Promise<void> {
     if (!this.isInitialized) return
 
-    console.log('[PlayerInteractionService] Rechecking video element due to DOM changes')
+    logger.info('Rechecking video element due to DOM changes', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+    })
 
     const currentElement = await this.findVideoElement()
 
     // If we found a different element or lost the current one
     if (currentElement !== this.videoElement) {
       if (currentElement && !this.videoElement) {
-        console.log('[PlayerInteractionService] Video element appeared')
+        logger.info('Video element appeared', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+        })
         await this.setVideoElement(currentElement)
       } else if (!currentElement && this.videoElement) {
-        console.log('[PlayerInteractionService] Video element disappeared')
+        logger.info('Video element disappeared', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+        })
         await this.setVideoElement(null)
       } else if (currentElement && this.videoElement && currentElement !== this.videoElement) {
-        console.log('[PlayerInteractionService] Video element replaced')
+        logger.info('Video element replaced', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+        })
         await this.setVideoElement(currentElement)
       }
     }
@@ -2396,10 +2487,12 @@ export class PlayerInteractionService {
         this.createEventHandler(eventType),
       )
       if (!result.success && result.error) {
-        console.warn(
-          `[PlayerInteractionService] Failed to add listener for ${eventType}:`,
-          result.error.message,
-        )
+        logger.warn(`Failed to add listener for ${eventType}:`, {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: {
+            error: result.error.message,
+          },
+        })
       }
     }
 
@@ -2435,10 +2528,12 @@ export class PlayerInteractionService {
 
         const result = await this.mediaProxy.addEventListener(eventType, stateListener)
         if (!result.success && result.error) {
-          console.warn(
-            `[PlayerInteractionService] Failed to add state listener for ${eventType}:`,
-            result.error.message,
-          )
+          logger.warn(`Failed to add state listener for ${eventType}:`, {
+            component: ComponentType.YOUTUBE_INTEGRATION,
+            metadata: {
+              error: result.error.message,
+            },
+          })
         }
       }
     }
@@ -2457,10 +2552,12 @@ export class PlayerInteractionService {
         this.createEventHandler(eventType),
       )
       if (!result.success && result.error) {
-        console.warn(
-          `[PlayerInteractionService] Failed to remove listener for ${eventType}:`,
-          result.error.message,
-        )
+        logger.warn(`Failed to remove listener for ${eventType}:`, {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: {
+            error: result.error.message,
+          },
+        })
       }
     }
   }
@@ -2480,10 +2577,12 @@ export class PlayerInteractionService {
         try {
           callback(event, playerState || undefined)
         } catch (error) {
-          console.error(
-            `[PlayerInteractionService] Error in event callback for ${eventType}:`,
-            error,
-          )
+          logger.error(`Error in event callback for ${eventType}:`, {
+            component: ComponentType.YOUTUBE_INTEGRATION,
+            metadata: {
+              error: error instanceof Error ? error.message : String(error),
+            },
+          })
         }
       })
     }
@@ -2556,14 +2655,22 @@ export class PlayerInteractionService {
           this.notifyStateChange(newStateInfo, this.previousState, changes)
         }
 
-        console.log(`[PlayerInteractionService] State changed to ${PlayerState[currentState]}`, {
-          changes,
-          transition,
-          trigger,
+        logger.info(`State changed to ${PlayerState[currentState]}`, {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: {
+            changes,
+            transition,
+            trigger,
+          },
         })
       }
     } catch (error) {
-      console.error('[PlayerInteractionService] Failed to update player state:', error)
+      logger.error('Failed to update player state', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      })
     }
   }
 
@@ -2671,7 +2778,12 @@ export class PlayerInteractionService {
       try {
         callback(newState, previousState, changes)
       } catch (error) {
-        console.error('[PlayerInteractionService] Error in state change callback:', error)
+        logger.error('Error in state change callback', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        })
       }
     })
   }
@@ -2747,7 +2859,12 @@ export class PlayerInteractionService {
       try {
         callback(videoElement)
       } catch (error) {
-        console.error('[PlayerInteractionService] Error in player change callback:', error)
+        logger.error('Error in player change callback', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        })
       }
     })
   }
@@ -2771,13 +2888,23 @@ export class PlayerInteractionService {
       context: 'unknown',
     }
 
-    console.error('[PlayerInteractionService]', error)
+    logger.error('Error in player change callback', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+      metadata: {
+        error: error instanceof Error ? error.message : String(error),
+      },
+    })
 
     this.playerChangeListeners.forEach((callback) => {
       try {
         callback(null, error)
       } catch (callbackError) {
-        console.error('[PlayerInteractionService] Error in error callback:', callbackError)
+        logger.error('Error in error callback', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: {
+            error: callbackError instanceof Error ? callbackError.message : String(callbackError),
+          },
+        })
       }
     })
   }
@@ -2827,7 +2954,9 @@ export class PlayerInteractionService {
    */
   public addStateChangeListener(callback: PlayerStateChangeCallback): void {
     this.stateChangeListeners.add(callback)
-    console.log('[PlayerInteractionService] State change listener added')
+    logger.info('State change listener added', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+    })
   }
 
   /**
@@ -2835,7 +2964,9 @@ export class PlayerInteractionService {
    */
   public removeStateChangeListener(callback: PlayerStateChangeCallback): void {
     this.stateChangeListeners.delete(callback)
-    console.log('[PlayerInteractionService] State change listener removed')
+    logger.info('State change listener removed', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+    })
   }
 
   /**
@@ -2843,7 +2974,9 @@ export class PlayerInteractionService {
    */
   public removeAllStateChangeListeners(): void {
     this.stateChangeListeners.clear()
-    console.log('[PlayerInteractionService] All state change listeners removed')
+    logger.info('All state change listeners removed', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+    })
   }
 
   /**
@@ -2865,7 +2998,9 @@ export class PlayerInteractionService {
    */
   public clearStateHistory(): void {
     this.stateHistory = []
-    console.log('[PlayerInteractionService] State history cleared')
+    logger.info('State history cleared', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+    })
   }
 
   /**
@@ -2928,7 +3063,9 @@ export class PlayerInteractionService {
     }
 
     this.updatePlayerState('manual_trigger')
-    console.log('[PlayerInteractionService] Manual state update triggered')
+    logger.info('Manual state update triggered', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+    })
   }
 
   // ========================================
@@ -2957,9 +3094,13 @@ export class PlayerInteractionService {
       timestamp: Date.now(),
     })
 
-    console.log(
-      `[PlayerInteractionService] Subtitle track loaded: ${track.language} (${track.cues.length} cues)`,
-    )
+    logger.info('Subtitle track loaded', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+      metadata: {
+        track,
+        cues: track.cues.length,
+      },
+    })
   }
 
   /**
@@ -3048,7 +3189,9 @@ export class PlayerInteractionService {
       this.updateSubtitleSync()
     }, 100) // 20 FPS update rate
 
-    console.log('[PlayerInteractionService] Subtitle synchronization started')
+    logger.info('Subtitle synchronization started', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+    })
   }
 
   /**
@@ -3063,7 +3206,9 @@ export class PlayerInteractionService {
     // Clear active cues
     this.activeCues = []
 
-    console.log('[PlayerInteractionService] Subtitle synchronization stopped')
+    logger.info('Subtitle synchronization stopped', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+    })
   }
 
   /**
@@ -3074,7 +3219,6 @@ export class PlayerInteractionService {
       return
     }
 
-    
     const currentTime = this.getCurrentTime()
     const adjustedTime = currentTime + this.subtitleSyncConfig.timeOffset
 
@@ -3218,7 +3362,9 @@ export class PlayerInteractionService {
       this.timingAdjustmentHistory.shift()
     }
 
-    console.log(`[PlayerInteractionService] Timing adjustment added: ${adjustment}s at ${time}s`)
+    logger.info(`Timing adjustment added: ${adjustment}s at ${time}s`, {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+    })
   }
 
   /**
@@ -3229,7 +3375,12 @@ export class PlayerInteractionService {
       try {
         callback(event)
       } catch (error) {
-        console.error('[PlayerInteractionService] Error in subtitle sync callback:', error)
+        logger.error('Error in subtitle sync callback', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        })
       }
     })
   }
@@ -3239,7 +3390,12 @@ export class PlayerInteractionService {
    */
   public updateConfig(newConfig: Partial<PlayerInteractionConfig>): void {
     this.config = { ...this.config, ...newConfig }
-    console.log('[PlayerInteractionService] Configuration updated:', this.config)
+    logger.info('Configuration updated', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+      metadata: {
+        config: this.config,
+      },
+    })
   }
 
   /**
@@ -3261,10 +3417,12 @@ export class PlayerInteractionService {
    */
   public updateStateTrackingConfig(newConfig: Partial<StateTrackingConfig>): void {
     this.stateTrackingConfig = { ...this.stateTrackingConfig, ...newConfig }
-    console.log(
-      '[PlayerInteractionService] State tracking configuration updated:',
-      this.stateTrackingConfig,
-    )
+    logger.info('State tracking configuration updated', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+      metadata: {
+        config: this.stateTrackingConfig,
+      },
+    })
   }
 
   /**
@@ -3288,10 +3446,12 @@ export class PlayerInteractionService {
       this.stopSubtitleSync()
     }
 
-    console.log(
-      '[PlayerInteractionService] Subtitle sync configuration updated:',
-      this.subtitleSyncConfig,
-    )
+    logger.info('Subtitle sync configuration updated', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+      metadata: {
+        config: this.subtitleSyncConfig,
+      },
+    })
   }
 
   /**
@@ -3299,7 +3459,9 @@ export class PlayerInteractionService {
    */
   public addSubtitleSyncListener(callback: SubtitleSyncCallback): void {
     this.subtitleSyncListeners.add(callback)
-    console.log('[PlayerInteractionService] Subtitle sync listener added')
+    logger.info('Subtitle sync listener added', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+    })
   }
 
   /**
@@ -3307,7 +3469,9 @@ export class PlayerInteractionService {
    */
   public removeSubtitleSyncListener(callback: SubtitleSyncCallback): void {
     this.subtitleSyncListeners.delete(callback)
-    console.log('[PlayerInteractionService] Subtitle sync listener removed')
+    logger.info('Subtitle sync listener removed', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+    })
   }
 
   /**
@@ -3315,7 +3479,9 @@ export class PlayerInteractionService {
    */
   public removeAllSubtitleSyncListeners(): void {
     this.subtitleSyncListeners.clear()
-    console.log('[PlayerInteractionService] All subtitle sync listeners removed')
+    logger.info('All subtitle sync listeners removed', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+    })
   }
 
   /**
@@ -3341,7 +3507,9 @@ export class PlayerInteractionService {
     this.activeCues = []
     this.timingAdjustmentHistory = []
 
-    console.log('[PlayerInteractionService] Subtitle track cleared')
+    logger.info('Subtitle track cleared', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+    })
   }
 
   /**
@@ -3448,9 +3616,13 @@ export class PlayerInteractionService {
       throw new Error('Loop end time must be greater than start time')
     }
     if (this.getDuration() > 0 && endTime > this.getDuration()) {
-      console.warn(
-        `[PlayerInteractionService] Loop end time (${endTime}s) exceeds video duration (${this.getDuration()}s)`,
-      )
+      logger.warn('Loop end time exceeds video duration', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          endTime,
+          duration: this.getDuration(),
+        },
+      })
     }
 
     // Stop any existing loop
@@ -3495,9 +3667,14 @@ export class PlayerInteractionService {
       timestamp: Date.now(),
     })
 
-    console.log(
-      `[PlayerInteractionService] Segment loop created: ${startTime}s - ${endTime}s (${loopId})`,
-    )
+    logger.info('Segment loop created', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+      metadata: {
+        startTime,
+        endTime,
+        loopId,
+      },
+    })
     return this.activeLoop
   }
 
@@ -3546,7 +3723,12 @@ export class PlayerInteractionService {
       this.stopLoopMonitoring()
     }
 
-    console.log(`[PlayerInteractionService] Segment loop updated: ${this.activeLoop.id}`)
+    logger.info('Segment loop updated', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+      metadata: {
+        id: this.activeLoop.id,
+      },
+    })
     return this.activeLoop
   }
 
@@ -3567,7 +3749,9 @@ export class PlayerInteractionService {
       this.updateLoopState()
     }, 33) // ~30 FPS
 
-    console.log('[PlayerInteractionService] Segment loop monitoring started')
+    logger.info('Segment loop monitoring started', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+    })
   }
 
   /**
@@ -3579,7 +3763,9 @@ export class PlayerInteractionService {
       this.loopMonitorIntervalId = null
     }
 
-    console.log('[PlayerInteractionService] Segment loop monitoring stopped')
+    logger.info('Segment loop monitoring stopped', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+    })
   }
 
   /**
@@ -3610,7 +3796,12 @@ export class PlayerInteractionService {
 
     // Handle entering the loop
     if (isInBounds && !wasActive) {
-      console.log(`[PlayerInteractionService] Entered loop bounds: ${this.activeLoop.id}`)
+      logger.info('Entered loop bounds', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          id: this.activeLoop.id,
+        },
+      })
     }
 
     // Handle loop iteration (reached end)
@@ -3656,9 +3847,12 @@ export class PlayerInteractionService {
 
     // Check if we've exceeded max consecutive loops
     if (newIteration >= this.segmentLoopConfig.maxConsecutiveLoops) {
-      console.warn(
-        `[PlayerInteractionService] Reached max consecutive loops (${this.segmentLoopConfig.maxConsecutiveLoops}), disabling loop`,
-      )
+      logger.warn('Reached max consecutive loops, disabling loop', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          maxConsecutiveLoops: this.segmentLoopConfig.maxConsecutiveLoops,
+        },
+      })
       this.disableSegmentLoop()
       return
     }
@@ -3717,14 +3911,24 @@ export class PlayerInteractionService {
       this.lastLoopSeekTime = seekTarget
       this.seek(seekTarget)
 
-      console.log(`[PlayerInteractionService] Loop seek executed to ${seekTarget}s`)
+      logger.info('Loop seek executed', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          seekTarget,
+        },
+      })
 
       // Handle fade effects if configured
       if (this.segmentLoopConfig.fadeInDuration > 0) {
         this.handleLoopFadeIn()
       }
     } catch (error) {
-      console.error('[PlayerInteractionService] Failed to execute loop seek:', error)
+      logger.error('Failed to execute loop seek', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      })
     }
   }
 
@@ -3777,13 +3981,18 @@ export class PlayerInteractionService {
           ? this.activeLoop.startTime
           : this.activeLoop.endTime - 0.1
 
-      console.log(
-        `[PlayerInteractionService] User seek outside loop not allowed, seeking back to ${seekTarget}s`,
-      )
+      logger.warn('User seek outside loop not allowed, seeking back to', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          seekTarget,
+        },
+      })
       this.seek(seekTarget)
     } else if (!this.segmentLoopConfig.resumeAfterSeekOutside) {
       // Disable loop when user seeks outside
-      console.log('[PlayerInteractionService] User seeked outside loop, disabling loop')
+      logger.warn('User seeked outside loop, disabling loop', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+      })
       this.disableSegmentLoop()
     }
   }
@@ -3816,7 +4025,12 @@ export class PlayerInteractionService {
       timestamp: Date.now(),
     })
 
-    console.log(`[PlayerInteractionService] Segment loop stopped: ${loop.id}`)
+    logger.info('Segment loop stopped', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+      metadata: {
+        id: loop.id,
+      },
+    })
   }
 
   /**
@@ -3840,7 +4054,12 @@ export class PlayerInteractionService {
       timestamp: Date.now(),
     })
 
-    console.log(`[PlayerInteractionService] Segment loop disabled: ${this.activeLoop.id}`)
+    logger.info('Segment loop disabled', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+      metadata: {
+        id: this.activeLoop.id,
+      },
+    })
   }
 
   /**
@@ -3860,7 +4079,12 @@ export class PlayerInteractionService {
       this.startLoopMonitoring()
     }
 
-    console.log(`[PlayerInteractionService] Segment loop enabled: ${this.activeLoop.id}`)
+    logger.info('Segment loop enabled', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+      metadata: {
+        id: this.activeLoop.id,
+      },
+    })
   }
 
   /**
@@ -3871,7 +4095,12 @@ export class PlayerInteractionService {
       try {
         callback(event)
       } catch (error) {
-        console.error('[PlayerInteractionService] Error in segment loop callback:', error)
+        logger.error('Error in segment loop callback', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        })
       }
     })
   }
@@ -3884,7 +4113,9 @@ export class PlayerInteractionService {
       throw new Error('Service not initialized')
     }
 
-    console.log('[PlayerInteractionService] Manually refreshing video element detection')
+    logger.info('Manually refreshing video element detection', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+    })
     await this.recheckVideoElement()
     return this.isReady()
   }
@@ -3901,10 +4132,17 @@ export class PlayerInteractionService {
 
     try {
       await this.videoElement!.play()
-      console.log('[PlayerInteractionService] Video play initiated')
+      logger.info('Video play initiated', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+      })
     } catch (error) {
       const message = `Failed to play video: ${error}`
-      console.error('[PlayerInteractionService]', message)
+      logger.error('Failed to play video', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      })
       this.notifyError(PlayerErrorCode.PLAYBACK_FAILED, message, { error })
       throw new Error(message)
     }
@@ -3918,10 +4156,17 @@ export class PlayerInteractionService {
 
     try {
       this.videoElement!.pause()
-      console.log('[PlayerInteractionService] Video paused')
+      logger.info('Video paused', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+      })
     } catch (error) {
       const message = `Failed to pause video: ${error}`
-      console.error('[PlayerInteractionService]', message)
+      logger.error('Failed to pause video', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      })
       this.notifyError(PlayerErrorCode.PLAYBACK_FAILED, message, { error })
       throw new Error(message)
     }
@@ -3936,10 +4181,20 @@ export class PlayerInteractionService {
 
     try {
       this.videoElement!.currentTime = timeInSeconds
-      console.log(`[PlayerInteractionService] Seeked to ${timeInSeconds}s`)
+      logger.info('Seeked to', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          timeInSeconds,
+        },
+      })
     } catch (error) {
       const message = `Failed to seek to ${timeInSeconds}s: ${error}`
-      console.error('[PlayerInteractionService]', message)
+      logger.error('Failed to seek', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          timeInSeconds,
+        },
+      })
       this.notifyError(PlayerErrorCode.SEEK_FAILED, message, { timeInSeconds, error })
       throw new Error(message)
     }
@@ -3970,10 +4225,20 @@ export class PlayerInteractionService {
 
     try {
       this.videoElement!.playbackRate = rate
-      console.log(`[PlayerInteractionService] Playback rate set to ${rate}x`)
+      logger.info('Playback rate set to', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          rate,
+        },
+      })
     } catch (error) {
       const message = `Failed to set playback rate to ${rate}x: ${error}`
-      console.error('[PlayerInteractionService]', message)
+      logger.error('Failed to set playback rate', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          rate,
+        },
+      })
       this.notifyError(PlayerErrorCode.INVALID_RATE_VALUE, message, { rate, error })
       throw new Error(message)
     }
@@ -3996,10 +4261,20 @@ export class PlayerInteractionService {
 
     try {
       this.videoElement!.volume = volume
-      console.log(`[PlayerInteractionService] Volume set to ${Math.round(volume * 100)}%`)
+      logger.info('Volume set to', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          volume: Math.round(volume * 100),
+        },
+      })
     } catch (error) {
       const message = `Failed to set volume to ${volume}: ${error}`
-      console.error('[PlayerInteractionService]', message)
+      logger.error('Failed to set volume', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          volume: Math.round(volume * 100),
+        },
+      })
       this.notifyError(PlayerErrorCode.PLAYBACK_FAILED, message, { volume, error })
       throw new Error(message)
     }
@@ -4021,10 +4296,20 @@ export class PlayerInteractionService {
 
     try {
       this.videoElement!.muted = muted
-      console.log(`[PlayerInteractionService] Video ${muted ? 'muted' : 'unmuted'}`)
+      logger.info('Video muted', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          muted,
+        },
+      })
     } catch (error) {
       const message = `Failed to ${muted ? 'mute' : 'unmute'} video: ${error}`
-      console.error('[PlayerInteractionService]', message)
+      logger.error('Failed to mute video', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          muted,
+        },
+      })
       this.notifyError(PlayerErrorCode.PLAYBACK_FAILED, message, { muted, error })
       throw new Error(message)
     }
@@ -4111,21 +4396,32 @@ export class PlayerInteractionService {
         .addEventListener(eventType, this.createEventHandler(eventType))
         .then((result) => {
           if (!result.success && result.error) {
-            console.warn(
-              `[PlayerInteractionService] Failed to add direct listener for ${eventType}:`,
-              result.error.message,
-            )
+            logger.warn('Failed to add direct listener for', {
+              component: ComponentType.YOUTUBE_INTEGRATION,
+              metadata: {
+                eventType,
+                error: result.error.message,
+              },
+            })
           }
         })
         .catch((error) => {
-          console.warn(
-            `[PlayerInteractionService] Error adding direct listener for ${eventType}:`,
-            error,
-          )
+          logger.warn('Error adding direct listener for', {
+            component: ComponentType.YOUTUBE_INTEGRATION,
+            metadata: {
+              eventType,
+              error: error instanceof Error ? error.message : String(error),
+            },
+          })
         })
     }
 
-    console.log(`[PlayerInteractionService] Event listener added for '${eventType}'`)
+    logger.info('Event listener added for', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+      metadata: {
+        eventType,
+      },
+    })
   }
 
   /**
@@ -4147,22 +4443,33 @@ export class PlayerInteractionService {
           .removeEventListener(eventType, this.createEventHandler(eventType))
           .then((result) => {
             if (!result.success && result.error) {
-              console.warn(
-                `[PlayerInteractionService] Failed to remove direct listener for ${eventType}:`,
-                result.error.message,
-              )
+              logger.warn('Failed to remove direct listener for', {
+                component: ComponentType.YOUTUBE_INTEGRATION,
+                metadata: {
+                  eventType,
+                  error: result.error.message,
+                },
+              })
             }
           })
           .catch((error) => {
-            console.warn(
-              `[PlayerInteractionService] Error removing direct listener for ${eventType}:`,
-              error,
-            )
+            logger.error('Error removing direct listener for', {
+              component: ComponentType.YOUTUBE_INTEGRATION,
+              metadata: {
+                eventType,
+                error: error instanceof Error ? error.message : String(error),
+              },
+            })
           })
       }
     }
 
-    console.log(`[PlayerInteractionService] Event listener removed for '${eventType}'`)
+    logger.info('Event listener removed for', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+      metadata: {
+        eventType,
+      },
+    })
   }
 
   /**
@@ -4178,21 +4485,32 @@ export class PlayerInteractionService {
           .removeEventListener(eventType, this.createEventHandler(eventType))
           .then((result) => {
             if (!result.success && result.error) {
-              console.warn(
-                `[PlayerInteractionService] Failed to remove all listeners for ${eventType}:`,
-                result.error.message,
-              )
+              logger.warn('Failed to remove all listeners for', {
+                component: ComponentType.YOUTUBE_INTEGRATION,
+                metadata: {
+                  eventType,
+                  error: result.error.message,
+                },
+              })
             }
           })
           .catch((error) => {
-            console.warn(
-              `[PlayerInteractionService] Error removing all listeners for ${eventType}:`,
-              error,
-            )
+            logger.error('Error removing all listeners for', {
+              component: ComponentType.YOUTUBE_INTEGRATION,
+              metadata: {
+                eventType,
+                error: error instanceof Error ? error.message : String(error),
+              },
+            })
           })
       }
 
-      console.log(`[PlayerInteractionService] All event listeners removed for '${eventType}'`)
+      logger.info('All event listeners removed for', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          eventType,
+        },
+      })
     }
   }
 
@@ -4227,9 +4545,13 @@ export class PlayerInteractionService {
 
     const duration = this.getDuration()
     if (duration > 0 && timeInSeconds > duration) {
-      console.warn(
-        `[PlayerInteractionService] Seek time ${timeInSeconds}s exceeds duration ${duration}s`,
-      )
+      logger.warn('Seek time exceeds duration', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          timeInSeconds,
+          duration,
+        },
+      })
     }
   }
 
@@ -4245,9 +4567,12 @@ export class PlayerInteractionService {
 
     // YouTube typically supports rates between 0.25x and 2x
     if (rate < 0.25 || rate > 2) {
-      console.warn(
-        `[PlayerInteractionService] Playback rate ${rate}x may not be supported by YouTube`,
-      )
+      logger.warn('Playback rate may not be supported by YouTube', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          rate,
+        },
+      })
     }
   }
 
@@ -4335,14 +4660,18 @@ export class PlayerInteractionService {
     }
 
     // Log error with enhanced context
-    console.error(`[PlayerInteractionService] Enhanced Error [${playerError.code}]:`, {
-      message: playerError.message,
-      severity: playerError.severity,
-      recoverable: playerError.recoverable,
-      retryable: playerError.retryable,
-      context: playerError.context,
-      details: playerError.details,
-      timestamp: new Date(playerError.timestamp).toISOString(),
+    logger.error('Enhanced Error', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+      metadata: {
+        code: playerError.code,
+        message: playerError.message,
+        severity: playerError.severity,
+        recoverable: playerError.recoverable,
+        retryable: playerError.retryable,
+        context: playerError.context,
+        details: playerError.details,
+        timestamp: new Date(playerError.timestamp).toISOString(),
+      },
     })
 
     // Notify standard error system
@@ -4393,15 +4722,23 @@ export class PlayerInteractionService {
 
       if (this.circuitBreakerFailureCount >= this.errorRecoveryConfig.circuitBreakerThreshold) {
         this.circuitBreakerState = 'open'
-        console.warn(
-          `[PlayerInteractionService] Circuit breaker opened after ${this.circuitBreakerFailureCount} failures`,
-        )
+        logger.warn('Circuit breaker opened after failures', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: {
+            failures: this.circuitBreakerFailureCount,
+          },
+        })
 
         // Schedule circuit breaker reset
         setTimeout(() => {
           this.circuitBreakerState = 'half-open'
           this.circuitBreakerFailureCount = 0
-          console.log('[PlayerInteractionService] Circuit breaker reset to half-open')
+          logger.info('Circuit breaker reset to half-open', {
+            component: ComponentType.YOUTUBE_INTEGRATION,
+            metadata: {
+              timeoutMs: this.errorRecoveryConfig.circuitBreakerTimeoutMs,
+            },
+          })
         }, this.errorRecoveryConfig.circuitBreakerTimeoutMs)
       }
     }
@@ -4415,7 +4752,13 @@ export class PlayerInteractionService {
 
     const retryCount = (error.details?.retryCount as number) || 0
     if (retryCount >= this.errorRecoveryConfig.maxRetries) {
-      console.warn(`[PlayerInteractionService] Max retries exceeded for operation: ${context}`)
+      logger.warn('Max retries exceeded for operation', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          context,
+          retryCount,
+        },
+      })
       return
     }
 
@@ -4424,9 +4767,13 @@ export class PlayerInteractionService {
       Math.pow(this.errorRecoveryConfig.retryBackoffFactor, retryCount)
 
     setTimeout(() => {
-      console.log(
-        `[PlayerInteractionService] Retrying operation: ${context} (attempt ${retryCount + 1})`,
-      )
+      logger.info('Retrying operation', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          context,
+          retryCount: retryCount + 1,
+        },
+      })
       // Note: Actual retry logic would depend on the specific operation
       // This provides the framework for retry implementation
     }, delay)
@@ -4475,7 +4822,12 @@ export class PlayerInteractionService {
     this.circuitBreakerFailureCount = 0
     this.retryQueues.clear()
     this.operationTimeouts.clear()
-    console.log('[PlayerInteractionService] Error tracking reset')
+    logger.info('Error tracking reset', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+      metadata: {
+        uptime: Date.now() - this.startTime,
+      },
+    })
   }
 
   /**
@@ -4490,7 +4842,12 @@ export class PlayerInteractionService {
    */
   public updateErrorRecoveryConfig(newConfig: Partial<ErrorRecoveryConfig>): void {
     this.errorRecoveryConfig = { ...this.errorRecoveryConfig, ...newConfig }
-    console.log('[PlayerInteractionService] Error recovery configuration updated')
+    logger.info('Error recovery configuration updated', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+      metadata: {
+        newConfig,
+      },
+    })
   }
 
   /**

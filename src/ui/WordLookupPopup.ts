@@ -8,6 +8,8 @@ import { DictionaryApiService } from '../translation/DictionaryApiService'
 import { TranslationApiService } from '../translation/TranslationApiService'
 import { TTSService } from '../translation/TTSService'
 import { StorageService } from '../storage'
+import { Logger } from '../logging'
+import { ComponentType } from '../logging/types'
 
 // ========================================
 // Types and Interfaces
@@ -1247,6 +1249,7 @@ export class WordLookupPopup {
   private translationService: TranslationApiService
   private ttsService: TTSService
   private storageService: StorageService
+  private readonly logger = Logger.getInstance()
 
   private events: { [K in keyof PopupEvents]?: PopupEvents[K] } = {}
 
@@ -1453,12 +1456,16 @@ export class WordLookupPopup {
       // Simple word preprocessing - just trim whitespace
       const processedWord = word.trim()
 
-      console.log(
-        `[WordLookupPopup] 🔍 Showing lookup for word: "${processedWord}" (original: "${word}")`,
-      )
-      console.log(`[WordLookupPopup] - Source language: ${sourceLanguage}`)
-      console.log(`[WordLookupPopup] - Target language: ${targetLanguage}`)
-      console.log(`[WordLookupPopup] - Position:`, pos)
+      this.logger.debug('Showing word lookup', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: {
+          word: processedWord,
+          originalWord: word,
+          sourceLanguage,
+          targetLanguage,
+          position: pos
+        }
+      })
 
       // Set languages if provided
       if (sourceLanguage && targetLanguage) {
@@ -1487,7 +1494,13 @@ export class WordLookupPopup {
       // Emit show event
       this.emit('show', { word: processedWord, position: pos, sourceLanguage, targetLanguage })
     } catch (error) {
-      console.error('[WordLookupPopup] Failed to show popup:', error)
+      this.logger.error('Failed to show popup', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: {
+          word: typeof wordOrData === 'string' ? wordOrData : wordOrData.word,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      })
 
       // Show language-specific error message
       const errorContext = this.classifyError(error as Error, {
@@ -1617,13 +1630,20 @@ export class WordLookupPopup {
     try {
       await this.waitForPendingOperations(2000) // 2 second timeout
     } catch (error) {
-      console.warn('[WordLookupPopup] Some operations did not complete during cleanup:', error)
+      this.logger.warn('Some operations did not complete during cleanup', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error)
+        }
+      })
     }
 
     // Perform complete cleanup
     this.performCompleteCleanup()
 
-    console.log('[WordLookupPopup] Component destroyed and cleaned up')
+    this.logger.info('Component destroyed and cleaned up', {
+      component: ComponentType.WORD_LOOKUP
+    })
   }
 
   /**
@@ -1633,9 +1653,12 @@ export class WordLookupPopup {
   public destroySync(): void {
     if (this.isDestroyed) return
 
-    console.warn(
-      '[WordLookupPopup] Using synchronous destroy - some operations may not complete properly',
-    )
+    this.logger.warn('Using synchronous destroy - some operations may not complete properly', {
+      component: ComponentType.WORD_LOOKUP,
+      metadata: {
+        reason: 'Sync destroy used instead of async destroy'
+      }
+    })
     this.performCompleteCleanup()
   }
 
@@ -1644,7 +1667,9 @@ export class WordLookupPopup {
    * Provides automatic cleanup for browser navigation/page unload scenarios
    */
   public disconnectedCallback(): void {
-    console.log('[WordLookupPopup] Component disconnected from DOM, performing cleanup')
+    this.logger.info('Component disconnected from DOM, performing cleanup', {
+      component: ComponentType.WORD_LOOKUP
+    })
     this.destroySync()
   }
 
@@ -1665,10 +1690,14 @@ export class WordLookupPopup {
   // ========================================
 
   private async loadWordContent(word: string): Promise<PopupContent> {
-    console.log(`[WordLookupPopup] Loading content for word: "${word}"`)
-    console.log(
-      `[WordLookupPopup] Source language: ${this.currentSourceLanguage}, Target language: ${this.currentTargetLanguage}`,
-    )
+    this.logger.debug('Loading content for word', {
+      component: ComponentType.WORD_LOOKUP,
+      metadata: {
+        word,
+        sourceLanguage: this.currentSourceLanguage,
+        targetLanguage: this.currentTargetLanguage
+      }
+    })
 
     // Progressive loading: show translation first, then definition (if applicable)
     let translation = ''
@@ -1676,14 +1705,20 @@ export class WordLookupPopup {
 
     try {
       // Load translation first (usually faster) - tracked operation
-      console.log(`[WordLookupPopup] Getting translation...`)
+      this.logger.debug('Getting translation', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: { word, sourceLanguage: this.currentSourceLanguage, targetLanguage: this.currentTargetLanguage }
+      })
       const translationPromise = this.translationService.translateText({
         text: word,
         fromLanguage: this.currentSourceLanguage,
         toLanguage: this.currentTargetLanguage,
       })
       translation = await this.trackOperation(translationPromise)
-      console.log(`[WordLookupPopup] Translation received: "${translation}"`)
+      this.logger.debug('Translation received', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: { word, translation: translation.substring(0, 50) }
+      })
 
       // Show partial content with translation (only if not destroyed)
       if (!this.isDestroyed) {
@@ -1694,25 +1729,42 @@ export class WordLookupPopup {
       // (since DictionaryApiService only supports English)
       if (this.currentSourceLanguage === 'en' || this.currentSourceLanguage === 'auto') {
         try {
-          console.log(`[WordLookupPopup] Getting definition for English word...`)
+          this.logger.debug('Getting definition for English word', {
+            component: ComponentType.WORD_LOOKUP,
+            metadata: { word, sourceLanguage: this.currentSourceLanguage }
+          })
           const definitionPromise = this.dictionaryService.getDefinition(word)
           definition = await this.trackOperation(definitionPromise)
-          console.log(`[WordLookupPopup] Definition received:`, definition)
+          this.logger.debug('Definition received', {
+            component: ComponentType.WORD_LOOKUP,
+            metadata: { word, definitionCount: definition?.meanings?.length || 0 }
+          })
         } catch (definitionError) {
-          console.log(
-            `[WordLookupPopup] Definition lookup failed (expected for non-English words):`,
-            definitionError,
-          )
+          this.logger.debug('Definition lookup failed (expected for non-English words)', {
+            component: ComponentType.WORD_LOOKUP,
+            metadata: {
+              word,
+              sourceLanguage: this.currentSourceLanguage,
+              error: definitionError instanceof Error ? definitionError.message : String(definitionError)
+            }
+          })
           // For non-English words, this is expected - don't treat as an error
           // Just continue with translation-only content
         }
       } else {
-        console.log(
-          `[WordLookupPopup] Skipping definition lookup for non-English word (${this.currentSourceLanguage})`,
-        )
+        this.logger.debug('Skipping definition lookup for non-English word', {
+          component: ComponentType.WORD_LOOKUP,
+          metadata: { word, sourceLanguage: this.currentSourceLanguage }
+        })
       }
     } catch (error) {
-      console.error(`[WordLookupPopup] Translation failed:`, error)
+      this.logger.error('Translation failed', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: {
+          word,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      })
 
       // If translation fails, try definition only (for English words)
       if (
@@ -1721,16 +1773,25 @@ export class WordLookupPopup {
         (this.currentSourceLanguage === 'en' || this.currentSourceLanguage === 'auto')
       ) {
         try {
-          console.log(`[WordLookupPopup] Trying definition-only fallback...`)
+          this.logger.debug('Trying definition-only fallback', {
+            component: ComponentType.WORD_LOOKUP,
+            metadata: { word, sourceLanguage: this.currentSourceLanguage }
+          })
           const definitionPromise = this.dictionaryService.getDefinition(word)
           definition = await this.trackOperation(definitionPromise)
-          console.log(`[WordLookupPopup] Definition fallback successful`)
+          this.logger.debug('Definition fallback successful', {
+            component: ComponentType.WORD_LOOKUP,
+            metadata: { word, definitionCount: definition?.meanings?.length || 0 }
+          })
         } catch (fallbackError) {
-          console.error(
-            `[WordLookupPopup] Both translation and dictionary services failed:`,
-            error,
-            fallbackError,
-          )
+          this.logger.error('Both translation and dictionary services failed', {
+            component: ComponentType.WORD_LOOKUP,
+            metadata: {
+              word,
+              translationError: error instanceof Error ? error.message : String(error),
+              dictionaryError: fallbackError instanceof Error ? fallbackError.message : String(fallbackError)
+            }
+          })
           // Both services failed - throw with better context
           throw new Error(
             `Both translation and dictionary services failed. Translation: ${(error as Error).message}, Dictionary: ${(fallbackError as Error).message}`,
@@ -1769,7 +1830,16 @@ export class WordLookupPopup {
       targetLanguage: this.currentTargetLanguage,
     }
 
-    console.log(`[WordLookupPopup] Final content:`, content)
+    this.logger.debug('Final content prepared', {
+      component: ComponentType.WORD_LOOKUP,
+      metadata: {
+        word: content.word,
+        hasTranslation: !!content.translation,
+        definitionCount: content.definitions.length,
+        exampleCount: content.examples.length,
+        hasPhonetic: !!content.phonetic
+      }
+    })
     return content
   }
 
@@ -1986,7 +2056,13 @@ export class WordLookupPopup {
   private showErrorState(error: Error): void {
     if (!this.popupContainer || this.isDestroyed) return
 
-    console.error('[WordLookupPopup] Error occurred:', error)
+    this.logger.error('Error occurred in showErrorState', {
+      component: ComponentType.WORD_LOOKUP,
+      metadata: {
+        word: this.currentWord,
+        error: error instanceof Error ? error.message : String(error)
+      }
+    })
 
     // Use enhanced error handling
     const errorContext = this.classifyError(error, {
@@ -2046,7 +2122,14 @@ export class WordLookupPopup {
         this.events.onTTSPlayed?.(this.currentWord)
       }
     } catch (error) {
-      console.error('[WordLookupPopup] TTS failed:', error)
+      this.logger.error('TTS failed', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: {
+          word: this.currentWord,
+          sourceLanguage: this.currentSourceLanguage,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      })
       if (!this.isDestroyed) {
         // Use enhanced error handling for TTS errors
         const errorContext = this.classifyError(error as Error, {
@@ -2094,7 +2177,13 @@ export class WordLookupPopup {
         this.showActionSuccess(actionKey, 'Word saved!')
       }
     } catch (error) {
-      console.error('[WordLookupPopup] Save word failed:', error)
+      this.logger.error('Save word failed', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: {
+          word: this.currentWord,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      })
       if (!this.isDestroyed) {
         // Use enhanced error handling for storage errors
         const errorContext = this.classifyError(error as Error, {
@@ -2763,9 +2852,19 @@ export class WordLookupPopup {
       }
 
       await navigator.clipboard.writeText(textToCopy)
-      console.log(`[WordLookupPopup] Copied ${content} to clipboard`)
+      this.logger.debug('Copied content to clipboard', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: { contentType: content, word: this.currentWord }
+      })
     } catch (error) {
-      console.error('[WordLookupPopup] Failed to copy to clipboard:', error)
+      this.logger.error('Failed to copy to clipboard', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: {
+          contentType: content,
+          word: this.currentWord,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      })
     }
   }
 
@@ -2785,7 +2884,10 @@ export class WordLookupPopup {
    */
   public emit(event: string, data: any): void {
     // Could be enhanced to support custom events
-    console.log(`[WordLookupPopup] Custom event: ${event}`, data)
+    this.logger.debug('Custom event emitted', {
+      component: ComponentType.WORD_LOOKUP,
+      metadata: { event, data }
+    })
   }
 
   private escapeHtml(text: string): string {
@@ -3117,7 +3219,14 @@ export class WordLookupPopup {
 
   private async handleEnhancedRetry(errorContext: ErrorContext): Promise<void> {
     if (!errorContext.retryable || this.errorState.retryCount >= errorContext.maxRetries) {
-      console.warn('[WordLookupPopup] Retry not allowed or max retries exceeded')
+      this.logger.warn('Retry not allowed or max retries exceeded', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: {
+          retryCount: this.errorState.retryCount,
+          maxRetries: errorContext.maxRetries,
+          retryable: errorContext.retryable
+        }
+      })
       return
     }
 
