@@ -189,7 +189,10 @@ export class ErrorRecoveryService {
   /**
    * Get singleton instance
    */
-  public static getInstance(config?: Partial<RecoveryConfig>): ErrorRecoveryService {
+  public static getInstance(config?: Partial<RecoveryConfig>): ErrorRecoveryService | null {
+    if (typeof window === 'undefined') {
+      return null
+    }
     if (!ErrorRecoveryService.instance) {
       ErrorRecoveryService.instance = new ErrorRecoveryService(config)
     }

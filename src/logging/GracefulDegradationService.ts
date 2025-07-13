@@ -177,7 +177,10 @@ export class GracefulDegradationService {
   /**
    * Get singleton instance
    */
-  public static getInstance(config?: { notifications?: Partial<UserNotificationConfig> }): GracefulDegradationService {
+  public static getInstance(config?: { notifications?: Partial<UserNotificationConfig> }): GracefulDegradationService | null {
+    if (typeof window === 'undefined') {
+      return null
+    }
     if (!GracefulDegradationService.instance) {
       GracefulDegradationService.instance = new GracefulDegradationService(config)
     }

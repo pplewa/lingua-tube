@@ -91,7 +91,10 @@ export class Logger {
   /**
    * Get singleton instance of Logger
    */
-  public static getInstance(config?: Partial<LoggerConfig>): Logger {
+  public static getInstance(config?: Partial<LoggerConfig>): Logger | null {
+    if (typeof window === 'undefined') {
+      return null
+    }
     if (!Logger.instance) {
       Logger.instance = new Logger(config)
     }

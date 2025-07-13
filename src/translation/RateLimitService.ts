@@ -433,15 +433,15 @@ export class RateLimitService {
         [RATE_LIMIT_STORAGE_KEYS.REQUEST_TOKENS]: this.usageStats.requestBucket,
         [RATE_LIMIT_STORAGE_KEYS.LAST_RESET]: Date.now(),
       })
-          } catch (error) {
-        const logger = Logger.getInstance()
-        logger.warn('Failed to save rate limit usage stats', {
-          component: ComponentType.TRANSLATION_SERVICE,
-          metadata: {
-            error: error instanceof Error ? error.message : String(error)
-          }
-        })
-      }
+    } catch (error) {
+      const logger = Logger.getInstance()
+      logger.warn('Failed to save rate limit usage stats', {
+        component: ComponentType.TRANSLATION_SERVICE,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      })
+    }
   }
 
   /**
@@ -536,4 +536,4 @@ export class RateLimitService {
 // ============================================================================
 
 // Export a singleton instance for use throughout the application
-export const rateLimitService = new RateLimitService()
+export const rateLimitService = typeof window !== 'undefined' ? new RateLimitService() : null

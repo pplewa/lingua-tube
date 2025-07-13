@@ -214,7 +214,10 @@ export class ConsoleLoggingService {
   /**
    * Get singleton instance
    */
-  public static getInstance(config?: Partial<ConsoleLoggingConfig>): ConsoleLoggingService {
+  public static getInstance(config?: Partial<ConsoleLoggingConfig>): ConsoleLoggingService | null {
+    if (typeof window === 'undefined') {
+      return null
+    }
     if (!ConsoleLoggingService.instance) {
       ConsoleLoggingService.instance = new ConsoleLoggingService(config)
     }

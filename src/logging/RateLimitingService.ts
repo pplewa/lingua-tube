@@ -156,7 +156,10 @@ export class RateLimitingService {
   public static getInstance(
     rateLimitConfig?: RateLimitConfig,
     deduplicationConfig?: DeduplicationConfig
-  ): RateLimitingService {
+  ): RateLimitingService | null {
+    if (typeof window === 'undefined') {
+      return null
+    }
     if (!RateLimitingService.instance) {
       const defaultRateLimit: RateLimitConfig = {
         enabled: true,
@@ -317,22 +320,22 @@ export class RateLimitingService {
     const limits = this.getRateLimitsForEntry(entry)
     const windowMs = this.rateLimitConfig.globalLimits.windowMs
     
-    let window = this.slidingWindows.get(key) || []
+    let _window = this.slidingWindows.get(key) || []
     
     // Remove entries outside the window
-    window = window.filter(w => now - w.timestamp < windowMs)
+    _window = _window.filter(w => now - w.timestamp < windowMs)
     
     // Calculate current weight in window
-    const currentWeight = window.reduce((sum, w) => sum + w.weight, 0)
+    const currentWeight = _window.reduce((sum, w) => sum + w.weight, 0)
     const severityWeight = this.getSeverityWeight(entry)
     
     if (currentWeight + severityWeight <= limits.maxLogsPerSecond) {
-      window.push({ timestamp: now, weight: severityWeight })
-      this.slidingWindows.set(key, window)
+      _window.push({ timestamp: now, weight: severityWeight })
+      this.slidingWindows.set(key, _window)
       return true
     }
     
-    this.slidingWindows.set(key, window)
+    this.slidingWindows.set(key, _window)
     return false
   }
   
