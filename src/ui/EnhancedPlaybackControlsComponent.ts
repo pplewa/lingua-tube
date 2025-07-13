@@ -2588,7 +2588,10 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
 
       return false
     } catch (error) {
-      console.error('[EnhancedPlaybackControls] Failed to load state:', error)
+      this.logger.error('Failed to load state', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: { error: error instanceof Error ? error.message : String(error) },
+      })
       return false
     }
   }
@@ -2607,7 +2610,10 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
 
       return result.success
     } catch (error) {
-      console.error('[EnhancedPlaybackControls] Failed to save state:', error)
+      this.logger.error('Failed to save state', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: { error: error instanceof Error ? error.message : String(error) },
+      })
       return false
     }
   }
@@ -2638,9 +2644,14 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
         lastPosition: this.playerService.getCurrentTime(),
       }
 
-      console.log('[EnhancedPlaybackControls] State restored successfully')
+      this.logger.info('State restored successfully', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+      })
     } catch (error) {
-      console.error('[EnhancedPlaybackControls] Failed to restore state:', error)
+      this.logger.error('Failed to restore state', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: { error: error instanceof Error ? error.message : String(error) },
+      })
     }
   }
 
@@ -2743,7 +2754,10 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
 
       return result.success
     } catch (error) {
-      console.error('[EnhancedPlaybackControls] Failed to clear state:', error)
+      this.logger.error('Failed to clear state', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: { error: error instanceof Error ? error.message : String(error) },
+      })
       return false
     }
   }
@@ -2766,7 +2780,10 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       try {
         listener(event)
       } catch (error) {
-        console.error('[EnhancedPlaybackControls] Event listener error:', error)
+        this.logger.error('Event listener error', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: { error: error instanceof Error ? error.message : String(error) },
+        })
       }
     })
   }
