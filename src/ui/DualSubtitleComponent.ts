@@ -152,7 +152,7 @@ const SUBTITLE_CONTAINER_STYLES = `
     transition: all var(--subtitle-transition-duration) ease-in-out;
   }
 
-  .subtitle-container.hidden {
+  .subtitle-container.hidden, .subtitle-container:empty {
     opacity: 0;
     transform: translateX(-50%) translateY(10px);
     pointer-events: none;
