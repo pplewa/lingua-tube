@@ -152,7 +152,7 @@ const SUBTITLE_CONTAINER_STYLES = `
     transition: all var(--subtitle-transition-duration) ease-in-out;
   }
 
-  .subtitle-container.hidden, .subtitle-container:empty {
+  .subtitle-container.hidden {
     opacity: 0;
     transform: translateX(-50%) translateY(10px);
     pointer-events: none;
@@ -901,8 +901,9 @@ export class DualSubtitleComponent {
     }
 
     if (combinedNative || combinedTarget) {
-      this.subtitleContainer?.classList.remove('hidden');
       this.showSubtitles();
+    } else {
+      this.hideSubtitles();
     }
   }
 
@@ -1086,7 +1087,7 @@ export class DualSubtitleComponent {
         }
       }, this.config.transitionDuration);
     } else {
-      this.subtitleContainer.classList.add('hidden');
+      this.subtitleContainer.classList.remove('hidden');
     }
 
     this.notifyVisibilityChange(false, 0);

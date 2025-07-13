@@ -686,6 +686,7 @@ const POPUP_STYLES = `
     position: relative;
     overflow: hidden;
     will-change: transform, background-color;
+    min-width: 120px;
   }
 
   .action-button::before {
