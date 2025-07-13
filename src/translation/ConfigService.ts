@@ -399,7 +399,7 @@ export class ConfigService {
         listener(config)
               } catch (error) {
           const logger = Logger.getInstance()
-          logger.warn('Error in config update listener', {
+          logger?.warn('Error in config update listener', {
             component: ComponentType.TRANSLATION_SERVICE,
             metadata: {
               error: error instanceof Error ? error.message : String(error)

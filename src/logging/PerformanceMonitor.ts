@@ -122,7 +122,7 @@ export const DEFAULT_THRESHOLDS: PerformanceThresholds = {
  */
 export class PerformanceMonitor {
   private static instance: PerformanceMonitor | null = null
-  private logger: Logger
+  private logger: Logger | null = null
   private thresholds: PerformanceThresholds
   private activeOperations: Map<
     string,
@@ -169,7 +169,7 @@ export class PerformanceMonitor {
       this.setupFlushTimer()
 
       // Log initialization
-      this.logger.info('PerformanceMonitor initialized', {
+      this.logger?.info('PerformanceMonitor initialized', {
         component: ComponentType.ERROR_HANDLER,
         action: 'performance_monitor_init',
         metadata: {
@@ -178,7 +178,7 @@ export class PerformanceMonitor {
         },
       })
     } catch (error) {
-      this.logger.error(
+      this.logger?.error(
         'Failed to initialize PerformanceMonitor',
         {
           component: ComponentType.ERROR_HANDLER,
@@ -198,7 +198,7 @@ export class PerformanceMonitor {
         const entries = list.getEntries()
         for (const entry of entries) {
           if (entry.entryType === 'measure') {
-            this.logger.debug('Memory measurement detected', {
+            this.logger?.debug('Memory measurement detected', {
               component: ComponentType.ERROR_HANDLER,
               action: 'memory_measure',
               performance: {
@@ -215,7 +215,7 @@ export class PerformanceMonitor {
 
       this.memoryObserver.observe({ entryTypes: ['measure', 'mark'] })
     } catch (error) {
-      this.logger.warn('Memory observer setup failed', {
+      this.logger?.warn('Memory observer setup failed', {
         component: ComponentType.ERROR_HANDLER,
         action: 'memory_observer_setup_error',
       })
@@ -253,7 +253,7 @@ export class PerformanceMonitor {
         performance.mark(`${name}-start`)
       }
 
-      this.logger.debug(`Started operation: ${name}`, {
+      this.logger?.debug(`Started operation: ${name}`, {
         component: metadata.component,
         action: 'performance_start',
         metadata: {
@@ -263,7 +263,7 @@ export class PerformanceMonitor {
         },
       })
     } catch (error) {
-      this.logger.error(
+      this.logger?.error(
         `Failed to start operation: ${name}`,
         {
           component: metadata.component,
@@ -286,7 +286,7 @@ export class PerformanceMonitor {
     try {
       const operation = this.activeOperations.get(name)
       if (!operation) {
-        this.logger.warn(`Operation not found: ${name}`, {
+        this.logger?.warn(`Operation not found: ${name}`, {
           component: ComponentType.ERROR_HANDLER,
           action: 'performance_end_not_found',
         })
@@ -349,7 +349,7 @@ export class PerformanceMonitor {
         measures: [{ name, duration }],
       }
 
-      this.logger.log(logLevel, `Operation completed: ${name}`, {
+      this.logger?.log(logLevel, `Operation completed: ${name}`, {
         component: finalMetadata.component,
         action: isSlowOperation ? 'performance_slow' : 'performance_complete',
         performance: performanceData,
@@ -372,7 +372,7 @@ export class PerformanceMonitor {
 
       return measurement
     } catch (error) {
-      this.logger.error(
+      this.logger?.error(
         `Failed to end operation: ${name}`,
         {
           component: ComponentType.ERROR_HANDLER,
@@ -539,7 +539,7 @@ export class PerformanceMonitor {
    * Handle slow operations with additional logging and analysis
    */
   private handleSlowOperation(measurement: PerformanceMeasurement): void {
-    this.logger.warn(`Slow operation detected: ${measurement.name}`, {
+    this.logger?.warn(`Slow operation detected: ${measurement.name}`, {
       component: measurement.metadata.component,
       action: 'slow_operation_detected',
       performance: {
@@ -563,7 +563,7 @@ export class PerformanceMonitor {
 
     // Additional analysis for critical slow operations
     if (measurement.duration > measurement.threshold * 3) {
-      this.logger.error(`Critical slow operation: ${measurement.name}`, {
+      this.logger?.error(`Critical slow operation: ${measurement.name}`, {
         component: measurement.metadata.component,
         action: 'critical_slow_operation',
         metadata: {
@@ -584,7 +584,7 @@ export class PerformanceMonitor {
       const excess = this.measurements.length - this.maxMeasurements
       this.measurements.splice(0, excess)
 
-      this.logger.debug('Performance measurement limit enforced', {
+      this.logger?.debug('Performance measurement limit enforced', {
         component: ComponentType.ERROR_HANDLER,
         action: 'performance_limit_enforced',
         metadata: {
@@ -606,7 +606,7 @@ export class PerformanceMonitor {
       const analytics = this.generateAnalytics()
 
       // Log analytics summary
-      this.logger.info('Performance analytics', {
+      this.logger?.info('Performance analytics', {
         component: ComponentType.ERROR_HANDLER,
         action: 'performance_analytics',
         metadata: {
@@ -629,7 +629,7 @@ export class PerformanceMonitor {
           },
         })
       } catch (storageError) {
-        this.logger.warn('Failed to store performance data', {
+        this.logger?.warn('Failed to store performance data', {
           component: ComponentType.ERROR_HANDLER,
           action: 'performance_storage_error',
         })
@@ -638,7 +638,7 @@ export class PerformanceMonitor {
       // Clear measurements after flush
       this.measurements = []
     } catch (error) {
-      this.logger.error(
+      this.logger?.error(
         'Failed to flush performance measurements',
         {
           component: ComponentType.ERROR_HANDLER,
@@ -739,7 +739,7 @@ export class PerformanceMonitor {
   public updateThresholds(newThresholds: Partial<PerformanceThresholds>): void {
     this.thresholds = { ...this.thresholds, ...newThresholds }
 
-    this.logger.info('Performance thresholds updated', {
+    this.logger?.info('Performance thresholds updated', {
       component: ComponentType.ERROR_HANDLER,
       action: 'performance_thresholds_updated',
       metadata: { thresholds: this.thresholds },
@@ -752,7 +752,7 @@ export class PerformanceMonitor {
   public setEnabled(enabled: boolean): void {
     this.isEnabled = enabled
 
-    this.logger.info(`Performance monitoring ${enabled ? 'enabled' : 'disabled'}`, {
+    this.logger?.info(`Performance monitoring ${enabled ? 'enabled' : 'disabled'}`, {
       component: ComponentType.ERROR_HANDLER,
       action: 'performance_monitoring_toggle',
       metadata: { enabled },
@@ -799,7 +799,7 @@ export class PerformanceMonitor {
     this.activeOperations.clear()
     this.measurements = []
 
-    this.logger.info('PerformanceMonitor destroyed', {
+    this.logger?.info('PerformanceMonitor destroyed', {
       component: ComponentType.ERROR_HANDLER,
       action: 'performance_monitor_destroy',
     })

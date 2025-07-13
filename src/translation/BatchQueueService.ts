@@ -453,9 +453,9 @@ export class BatchQueueService {
   private async executeBatch(batch: ProcessingBatch): Promise<void> {
     try {
       // Check rate limits
-      const rateLimitStatus = await rateLimitService.checkRateLimit(batch.totalCharacters)
+      const rateLimitStatus = await rateLimitService?.checkRateLimit(batch.totalCharacters)
 
-      if (!rateLimitStatus.allowed) {
+      if (!rateLimitStatus?.allowed) {
         // Rate limit exceeded, requeue requests
         this.requeueBatchRequests(batch, 'Rate limit exceeded')
         return
@@ -477,7 +477,7 @@ export class BatchQueueService {
       const processingTime = Date.now() - startTime
 
       // Record usage
-      await rateLimitService.recordUsage(batch.totalCharacters)
+      await rateLimitService?.recordUsage(batch.totalCharacters)
 
       // Process results
       for (let i = 0; i < batch.requests.length; i++) {

@@ -52,7 +52,7 @@ export class YouTubeXMLParser {
     const errors: ParseError[] = []
 
     try {
-      logger.info('Parsing XML subtitle content', {
+      logger?.info('Parsing XML subtitle content', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           contentLength: content.length,
@@ -75,7 +75,7 @@ export class YouTubeXMLParser {
 
       // Detect specific YouTube XML format
       const detectedFormat = this.detectYouTubeFormat(cleanedContent)
-      logger.info('Detected YouTube XML format', {
+      logger?.info('Detected YouTube XML format', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           format: detectedFormat,
@@ -106,7 +106,7 @@ export class YouTubeXMLParser {
       segments = this.postProcessSegments(segments, config)
 
       const parseTime = performance.now() - startTime
-      logger.info('XML parsing completed successfully', {
+      logger?.info('XML parsing completed successfully', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           segmentCount: segments.length,
@@ -133,7 +133,7 @@ export class YouTubeXMLParser {
         errors: errors.length > 0 ? errors : undefined,
       }
     } catch (error) {
-      logger.error('XML parsing failed', {
+      logger?.error('XML parsing failed', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           contentLength: content.length,

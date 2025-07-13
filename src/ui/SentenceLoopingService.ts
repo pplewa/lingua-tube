@@ -249,7 +249,7 @@ export class SentenceLoopingService {
   public async initialize(): Promise<boolean> {
     try {
       if (this.isInitialized) {
-        this.logger.warn('Already initialized', {
+        this.logger?.warn('Already initialized', {
           component: ComponentType.SUBTITLE_MANAGER
         })
         return true
@@ -262,7 +262,7 @@ export class SentenceLoopingService {
       await this.refreshSubtitleData()
 
       this.isInitialized = true
-      this.logger.info('Initialized successfully', {
+      this.logger?.info('Initialized successfully', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           configEnabled: this.config.enabled,
@@ -272,7 +272,7 @@ export class SentenceLoopingService {
       })
       return true
     } catch (error) {
-      this.logger.error('Initialization failed', {
+      this.logger?.error('Initialization failed', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           error: error instanceof Error ? error.message : String(error)
@@ -298,11 +298,11 @@ export class SentenceLoopingService {
       this.eventListeners.clear()
 
       this.isInitialized = false
-      this.logger.info('Destroyed successfully', {
+      this.logger?.info('Destroyed successfully', {
         component: ComponentType.SUBTITLE_MANAGER
       })
     } catch (error) {
-      this.logger.error('Destroy failed', {
+      this.logger?.error('Destroy failed', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           error: error instanceof Error ? error.message : String(error)
@@ -322,7 +322,7 @@ export class SentenceLoopingService {
         this.updateConfigFromSettings(result.data)
       }
     } catch (error) {
-      this.logger.warn('Failed to load config from storage', {
+      this.logger?.warn('Failed to load config from storage', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           error: error instanceof Error ? error.message : String(error)
@@ -410,7 +410,7 @@ export class SentenceLoopingService {
       }))
       this.availableSentences = SentenceDetector.detectSentences(this.subtitleSegments)
 
-      this.logger.debug('Subtitle data refreshed', {
+      this.logger?.debug('Subtitle data refreshed', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           sentenceCount: this.availableSentences.length,
@@ -419,7 +419,7 @@ export class SentenceLoopingService {
         }
       })
     } catch (error) {
-      this.logger.error('Failed to refresh subtitle data', {
+      this.logger?.error('Failed to refresh subtitle data', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           error: error instanceof Error ? error.message : String(error)
@@ -436,7 +436,7 @@ export class SentenceLoopingService {
 
   public createLoopFromCurrentTime(): SentenceLoop | null {
     if (!this.config.enabled) {
-      this.logger.warn('Service is disabled', {
+      this.logger?.warn('Service is disabled', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           action: 'createLoopFromCurrentTime'
@@ -452,7 +452,7 @@ export class SentenceLoopingService {
   public createLoopAtTime(time: number): SentenceLoop | null {
     const sentence = SentenceDetector.findSentenceAtTime(this.availableSentences, time)
     if (!sentence) {
-      this.logger.warn('No sentence found at time', {
+      this.logger?.warn('No sentence found at time', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           time,
@@ -468,7 +468,7 @@ export class SentenceLoopingService {
   public createLoopFromSubtitleId(subtitleId: string): SentenceLoop | null {
     const sentence = SentenceDetector.findSentenceBySegment(this.availableSentences, subtitleId)
     if (!sentence) {
-      this.logger.warn('No sentence found for subtitle ID', {
+      this.logger?.warn('No sentence found for subtitle ID', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           subtitleId,
@@ -489,7 +489,7 @@ export class SentenceLoopingService {
 
     // Validate loop duration
     if (duration < this.config.minLoopDuration) {
-      this.logger.warn('Loop duration too short', {
+      this.logger?.warn('Loop duration too short', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           duration,
@@ -501,7 +501,7 @@ export class SentenceLoopingService {
     }
 
     if (duration > this.config.maxLoopDuration) {
-      this.logger.warn('Loop duration too long', {
+      this.logger?.warn('Loop duration too long', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           duration,
@@ -525,7 +525,7 @@ export class SentenceLoopingService {
       lastActivated: 0,
     }
 
-    this.logger.info('Created loop', {
+    this.logger?.info('Created loop', {
       component: ComponentType.SUBTITLE_MANAGER,
       metadata: {
         loopId: loop.id,
@@ -543,7 +543,7 @@ export class SentenceLoopingService {
 
   public activateLoop(loop: SentenceLoop): boolean {
     if (!this.config.enabled) {
-      this.logger.warn('Service is disabled', {
+      this.logger?.warn('Service is disabled', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           action: 'activateLoop',
@@ -592,7 +592,7 @@ export class SentenceLoopingService {
       timestamp: Date.now(),
     })
 
-    this.logger.info('Started looping', {
+    this.logger?.info('Started looping', {
       component: ComponentType.SUBTITLE_MANAGER,
       metadata: {
         loopId: this.currentLoop.id,
@@ -615,7 +615,7 @@ export class SentenceLoopingService {
         this.applyFadeIn()
       }
     } catch (error) {
-      this.logger.error('Failed to seek to loop start', {
+      this.logger?.error('Failed to seek to loop start', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           loopId: this.currentLoop?.id,
@@ -652,7 +652,7 @@ export class SentenceLoopingService {
       currentTime < this.currentLoop.startTime - 1.0 ||
       currentTime > this.currentLoop.endTime + 1.0
     ) {
-      this.logger.info('User seeked outside loop, stopping', {
+      this.logger?.info('User seeked outside loop, stopping', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           loopId: this.currentLoop.id,
@@ -732,7 +732,7 @@ export class SentenceLoopingService {
     })
 
     this.stopCurrentLoop()
-    this.logger.info('Loop completed', {
+    this.logger?.info('Loop completed', {
       component: ComponentType.SUBTITLE_MANAGER,
       metadata: {
         loopId: completedLoop.id,
@@ -765,7 +765,7 @@ export class SentenceLoopingService {
       timestamp: Date.now(),
     })
 
-    this.logger.info('Stopped loop', {
+    this.logger?.info('Stopped loop', {
       component: ComponentType.SUBTITLE_MANAGER,
       metadata: {
         loopId: stoppedLoop.id,
@@ -895,7 +895,7 @@ export class SentenceLoopingService {
       try {
         listener(event)
       } catch (error) {
-        this.logger.error('Event listener error', {
+        this.logger?.error('Event listener error', {
           component: ComponentType.SUBTITLE_MANAGER,
           metadata: {
             eventType: event.type,

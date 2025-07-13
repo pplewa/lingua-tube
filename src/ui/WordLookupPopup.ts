@@ -1456,7 +1456,7 @@ export class WordLookupPopup {
       // Simple word preprocessing - just trim whitespace
       const processedWord = word.trim()
 
-      this.logger.debug('Showing word lookup', {
+      this.logger?.debug('Showing word lookup', {
         component: ComponentType.WORD_LOOKUP,
         metadata: {
           word: processedWord,
@@ -1494,7 +1494,7 @@ export class WordLookupPopup {
       // Emit show event
       this.emit('show', { word: processedWord, position: pos, sourceLanguage, targetLanguage })
     } catch (error) {
-      this.logger.error('Failed to show popup', {
+      this.logger?.error('Failed to show popup', {
         component: ComponentType.WORD_LOOKUP,
         metadata: {
           word: typeof wordOrData === 'string' ? wordOrData : wordOrData.word,
@@ -1630,7 +1630,7 @@ export class WordLookupPopup {
     try {
       await this.waitForPendingOperations(2000) // 2 second timeout
     } catch (error) {
-      this.logger.warn('Some operations did not complete during cleanup', {
+      this.logger?.warn('Some operations did not complete during cleanup', {
         component: ComponentType.WORD_LOOKUP,
         metadata: {
           error: error instanceof Error ? error.message : String(error)
@@ -1641,7 +1641,7 @@ export class WordLookupPopup {
     // Perform complete cleanup
     this.performCompleteCleanup()
 
-    this.logger.info('Component destroyed and cleaned up', {
+    this.logger?.info('Component destroyed and cleaned up', {
       component: ComponentType.WORD_LOOKUP
     })
   }
@@ -1653,7 +1653,7 @@ export class WordLookupPopup {
   public destroySync(): void {
     if (this.isDestroyed) return
 
-    this.logger.warn('Using synchronous destroy - some operations may not complete properly', {
+    this.logger?.warn('Using synchronous destroy - some operations may not complete properly', {
       component: ComponentType.WORD_LOOKUP,
       metadata: {
         reason: 'Sync destroy used instead of async destroy'
@@ -1667,7 +1667,7 @@ export class WordLookupPopup {
    * Provides automatic cleanup for browser navigation/page unload scenarios
    */
   public disconnectedCallback(): void {
-    this.logger.info('Component disconnected from DOM, performing cleanup', {
+    this.logger?.info('Component disconnected from DOM, performing cleanup', {
       component: ComponentType.WORD_LOOKUP
     })
     this.destroySync()
@@ -1690,7 +1690,7 @@ export class WordLookupPopup {
   // ========================================
 
   private async loadWordContent(word: string): Promise<PopupContent> {
-    this.logger.debug('Loading content for word', {
+    this.logger?.debug('Loading content for word', {
       component: ComponentType.WORD_LOOKUP,
       metadata: {
         word,
@@ -1705,7 +1705,7 @@ export class WordLookupPopup {
 
     try {
       // Load translation first (usually faster) - tracked operation
-      this.logger.debug('Getting translation', {
+      this.logger?.debug('Getting translation', {
         component: ComponentType.WORD_LOOKUP,
         metadata: { word, sourceLanguage: this.currentSourceLanguage, targetLanguage: this.currentTargetLanguage }
       })
@@ -1715,7 +1715,7 @@ export class WordLookupPopup {
         toLanguage: this.currentTargetLanguage,
       })
       translation = await this.trackOperation(translationPromise)
-      this.logger.debug('Translation received', {
+      this.logger?.debug('Translation received', {
         component: ComponentType.WORD_LOOKUP,
         metadata: { word, translation: translation.substring(0, 50) }
       })
@@ -1729,18 +1729,18 @@ export class WordLookupPopup {
       // (since DictionaryApiService only supports English)
       if (this.currentSourceLanguage === 'en' || this.currentSourceLanguage === 'auto') {
         try {
-          this.logger.debug('Getting definition for English word', {
+          this.logger?.debug('Getting definition for English word', {
             component: ComponentType.WORD_LOOKUP,
             metadata: { word, sourceLanguage: this.currentSourceLanguage }
           })
           const definitionPromise = this.dictionaryService.getDefinition(word)
           definition = await this.trackOperation(definitionPromise)
-          this.logger.debug('Definition received', {
+          this.logger?.debug('Definition received', {
             component: ComponentType.WORD_LOOKUP,
             metadata: { word, definitionCount: definition?.meanings?.length || 0 }
           })
         } catch (definitionError) {
-          this.logger.debug('Definition lookup failed (expected for non-English words)', {
+          this.logger?.debug('Definition lookup failed (expected for non-English words)', {
             component: ComponentType.WORD_LOOKUP,
             metadata: {
               word,
@@ -1752,13 +1752,13 @@ export class WordLookupPopup {
           // Just continue with translation-only content
         }
       } else {
-        this.logger.debug('Skipping definition lookup for non-English word', {
+        this.logger?.debug('Skipping definition lookup for non-English word', {
           component: ComponentType.WORD_LOOKUP,
           metadata: { word, sourceLanguage: this.currentSourceLanguage }
         })
       }
     } catch (error) {
-      this.logger.error('Translation failed', {
+      this.logger?.error('Translation failed', {
         component: ComponentType.WORD_LOOKUP,
         metadata: {
           word,
@@ -1773,18 +1773,18 @@ export class WordLookupPopup {
         (this.currentSourceLanguage === 'en' || this.currentSourceLanguage === 'auto')
       ) {
         try {
-          this.logger.debug('Trying definition-only fallback', {
+          this.logger?.debug('Trying definition-only fallback', {
             component: ComponentType.WORD_LOOKUP,
             metadata: { word, sourceLanguage: this.currentSourceLanguage }
           })
           const definitionPromise = this.dictionaryService.getDefinition(word)
           definition = await this.trackOperation(definitionPromise)
-          this.logger.debug('Definition fallback successful', {
+          this.logger?.debug('Definition fallback successful', {
             component: ComponentType.WORD_LOOKUP,
             metadata: { word, definitionCount: definition?.meanings?.length || 0 }
           })
         } catch (fallbackError) {
-          this.logger.error('Both translation and dictionary services failed', {
+          this.logger?.error('Both translation and dictionary services failed', {
             component: ComponentType.WORD_LOOKUP,
             metadata: {
               word,
@@ -1830,7 +1830,7 @@ export class WordLookupPopup {
       targetLanguage: this.currentTargetLanguage,
     }
 
-    this.logger.debug('Final content prepared', {
+    this.logger?.debug('Final content prepared', {
       component: ComponentType.WORD_LOOKUP,
       metadata: {
         word: content.word,
@@ -2056,7 +2056,7 @@ export class WordLookupPopup {
   private showErrorState(error: Error): void {
     if (!this.popupContainer || this.isDestroyed) return
 
-    this.logger.error('Error occurred in showErrorState', {
+    this.logger?.error('Error occurred in showErrorState', {
       component: ComponentType.WORD_LOOKUP,
       metadata: {
         word: this.currentWord,
@@ -2122,7 +2122,7 @@ export class WordLookupPopup {
         this.events.onTTSPlayed?.(this.currentWord)
       }
     } catch (error) {
-      this.logger.error('TTS failed', {
+      this.logger?.error('TTS failed', {
         component: ComponentType.WORD_LOOKUP,
         metadata: {
           word: this.currentWord,
@@ -2177,7 +2177,7 @@ export class WordLookupPopup {
         this.showActionSuccess(actionKey, 'Word saved!')
       }
     } catch (error) {
-      this.logger.error('Save word failed', {
+      this.logger?.error('Save word failed', {
         component: ComponentType.WORD_LOOKUP,
         metadata: {
           word: this.currentWord,
@@ -2229,7 +2229,7 @@ export class WordLookupPopup {
   }
 
   // ========================================
-  // Advanced Positioning Logic
+  // Simplified Positioning Logic
   // ========================================
 
   private positionPopup(position: { x: number; y: number }): void {
@@ -2245,238 +2245,32 @@ export class WordLookupPopup {
       height: this.config.maxHeight,
     }
 
-    // Get YouTube-specific UI elements to avoid
-    const youtubeElements = this.getYouTubeUIElements()
+    // SIMPLE LOGIC: Always position popup above the clicked word using bottom CSS
+    // Center horizontally on the clicked position
+    const x = position.x - popupRect.width / 2
+    
+    // Position bottom of popup just above the clicked word
+    const bottomDistance = position.y - viewport.height - 10 // 10px gap above word
+    
+    // Apply positioning
+    this.popupContainer.style.left = `${x}px`
+    this.popupContainer.style.top = ''
+    this.popupContainer.style.bottom = `${bottomDistance}px`
+    
+    console.warn('[POPUP DEBUG] Simple positioning', {
+      clickX: position.x,
+      clickY: position.y,
+      popupX: x,
+      bottomDistance,
+      viewportHeight: viewport.height
+    })
 
-    // Calculate best position with smart placement
-    const placement = this.calculateSmartPlacement(position, viewport, popupRect, youtubeElements)
-
-    // Apply positioning with smooth transition
-    this.popupContainer.style.left = `${placement.x}px`
-    this.popupContainer.style.top = `${placement.y}px`
-
-    // Add positioning classes for CSS styling
-    this.updatePositionClasses(placement, position)
+    // Simple positioning - no need for complex classes
   }
 
-  private getYouTubeUIElements(): Array<{ rect: DOMRect; priority: number; name: string }> {
-    const elements: Array<{ rect: DOMRect; priority: number; name: string }> = []
 
-    // High priority elements (critical to avoid)
-    const playerControls = document.querySelector('.ytp-chrome-bottom')
-    if (playerControls) {
-      elements.push({
-        rect: playerControls.getBoundingClientRect(),
-        priority: 10,
-        name: 'player-controls',
-      })
-    }
 
-    const topBar = document.querySelector('#masthead')
-    if (topBar) {
-      elements.push({
-        rect: topBar.getBoundingClientRect(),
-        priority: 9,
-        name: 'top-bar',
-      })
-    }
 
-    // Medium priority elements
-    const sidebar = document.querySelector('#secondary')
-    if (sidebar) {
-      elements.push({
-        rect: sidebar.getBoundingClientRect(),
-        priority: 7,
-        name: 'sidebar',
-      })
-    }
-
-    const chat = document.querySelector('#chat')
-    if (chat) {
-      elements.push({
-        rect: chat.getBoundingClientRect(),
-        priority: 6,
-        name: 'chat',
-      })
-    }
-
-    // Lower priority elements
-    const description = document.querySelector('#description')
-    if (description) {
-      elements.push({
-        rect: description.getBoundingClientRect(),
-        priority: 4,
-        name: 'description',
-      })
-    }
-
-    const comments = document.querySelector('#comments')
-    if (comments) {
-      elements.push({
-        rect: comments.getBoundingClientRect(),
-        priority: 3,
-        name: 'comments',
-      })
-    }
-
-    return elements
-  }
-
-  private calculateSmartPlacement(
-    position: { x: number; y: number },
-    viewport: { width: number; height: number },
-    popupRect: { width: number; height: number },
-    youtubeElements: Array<{ rect: DOMRect; priority: number; name: string }>,
-  ): { x: number; y: number; placement: string } {
-    const offset = 12
-    const arrowOffset = 8
-
-    // Define possible positions in priority order
-    const placements = [
-      { name: 'bottom-center', x: position.x - popupRect.width / 2, y: position.y + arrowOffset },
-      {
-        name: 'top-center',
-        x: position.x - popupRect.width / 2,
-        y: position.y - popupRect.height - arrowOffset,
-      },
-      { name: 'right-center', x: position.x + arrowOffset, y: position.y - popupRect.height / 2 },
-      {
-        name: 'left-center',
-        x: position.x - popupRect.width - arrowOffset,
-        y: position.y - popupRect.height / 2,
-      },
-      { name: 'bottom-left', x: position.x - offset, y: position.y + arrowOffset },
-      {
-        name: 'bottom-right',
-        x: position.x - popupRect.width + offset,
-        y: position.y + arrowOffset,
-      },
-      { name: 'top-left', x: position.x - offset, y: position.y - popupRect.height - arrowOffset },
-      {
-        name: 'top-right',
-        x: position.x - popupRect.width + offset,
-        y: position.y - popupRect.height - arrowOffset,
-      },
-    ]
-
-    // Find the best position
-    let bestPlacement = placements[0]
-    let bestScore = -Infinity
-
-    for (const placement of placements) {
-      const score = this.scorePlacement(placement, viewport, popupRect, youtubeElements, offset)
-      if (score > bestScore) {
-        bestScore = score
-        bestPlacement = placement
-      }
-    }
-
-    // Apply final viewport adjustments
-    const finalPosition = this.adjustForViewport(bestPlacement, popupRect, viewport, offset)
-
-    return {
-      x: finalPosition.x,
-      y: finalPosition.y,
-      placement: bestPlacement.name,
-    }
-  }
-
-  private scorePlacement(
-    placement: { name: string; x: number; y: number },
-    viewport: { width: number; height: number },
-    popupRect: { width: number; height: number },
-    youtubeElements: Array<{ rect: DOMRect; priority: number; name: string }>,
-    offset: number,
-  ): number {
-    let score = 0
-
-    const popupBounds = {
-      left: placement.x,
-      right: placement.x + popupRect.width,
-      top: placement.y,
-      bottom: placement.y + popupRect.height,
-    }
-
-    // Penalty for going outside viewport
-    if (popupBounds.left < offset) score -= 100
-    if (popupBounds.right > viewport.width - offset) score -= 100
-    if (popupBounds.top < offset) score -= 100
-    if (popupBounds.bottom > viewport.height - offset) score -= 100
-
-    // Bonus for staying well within viewport
-    const marginLeft = popupBounds.left - offset
-    const marginRight = viewport.width - popupBounds.right - offset
-    const marginTop = popupBounds.top - offset
-    const marginBottom = viewport.height - popupBounds.bottom - offset
-
-    score += Math.min(marginLeft, marginRight) * 0.1
-    score += Math.min(marginTop, marginBottom) * 0.1
-
-    // Penalty for overlapping with YouTube elements
-    for (const element of youtubeElements) {
-      const overlap = this.calculateOverlap(popupBounds, element.rect)
-      if (overlap > 0) {
-        score -= overlap * element.priority
-      }
-    }
-
-    // Bonus for preferred positions (bottom-center is most natural)
-    const positionBonus = {
-      'bottom-center': 20,
-      'top-center': 15,
-      'right-center': 10,
-      'left-center': 10,
-      'bottom-left': 5,
-      'bottom-right': 5,
-      'top-left': 3,
-      'top-right': 3,
-    }
-
-    score += positionBonus[placement.name as keyof typeof positionBonus] || 0
-
-    return score
-  }
-
-  private calculateOverlap(
-    rect1: { left: number; right: number; top: number; bottom: number },
-    rect2: DOMRect,
-  ): number {
-    const left = Math.max(rect1.left, rect2.left)
-    const right = Math.min(rect1.right, rect2.right)
-    const top = Math.max(rect1.top, rect2.top)
-    const bottom = Math.min(rect1.bottom, rect2.bottom)
-
-    if (left < right && top < bottom) {
-      return (right - left) * (bottom - top)
-    }
-
-    return 0
-  }
-
-  private adjustForViewport(
-    placement: { name: string; x: number; y: number },
-    popupRect: { width: number; height: number },
-    viewport: { width: number; height: number },
-    offset: number,
-  ): { x: number; y: number } {
-    let { x, y } = placement
-
-    // Adjust horizontal position
-    if (x < offset) {
-      x = offset
-    } else if (x + popupRect.width > viewport.width - offset) {
-      x = viewport.width - popupRect.width - offset
-    }
-
-    // Adjust vertical position
-    if (y < offset) {
-      y = offset
-    } else if (y + popupRect.height > viewport.height - offset) {
-      y = viewport.height - popupRect.height - offset
-    }
-
-    return { x, y }
-  }
 
   private updatePositionClasses(
     placement: { x: number; y: number; placement: string },
@@ -2852,12 +2646,12 @@ export class WordLookupPopup {
       }
 
       await navigator.clipboard.writeText(textToCopy)
-      this.logger.debug('Copied content to clipboard', {
+      this.logger?.debug('Copied content to clipboard', {
         component: ComponentType.WORD_LOOKUP,
         metadata: { contentType: content, word: this.currentWord }
       })
     } catch (error) {
-      this.logger.error('Failed to copy to clipboard', {
+      this.logger?.error('Failed to copy to clipboard', {
         component: ComponentType.WORD_LOOKUP,
         metadata: {
           contentType: content,
@@ -2884,7 +2678,7 @@ export class WordLookupPopup {
    */
   public emit(event: string, data: any): void {
     // Could be enhanced to support custom events
-    this.logger.debug('Custom event emitted', {
+    this.logger?.debug('Custom event emitted', {
       component: ComponentType.WORD_LOOKUP,
       metadata: { event, data }
     })
@@ -3219,7 +3013,7 @@ export class WordLookupPopup {
 
   private async handleEnhancedRetry(errorContext: ErrorContext): Promise<void> {
     if (!errorContext.retryable || this.errorState.retryCount >= errorContext.maxRetries) {
-      this.logger.warn('Retry not allowed or max retries exceeded', {
+      this.logger?.warn('Retry not allowed or max retries exceeded', {
         component: ComponentType.WORD_LOOKUP,
         metadata: {
           retryCount: this.errorState.retryCount,

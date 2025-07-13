@@ -77,7 +77,7 @@ export class SegmentMerger {
    */
   async mergeFile(subtitleFile: SubtitleFile): Promise<MergeResult> {
     const startTime = Date.now()
-    this.logger.info('Starting segment merge', {
+    this.logger?.info('Starting segment merge', {
       component: ComponentType.SUBTITLE_MANAGER,
       metadata: {
         segmentCount: subtitleFile.segments.length,
@@ -89,7 +89,7 @@ export class SegmentMerger {
     const result = await this.mergeSegments(subtitleFile.segments)
 
     const processingTime = Date.now() - startTime
-    this.logger.info('Segment merge completed', {
+    this.logger?.info('Segment merge completed', {
       component: ComponentType.SUBTITLE_MANAGER,
       metadata: {
         originalCount: result.originalCount,

@@ -400,121 +400,121 @@ export class DualSubtitleComponent {
   public async initialize(): Promise<boolean> {
     try {
       if (this.isInitialized) {
-        this.logger.warn('Already initialized', {
+        this.logger?.warn('Already initialized', {
           component: ComponentType.SUBTITLE_MANAGER,
           metadata: {}
         })
         return true
       }
 
-      this.logger.info('Starting initialization', {
+      this.logger?.info('Starting initialization', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {}
       })
 
       // Load config from storage first
-      this.logger.debug('Loading config from storage', {
+      this.logger?.debug('Loading config from storage', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {}
       })
       await this.loadConfigFromStorage()
-      this.logger.debug('Config loaded from storage', {
+      this.logger?.debug('Config loaded from storage', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {}
       })
 
       // Find YouTube player container
-      this.logger.debug('Finding YouTube player container', {
+      this.logger?.debug('Finding YouTube player container', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {}
       })
       const playerContainer = this.findPlayerContainer()
       if (!playerContainer) {
-        this.logger.error('Could not find YouTube player container', {
+        this.logger?.error('Could not find YouTube player container', {
           component: ComponentType.SUBTITLE_MANAGER,
           metadata: {}
         })
         return false
       }
-      this.logger.debug('Player container found', {
+      this.logger?.debug('Player container found', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {}
       })
 
       // Create shadow DOM container
-      this.logger.debug('Creating container', {
+      this.logger?.debug('Creating container', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {}
       })
       this.container = this.createContainer()
       if (!this.container) {
-        this.logger.error('Failed to create container', {
+        this.logger?.error('Failed to create container', {
           component: ComponentType.SUBTITLE_MANAGER,
           metadata: {}
         })
         return false
       }
-      this.logger.debug('Container created', {
+      this.logger?.debug('Container created', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {}
       })
 
       // Attach to player
-      this.logger.debug('Attaching to player', {
+      this.logger?.debug('Attaching to player', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {}
       })
       playerContainer.appendChild(this.container)
-      this.logger.debug('Attached to player', {
+      this.logger?.debug('Attached to player', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {}
       })
 
       // Create shadow root and content
-      this.logger.debug('Creating shadow DOM', {
+      this.logger?.debug('Creating shadow DOM', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {}
       })
       this.createShadowDOM()
       this.createSubtitleElements()
       this.applyConfiguration()
-      this.logger.debug('Shadow DOM created', {
+      this.logger?.debug('Shadow DOM created', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {}
       })
 
       // Set up observers
-      this.logger.debug('Setting up observers', {
+      this.logger?.debug('Setting up observers', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {}
       })
       this.setupResizeObserver()
       this.setupMutationObserver()
       this.setupVocabularyEventListeners()
-      this.logger.debug('Observers set up', {
+      this.logger?.debug('Observers set up', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {}
       })
 
       // Connect to subtitle sync
-      this.logger.debug('Connecting to subtitle sync', {
+      this.logger?.debug('Connecting to subtitle sync', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {}
       })
       this.playerService.addSubtitleSyncListener(this.subtitleSyncHandler)
-      this.logger.debug('Connected to subtitle sync', {
+      this.logger?.debug('Connected to subtitle sync', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {}
       })
 
       this.isInitialized = true
-      this.logger.info('Initialized successfully', {
+      this.logger?.info('Initialized successfully', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {}
       })
       return true
     } catch (error) {
-      this.logger.error('Initialization failed', {
+      this.logger?.error('Initialization failed', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: { error: error instanceof Error ? error.message : String(error) }
       })
@@ -566,12 +566,12 @@ export class DualSubtitleComponent {
       this.vocabularyCache.clear()
 
       this.isInitialized = false
-      this.logger.info('Destroyed successfully', {
+      this.logger?.info('Destroyed successfully', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {}
       })
     } catch (error) {
-      this.logger.error('Destroy failed', {
+      this.logger?.error('Destroy failed', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: { error: error instanceof Error ? error.message : String(error) }
       })
@@ -659,7 +659,7 @@ export class DualSubtitleComponent {
         this.updateConfigFromSettings(result.data)
       }
     } catch (error) {
-      this.logger.warn('Failed to load config from storage', {
+      this.logger?.warn('Failed to load config from storage', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: { error: error instanceof Error ? error.message : String(error) }
       })
@@ -804,7 +804,7 @@ export class DualSubtitleComponent {
   private segmentWords(text: string): WordSegment[] {
     if (!text) return []
 
-    this.logger.debug('Segmenting text', {
+    this.logger?.debug('Segmenting text', {
       component: ComponentType.SUBTITLE_MANAGER,
       metadata: { text, textLength: text.length }
     })
@@ -837,7 +837,7 @@ export class DualSubtitleComponent {
       partOfSpeech: undefined,
     }))
 
-    this.logger.debug('Thai text segmented', {
+    this.logger?.debug('Thai text segmented', {
       component: ComponentType.SUBTITLE_MANAGER,
       metadata: { 
         segmentCount: segments.length,
@@ -870,7 +870,7 @@ export class DualSubtitleComponent {
       partOfSpeech: undefined,
     }))
 
-    this.logger.debug('Non-Thai text segmented', {
+    this.logger?.debug('Non-Thai text segmented', {
       component: ComponentType.SUBTITLE_MANAGER,
       metadata: { 
         segmentCount: segments.length,
@@ -906,7 +906,7 @@ export class DualSubtitleComponent {
   private renderTargetLine(text: string): void {
     if (!this.targetLine) return
 
-    this.logger.debug('Rendering target line', {
+    this.logger?.debug('Rendering target line', {
       component: ComponentType.SUBTITLE_MANAGER,
       metadata: { text, textLength: text.length }
     })
@@ -962,7 +962,7 @@ export class DualSubtitleComponent {
           }
         })
         .catch((error) => {
-          this.logger.warn('Error checking vocabulary word', {
+          this.logger?.warn('Error checking vocabulary word', {
             component: ComponentType.SUBTITLE_MANAGER,
             metadata: { 
               word: word.text,
@@ -972,7 +972,7 @@ export class DualSubtitleComponent {
         })
 
       wordSpan.addEventListener('click', (event) => {
-        this.logger.debug('Word clicked', {
+        this.logger?.debug('Word clicked', {
           component: ComponentType.SUBTITLE_MANAGER,
           metadata: { word: word.text }
         })
@@ -992,7 +992,7 @@ export class DualSubtitleComponent {
       this.targetLine.appendChild(textNode)
     }
 
-    this.logger.debug('Rendered clickable words', {
+    this.logger?.debug('Rendered clickable words', {
       component: ComponentType.SUBTITLE_MANAGER,
       metadata: { wordCount: words.length }
     })
@@ -1007,7 +1007,7 @@ export class DualSubtitleComponent {
     const rect = (event.target as HTMLElement).getBoundingClientRect()
     const cleanedWord = word.trim() // Simple cleaning - just remove whitespace
 
-    this.logger.debug('Handling word click', {
+    this.logger?.debug('Handling word click', {
       component: ComponentType.SUBTITLE_MANAGER,
       metadata: { cleanedWord }
     })
@@ -1020,11 +1020,11 @@ export class DualSubtitleComponent {
       cueId: this.currentCues[0]?.id || '',
       position: {
         x: rect.left + rect.width / 2,
-        y: rect.top,
+        y: rect.bottom, // Use bottom edge so popup appears below the word
       },
     }
 
-    this.logger.debug('Word click event created', {
+    this.logger?.debug('Word click event created', {
       component: ComponentType.SUBTITLE_MANAGER,
       metadata: { 
         word: wordClickEvent.word,
@@ -1037,13 +1037,13 @@ export class DualSubtitleComponent {
     // Notify all word click listeners
     this.wordClickListeners.forEach((listener) => {
       try {
-        this.logger.debug('Calling word click listener', {
+        this.logger?.debug('Calling word click listener', {
           component: ComponentType.SUBTITLE_MANAGER,
           metadata: {}
         })
         listener(wordClickEvent)
       } catch (error) {
-        this.logger.error('Error in word click listener', {
+        this.logger?.error('Error in word click listener', {
           component: ComponentType.SUBTITLE_MANAGER,
           metadata: { error: error instanceof Error ? error.message : String(error) }
         })
@@ -1238,7 +1238,7 @@ export class DualSubtitleComponent {
       try {
         listener(visible, cueCount)
       } catch (error) {
-        this.logger.error('Visibility listener error', {
+        this.logger?.error('Visibility listener error', {
           component: ComponentType.SUBTITLE_MANAGER,
           metadata: { 
             visible, 
@@ -1349,7 +1349,7 @@ export class DualSubtitleComponent {
       this.vocabularyCache.set(word, isVocabularyWord.toString())
       return isVocabularyWord
     } catch (error) {
-      this.logger.warn('Error checking vocabulary word', {
+      this.logger?.warn('Error checking vocabulary word', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: { 
           word,

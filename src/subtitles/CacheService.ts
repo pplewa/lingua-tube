@@ -40,7 +40,7 @@ interface CacheStatsTracker {
  */
 export class SubtitleCacheService implements SubtitleCache {
   private readonly config: CacheConfig
-  private readonly logger: Logger
+  private readonly logger: Logger | null = null
   private readonly statsTracker: CacheStatsTracker
   private readonly memoryCache: Map<string, CacheEntry>
   private cleanupTimer?: number
@@ -74,7 +74,7 @@ export class SubtitleCacheService implements SubtitleCache {
    */
   private async initialize(): Promise<void> {
     try {
-      this.logger.info('Initializing subtitle cache service...', { component: ComponentType.SUBTITLE_MANAGER })
+      this.logger?.info('Initializing subtitle cache service...', { component: ComponentType.SUBTITLE_MANAGER })
 
       // Load existing statistics
       await this.loadStats()
@@ -88,9 +88,9 @@ export class SubtitleCacheService implements SubtitleCache {
         await this.cleanup()
       }
 
-      this.logger.info('Cache service initialized successfully', { component: ComponentType.SUBTITLE_MANAGER })
+      this.logger?.info('Cache service initialized successfully', { component: ComponentType.SUBTITLE_MANAGER })
     } catch (error) {
-      this.logger.error('Cache initialization failed', { component: ComponentType.SUBTITLE_MANAGER }, error instanceof Error ? error : undefined)
+      this.logger?.error('Cache initialization failed', { component: ComponentType.SUBTITLE_MANAGER }, error instanceof Error ? error : undefined)
     }
   }
 
@@ -163,7 +163,7 @@ export class SubtitleCacheService implements SubtitleCache {
       this.statsTracker.hits++
       return entry
     } catch (error) {
-      this.logger.error('Cache get error', { 
+      this.logger?.error('Cache get error', { 
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: { key }
       }, error instanceof Error ? error : undefined)
@@ -209,12 +209,12 @@ export class SubtitleCacheService implements SubtitleCache {
         this.memoryCache.set(key, entry)
       }
 
-      this.logger.debug('Cached subtitle file', { 
+      this.logger?.debug('Cached subtitle file', { 
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: { key, size: entry.metadata.size }
       })
     } catch (error) {
-      this.logger.error('Cache set error', { 
+      this.logger?.error('Cache set error', { 
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: { key }
       }, error instanceof Error ? error : undefined)
@@ -236,7 +236,7 @@ export class SubtitleCacheService implements SubtitleCache {
       this.memoryCache.delete(key)
 
       if (removed) {
-        this.logger.debug('Deleted cached entry', { 
+        this.logger?.debug('Deleted cached entry', { 
           component: ComponentType.SUBTITLE_MANAGER,
           metadata: { key }
         })
@@ -244,7 +244,7 @@ export class SubtitleCacheService implements SubtitleCache {
 
       return removed
     } catch (error) {
-      this.logger.error('Cache delete error', { 
+      this.logger?.error('Cache delete error', { 
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: { key }
       }, error instanceof Error ? error : undefined)
@@ -257,7 +257,7 @@ export class SubtitleCacheService implements SubtitleCache {
    */
   async clear(): Promise<void> {
     try {
-      this.logger.info('Clearing subtitle cache...', { component: ComponentType.SUBTITLE_MANAGER })
+      this.logger?.info('Clearing subtitle cache...', { component: ComponentType.SUBTITLE_MANAGER })
 
       // Clear memory cache
       this.memoryCache.clear()
@@ -277,12 +277,12 @@ export class SubtitleCacheService implements SubtitleCache {
 
       await this.saveStats()
 
-      this.logger.info('Cache cleared', { 
+      this.logger?.info('Cache cleared', { 
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: { entriesRemoved: allKeys.length }
       })
     } catch (error) {
-      this.logger.error('Cache clear error', { component: ComponentType.SUBTITLE_MANAGER }, error instanceof Error ? error : undefined)
+      this.logger?.error('Cache clear error', { component: ComponentType.SUBTITLE_MANAGER }, error instanceof Error ? error : undefined)
       throw error
     }
   }
@@ -316,7 +316,7 @@ export class SubtitleCacheService implements SubtitleCache {
    */
   async cleanup(): Promise<void> {
     try {
-      this.logger.info('Starting cache cleanup...', { component: ComponentType.SUBTITLE_MANAGER })
+      this.logger?.info('Starting cache cleanup...', { component: ComponentType.SUBTITLE_MANAGER })
 
       const now = Date.now()
       let removedCount = 0
@@ -347,7 +347,7 @@ export class SubtitleCacheService implements SubtitleCache {
             this.statsTracker.evictions++
           }
         } catch (error) {
-          this.logger.warn('Error processing cache entry during cleanup', { 
+          this.logger?.warn('Error processing cache entry during cleanup', { 
             component: ComponentType.SUBTITLE_MANAGER,
             metadata: { cacheKey, error: error instanceof Error ? error.message : String(error) }
           })
@@ -364,12 +364,12 @@ export class SubtitleCacheService implements SubtitleCache {
       this.statsTracker.lastCleanup = now
       await this.saveStats()
 
-      this.logger.info('Cache cleanup completed', { 
+      this.logger?.info('Cache cleanup completed', { 
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: { entriesRemoved: removedCount, bytesFreed: freedSpace }
       })
     } catch (error) {
-      this.logger.error('Cache cleanup failed', { component: ComponentType.SUBTITLE_MANAGER }, error instanceof Error ? error : undefined)
+      this.logger?.error('Cache cleanup failed', { component: ComponentType.SUBTITLE_MANAGER }, error instanceof Error ? error : undefined)
     }
   }
 
@@ -385,7 +385,7 @@ export class SubtitleCacheService implements SubtitleCache {
       const result = await chrome.storage.local.get([key])
       return result[key] || null
     } catch (error) {
-      this.logger.error('Storage get error', { 
+      this.logger?.error('Storage get error', { 
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: { key }
       }, error instanceof Error ? error : undefined)
@@ -400,7 +400,7 @@ export class SubtitleCacheService implements SubtitleCache {
     try {
       await chrome.storage.local.set({ [key]: data })
     } catch (error) {
-      this.logger.error('Storage set error', { 
+      this.logger?.error('Storage set error', { 
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: { key }
       }, error instanceof Error ? error : undefined)
@@ -416,7 +416,7 @@ export class SubtitleCacheService implements SubtitleCache {
       await chrome.storage.local.remove([key])
       return true
     } catch (error) {
-      this.logger.error('Storage remove error', { 
+      this.logger?.error('Storage remove error', { 
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: { key }
       }, error instanceof Error ? error : undefined)
@@ -434,7 +434,7 @@ export class SubtitleCacheService implements SubtitleCache {
         key.startsWith(SubtitleCacheService.CACHE_KEY_PREFIX),
       )
     } catch (error) {
-      this.logger.error('Error getting cache keys', { component: ComponentType.SUBTITLE_MANAGER }, error instanceof Error ? error : undefined)
+      this.logger?.error('Error getting cache keys', { component: ComponentType.SUBTITLE_MANAGER }, error instanceof Error ? error : undefined)
       return []
     }
   }
@@ -482,7 +482,7 @@ export class SubtitleCacheService implements SubtitleCache {
         metadata: stored.metadata,
       }
     } catch (error) {
-      this.logger.error('Cache entry deserialization failed', { component: ComponentType.SUBTITLE_MANAGER }, error instanceof Error ? error : undefined)
+      this.logger?.error('Cache entry deserialization failed', { component: ComponentType.SUBTITLE_MANAGER }, error instanceof Error ? error : undefined)
       return null
     }
   }
@@ -652,7 +652,7 @@ export class SubtitleCacheService implements SubtitleCache {
         Object.assign(this.statsTracker, stored)
       }
     } catch (error) {
-      this.logger.warn('Failed to load cache stats', { 
+      this.logger?.warn('Failed to load cache stats', { 
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: { error: error instanceof Error ? error.message : String(error) }
       })
@@ -668,7 +668,7 @@ export class SubtitleCacheService implements SubtitleCache {
         [SubtitleCacheService.STATS_KEY]: this.statsTracker,
       })
     } catch (error) {
-      this.logger.warn('Failed to save cache stats', { 
+      this.logger?.warn('Failed to save cache stats', { 
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: { error: error instanceof Error ? error.message : String(error) }
       })

@@ -74,7 +74,7 @@ export class CorsHandler {
     options: Partial<FetchConfig> = {},
   ): Promise<CorsRequestResult> {
     const startTime = Date.now()
-    this.logger.info('Fetching with CORS handling', {
+    this.logger?.info('Fetching with CORS handling', {
       component: ComponentType.SUBTITLE_MANAGER,
       url,
       metadata: { strategies: this.config.strategies }
@@ -82,7 +82,7 @@ export class CorsHandler {
 
     for (const strategy of this.config.strategies) {
       try {
-        this.logger.debug('Trying CORS strategy', {
+        this.logger?.debug('Trying CORS strategy', {
           component: ComponentType.SUBTITLE_MANAGER,
           url,
           metadata: { strategy }
@@ -92,7 +92,7 @@ export class CorsHandler {
 
         if (result.success) {
           const duration = Date.now() - startTime
-          this.logger.info('CORS strategy succeeded', {
+          this.logger?.info('CORS strategy succeeded', {
             component: ComponentType.SUBTITLE_MANAGER,
             url,
             metadata: {
@@ -106,7 +106,7 @@ export class CorsHandler {
         }
 
         // Log failure but continue to next strategy
-        this.logger.warn('CORS strategy failed', {
+        this.logger?.warn('CORS strategy failed', {
           component: ComponentType.SUBTITLE_MANAGER,
           url,
           metadata: {
@@ -124,7 +124,7 @@ export class CorsHandler {
 
         // For other errors that aren't retryable, break
         if (result.error && !result.error.retryable) {
-          this.logger.info('Non-retryable error, stopping strategy attempts', {
+          this.logger?.info('Non-retryable error, stopping strategy attempts', {
             component: ComponentType.SUBTITLE_MANAGER,
             url,
             metadata: {
@@ -136,7 +136,7 @@ export class CorsHandler {
           return result
         }
       } catch (error) {
-        this.logger.error('CORS strategy threw error', {
+        this.logger?.error('CORS strategy threw error', {
           component: ComponentType.SUBTITLE_MANAGER,
           url,
           metadata: {
@@ -152,7 +152,7 @@ export class CorsHandler {
 
     // All strategies failed
     const totalDuration = Date.now() - startTime
-    this.logger.error('All CORS strategies failed', {
+    this.logger?.error('All CORS strategies failed', {
       component: ComponentType.SUBTITLE_MANAGER,
       url,
       metadata: {

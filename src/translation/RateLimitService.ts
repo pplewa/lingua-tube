@@ -435,7 +435,7 @@ export class RateLimitService {
       })
     } catch (error) {
       const logger = Logger.getInstance()
-      logger.warn('Failed to save rate limit usage stats', {
+      logger?.warn('Failed to save rate limit usage stats', {
         component: ComponentType.TRANSLATION_SERVICE,
         metadata: {
           error: error instanceof Error ? error.message : String(error),

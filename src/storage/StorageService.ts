@@ -70,7 +70,7 @@ export class LinguaTubeStorageService implements StorageService {
       await this.ensureDefaultSettings()
       this.isInitialized = true
           } catch (error) {
-        this.logger.error('Storage initialization failed', {
+        this.logger?.error('Storage initialization failed', {
           component: ComponentType.STORAGE_SERVICE,
           metadata: {
             error: error instanceof Error ? error.message : String(error),
@@ -427,7 +427,7 @@ export class LinguaTubeStorageService implements StorageService {
         try {
           listener(event)
                   } catch (error) {
-            this.logger.error('Event listener error', {
+            this.logger?.error('Event listener error', {
               component: ComponentType.STORAGE_SERVICE,
               metadata: {
                 error: error instanceof Error ? error.message : String(error),

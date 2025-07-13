@@ -55,7 +55,7 @@ export class MultiFormatSubtitleParser {
     const startTime = performance.now()
 
     try {
-      logger.info('Starting multi-format subtitle parsing', {
+      logger?.info('Starting multi-format subtitle parsing', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           contentLength: content.length,
@@ -78,7 +78,7 @@ export class MultiFormatSubtitleParser {
 
       // Detect format
       const format = this.detectFormat(content)
-      logger.info('Detected subtitle format', {
+      logger?.info('Detected subtitle format', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           format,
@@ -122,7 +122,7 @@ export class MultiFormatSubtitleParser {
       }
 
       const parseTime = performance.now() - startTime
-      logger.info('Multi-format parsing completed', {
+      logger?.info('Multi-format parsing completed', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           parseTime: parseTime.toFixed(2),
@@ -141,7 +141,7 @@ export class MultiFormatSubtitleParser {
 
       return result
     } catch (error) {
-      logger.error('Multi-format parsing failed', {
+      logger?.error('Multi-format parsing failed', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           contentLength: content.length,
@@ -243,7 +243,7 @@ export class MultiFormatSubtitleParser {
     const segments: SubtitleSegment[] = []
 
     try {
-      logger.info('Parsing VTT/WebVTT format', {
+      logger?.info('Parsing VTT/WebVTT format', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           contentLength: content.length,
@@ -339,7 +339,7 @@ export class MultiFormatSubtitleParser {
         }
       }
 
-      logger.info('VTT parsing completed', {
+      logger?.info('VTT parsing completed', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           segmentCount: segments.length,
@@ -362,7 +362,7 @@ export class MultiFormatSubtitleParser {
         errors: errors.length > 0 ? errors : undefined,
       }
     } catch (error) {
-      logger.error('VTT parsing failed', {
+      logger?.error('VTT parsing failed', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           contentLength: content.length,
@@ -476,7 +476,7 @@ export class MultiFormatSubtitleParser {
     const segments: SubtitleSegment[] = []
 
     try {
-      logger.info('Parsing SRT format', {
+      logger?.info('Parsing SRT format', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           contentLength: content.length,
@@ -503,7 +503,7 @@ export class MultiFormatSubtitleParser {
         }
       }
 
-      logger.info('SRT parsing completed', {
+      logger?.info('SRT parsing completed', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           segmentCount: segments.length,
@@ -527,7 +527,7 @@ export class MultiFormatSubtitleParser {
         errors: errors.length > 0 ? errors : undefined,
       }
     } catch (error) {
-      logger.error('SRT parsing failed', {
+      logger?.error('SRT parsing failed', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           contentLength: content.length,
@@ -631,7 +631,7 @@ export class MultiFormatSubtitleParser {
     const segments: SubtitleSegment[] = []
 
     try {
-      logger.info('Parsing as generic text format', {
+      logger?.info('Parsing as generic text format', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           contentLength: content.length,
@@ -657,7 +657,7 @@ export class MultiFormatSubtitleParser {
         })
       }
 
-      logger.info('Generic text parsing completed', {
+      logger?.info('Generic text parsing completed', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           segmentCount: segments.length,
@@ -681,7 +681,7 @@ export class MultiFormatSubtitleParser {
         errors: errors.length > 0 ? errors : undefined,
       }
     } catch (error) {
-      logger.error('Generic text parsing failed', {
+      logger?.error('Generic text parsing failed', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           contentLength: content.length,

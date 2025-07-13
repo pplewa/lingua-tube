@@ -54,7 +54,7 @@ export class SubtitleFetchUtility {
 
     while (attempt < config.retryConfig.maxAttempts) {
       try {
-        this.logger.info('Fetching subtitles from URL', {
+        this.logger?.info('Fetching subtitles from URL', {
           component: ComponentType.SUBTITLE_MANAGER,
           url: request.url,
           metadata: {
@@ -72,7 +72,7 @@ export class SubtitleFetchUtility {
 
         // Check if response indicates success
         if (response.status >= 200 && response.status < 300) {
-          this.logger.info('Successfully fetched subtitles', {
+          this.logger?.info('Successfully fetched subtitles', {
             component: ComponentType.SUBTITLE_MANAGER,
             url: request.url,
             metadata: {
@@ -98,7 +98,7 @@ export class SubtitleFetchUtility {
           throw this.convertToSubtitleError(error, request.url)
         }
 
-        this.logger.warn('Fetch attempt failed', {
+        this.logger?.warn('Fetch attempt failed', {
           component: ComponentType.SUBTITLE_MANAGER,
           url: request.url,
           metadata: {
@@ -226,7 +226,7 @@ export class SubtitleFetchUtility {
       // Cross-origin requests
       return 'cors'
     } catch (error) {
-             this.logger.warn('Invalid URL, using CORS mode', {
+             this.logger?.warn('Invalid URL, using CORS mode', {
          component: ComponentType.SUBTITLE_MANAGER,
          url,
          metadata: { error: error instanceof Error ? error.message : String(error) }

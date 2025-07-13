@@ -753,7 +753,7 @@ export class RateLimitingService {
 /**
  * Create rate limiting service from logger config
  */
-export function createRateLimitingServiceFromConfig(config: LoggerConfig): RateLimitingService {
+export function createRateLimitingServiceFromConfig(config: LoggerConfig): RateLimitingService | null {
   const rateLimitConfig: RateLimitConfig = {
     enabled: config.rateLimiting.enabled,
     algorithm: 'token_bucket',

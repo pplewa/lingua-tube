@@ -189,7 +189,7 @@ export class WordHighlightingService {
 
       return this.updateStats(startTime, result.totalWords, result.highlightedWords.length, 1)
     } catch (error) {
-      this.logger.error('Error highlighting element', {
+      this.logger?.error('Error highlighting element', {
         component: ComponentType.WORD_LOOKUP,
         metadata: {
           error: error instanceof Error ? error.message : String(error),
@@ -245,7 +245,7 @@ export class WordHighlightingService {
         // Re-highlight with current vocabulary
         await this.highlightElement(context.element, context.config)
       } catch (error) {
-        this.logger.error('Error refreshing highlighting', {
+        this.logger?.error('Error refreshing highlighting', {
           component: ComponentType.WORD_LOOKUP,
           metadata: {
             error: error instanceof Error ? error.message : String(error),
@@ -410,7 +410,7 @@ export class WordHighlightingService {
 
       document.adoptedStyleSheets = [...document.adoptedStyleSheets, this.styleSheet]
     } catch (error) {
-      this.logger.warn('Could not create stylesheet', {
+      this.logger?.warn('Could not create stylesheet', {
         component: ComponentType.WORD_LOOKUP,
         metadata: {
           error: error instanceof Error ? error.message : String(error)

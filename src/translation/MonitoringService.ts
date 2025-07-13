@@ -913,8 +913,8 @@ export class MonitoringService {
    */
   private async getQuotaUsage(): Promise<number> {
     try {
-      const stats = await rateLimitService.getUsageStats()
-      return stats.monthly.percentage / 100
+      const stats = await rateLimitService?.getUsageStats()
+      return stats?.monthly?.percentage ? stats.monthly.percentage / 100 : 0
     } catch (error) {
       return 0
     }

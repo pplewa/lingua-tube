@@ -572,8 +572,8 @@ export class ErrorHandlingService {
    * Check rate limit service health
    */
   private async checkRateLimitHealth(): Promise<void> {
-    const status = await rateLimitService.checkRateLimit(0)
-    if (!status.allowed && status.quotaExceeded) {
+    const status = await rateLimitService?.checkRateLimit(0)
+    if (!status?.allowed && status?.quotaExceeded) {
       throw new Error('Rate limit quota exceeded')
     }
   }

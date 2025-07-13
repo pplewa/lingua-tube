@@ -1020,7 +1020,7 @@ export class VocabularyListComponent {
         const result = await this.vocabularyManager.importVocabulary(text, format)
 
         if (result.successful.length > 0) {
-          this.logger.info(`Successfully imported ${result.successful.length} words`, {
+          this.logger?.info(`Successfully imported ${result.successful.length} words`, {
             component: ComponentType.WORD_LOOKUP,
             metadata: {
               importedCount: result.successful.length,
@@ -1031,7 +1031,7 @@ export class VocabularyListComponent {
         }
 
         if (result.failed.length > 0) {
-          this.logger.warn(`Failed to import ${result.failed.length} words`, {
+          this.logger?.warn(`Failed to import ${result.failed.length} words`, {
             component: ComponentType.WORD_LOOKUP,
             metadata: {
               failedCount: result.failed.length,
@@ -1044,7 +1044,7 @@ export class VocabularyListComponent {
         // Trigger event for external handling
         this.events.onImportRequest?.(format)
       } catch (error) {
-        this.logger.error('Import error', {
+        this.logger?.error('Import error', {
           component: ComponentType.WORD_LOOKUP,
           metadata: {
             error: error instanceof Error ? error.message : String(error),

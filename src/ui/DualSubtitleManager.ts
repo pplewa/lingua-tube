@@ -108,7 +108,7 @@ export class DualSubtitleManager {
 
       if (response.success && response.status) {
         const status = response.status
-        this.logger.info('Translation status', {
+        this.logger?.info('Translation status', {
           component: ComponentType.SUBTITLE_MANAGER,
           metadata: {
             configured: status.configured,
@@ -118,7 +118,7 @@ export class DualSubtitleManager {
         })
 
         if (!status.configured || !status.hasApiKey) {
-          this.logger.warn('Translation service not properly configured', {
+          this.logger?.warn('Translation service not properly configured', {
             component: ComponentType.SUBTITLE_MANAGER,
             metadata: {
               hasApiKey: status.hasApiKey,
@@ -127,12 +127,12 @@ export class DualSubtitleManager {
             }
           })
         } else {
-          this.logger.info('Translation service is ready', {
+          this.logger?.info('Translation service is ready', {
             component: ComponentType.SUBTITLE_MANAGER
           })
         }
       } else {
-        this.logger.warn('Failed to get translation status from background service', {
+        this.logger?.warn('Failed to get translation status from background service', {
           component: ComponentType.SUBTITLE_MANAGER,
           metadata: {
             responseSuccess: response?.success,
@@ -141,7 +141,7 @@ export class DualSubtitleManager {
         })
       }
     } catch (error) {
-      this.logger.warn('Error checking translation status', {
+      this.logger?.warn('Error checking translation status', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           error: error instanceof Error ? error.message : String(error)
@@ -153,19 +153,19 @@ export class DualSubtitleManager {
   public async initialize(): Promise<boolean> {
     try {
       if (this.isInitialized) {
-        this.logger.warn('Already initialized', {
+        this.logger?.warn('Already initialized', {
           component: ComponentType.SUBTITLE_MANAGER
         })
         return true
       }
 
-      this.logger.info('Starting initialization', {
+      this.logger?.info('Starting initialization', {
         component: ComponentType.SUBTITLE_MANAGER
       })
 
       // Check translation service status from background service (non-blocking)
       this.checkTranslationStatus().catch((error) => {
-        this.logger.warn('Translation status check failed', {
+        this.logger?.warn('Translation status check failed', {
           component: ComponentType.SUBTITLE_MANAGER,
           metadata: {
             error: error instanceof Error ? error.message : String(error)
@@ -174,16 +174,16 @@ export class DualSubtitleManager {
       })
 
       // Load user settings
-      this.logger.info('Loading user settings', {
+      this.logger?.info('Loading user settings', {
         component: ComponentType.SUBTITLE_MANAGER
       })
       await this.loadUserSettings()
-      this.logger.info('User settings loaded', {
+      this.logger?.info('User settings loaded', {
         component: ComponentType.SUBTITLE_MANAGER
       })
 
       // Initialize subtitle component
-      this.logger.info('Creating subtitle component', {
+      this.logger?.info('Creating subtitle component', {
         component: ComponentType.SUBTITLE_MANAGER
       })
       this.subtitleComponent = new DualSubtitleComponent(
@@ -191,30 +191,30 @@ export class DualSubtitleManager {
         this.storageService,
         await this.createSubtitleConfig(),
       )
-      this.logger.info('Subtitle component created', {
+      this.logger?.info('Subtitle component created', {
         component: ComponentType.SUBTITLE_MANAGER
       })
 
-      this.logger.info('Initializing subtitle component', {
+      this.logger?.info('Initializing subtitle component', {
         component: ComponentType.SUBTITLE_MANAGER
       })
       const initSuccess = await this.subtitleComponent.initialize()
       if (!initSuccess) {
-        this.logger.error('Failed to initialize subtitle component', {
+        this.logger?.error('Failed to initialize subtitle component', {
           component: ComponentType.SUBTITLE_MANAGER
         })
         return false
       }
-      this.logger.info('Subtitle component initialized', {
+      this.logger?.info('Subtitle component initialized', {
         component: ComponentType.SUBTITLE_MANAGER
       })
 
       // Set up subtitle component event handlers
-      this.logger.info('Setting up event handlers', {
+      this.logger?.info('Setting up event handlers', {
         component: ComponentType.SUBTITLE_MANAGER
       })
       this.setupSubtitleEventHandlers()
-      this.logger.info('Event handlers set up', {
+      this.logger?.info('Event handlers set up', {
         component: ComponentType.SUBTITLE_MANAGER
       })
 
@@ -222,7 +222,7 @@ export class DualSubtitleManager {
       this.currentVideoId = this.extractVideoId(window.location.href)
 
       this.isInitialized = true
-      this.logger.info('Initialized successfully', {
+      this.logger?.info('Initialized successfully', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           currentVideoId: this.currentVideoId
@@ -230,7 +230,7 @@ export class DualSubtitleManager {
       })
       return true
     } catch (error) {
-      this.logger.error('Initialization failed', {
+      this.logger?.error('Initialization failed', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           error: error instanceof Error ? error.message : String(error)
@@ -261,11 +261,11 @@ export class DualSubtitleManager {
       this.translationCallbacks.clear()
 
       this.isInitialized = false
-      this.logger.info('Destroyed successfully', {
+      this.logger?.info('Destroyed successfully', {
         component: ComponentType.SUBTITLE_MANAGER
       })
     } catch (error) {
-      this.logger.error('Destroy failed', {
+      this.logger?.error('Destroy failed', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           error: error instanceof Error ? error.message : String(error)
@@ -289,7 +289,7 @@ export class DualSubtitleManager {
           this.wordLookupPopup.setDefaultLanguages(this.sourceLanguage, this.targetLanguage)
         }
 
-        this.logger.info('User settings loaded', {
+        this.logger?.info('User settings loaded', {
           component: ComponentType.SUBTITLE_MANAGER,
           metadata: {
             sourceLanguage: this.sourceLanguage,
@@ -309,7 +309,7 @@ export class DualSubtitleManager {
         }
       }
     } catch (error) {
-      this.logger.warn('Failed to load user settings', {
+      this.logger?.warn('Failed to load user settings', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           error: error instanceof Error ? error.message : String(error)
@@ -337,7 +337,7 @@ export class DualSubtitleManager {
         }
       }
     } catch (error) {
-      this.logger.warn('Failed to create subtitle config from settings', {
+      this.logger?.warn('Failed to create subtitle config from settings', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           error: error instanceof Error ? error.message : String(error)
@@ -386,7 +386,7 @@ export class DualSubtitleManager {
     // Handle visibility changes
     this.subtitleComponent.addVisibilityListener((visible, cueCount) => {
       if (visible && this.config.autoTranslate) {
-        this.logger.debug('Processing visible cues', {
+        this.logger?.debug('Processing visible cues', {
           component: ComponentType.SUBTITLE_MANAGER,
           metadata: {
             cueCount,
@@ -403,7 +403,7 @@ export class DualSubtitleManager {
       this.currentVideoId = videoId
       this.clearTranslationQueue()
 
-      this.logger.info('Video changed', {
+      this.logger?.info('Video changed', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           previousVideoId: this.currentVideoId,
@@ -415,7 +415,7 @@ export class DualSubtitleManager {
 
   private async handleWordClick(event: WordClickEvent): Promise<void> {
     try {
-      this.logger.debug('Handling word click', {
+      this.logger?.debug('Handling word click', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           word: event.word,
@@ -428,7 +428,7 @@ export class DualSubtitleManager {
       const { word, cueId, context, position } = event
 
       // Get translation for the word
-      this.logger.debug('Getting word translation', {
+      this.logger?.debug('Getting word translation', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           word,
@@ -438,7 +438,7 @@ export class DualSubtitleManager {
         }
       })
       const translation = await this.getWordTranslation(word, context)
-      this.logger.debug('Word translation completed', {
+      this.logger?.debug('Word translation completed', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           word,
@@ -469,7 +469,7 @@ export class DualSubtitleManager {
           try {
             callback(vocabularyEntry)
           } catch (error) {
-            this.logger.error('Vocabulary callback error', {
+            this.logger?.error('Vocabulary callback error', {
               component: ComponentType.SUBTITLE_MANAGER,
               metadata: {
                 word,
@@ -480,7 +480,7 @@ export class DualSubtitleManager {
         })
       }
     } catch (error) {
-      this.logger.error('Word click handling failed', {
+      this.logger?.error('Word click handling failed', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           word: event.word,
@@ -525,7 +525,7 @@ export class DualSubtitleManager {
           return
         }
       } catch (error) {
-        this.logger.warn('Cache lookup failed', {
+        this.logger?.warn('Cache lookup failed', {
           component: ComponentType.SUBTITLE_MANAGER,
           metadata: {
             cueId,
@@ -577,7 +577,7 @@ export class DualSubtitleManager {
       // Deliver translation
       this.deliverTranslation(cueId, translation)
     } catch (error) {
-      this.logger.error('Translation failed', {
+      this.logger?.error('Translation failed', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           cueId,
@@ -604,7 +604,7 @@ export class DualSubtitleManager {
       try {
         callback(translation, cueId)
       } catch (error) {
-        this.logger.error('Translation callback error', {
+        this.logger?.error('Translation callback error', {
           component: ComponentType.SUBTITLE_MANAGER,
           metadata: {
             cueId,
@@ -618,7 +618,7 @@ export class DualSubtitleManager {
 
   private async getWordTranslation(word: string, context: string): Promise<string> {
     try {
-      this.logger.debug('Getting word translation', {
+      this.logger?.debug('Getting word translation', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           word,
@@ -636,7 +636,7 @@ export class DualSubtitleManager {
           this.targetLanguage,
         )
         if (cached) {
-          this.logger.debug('Found cached translation', {
+          this.logger?.debug('Found cached translation', {
             component: ComponentType.SUBTITLE_MANAGER,
             metadata: {
               word,
@@ -653,7 +653,7 @@ export class DualSubtitleManager {
       const contextWords = this.extractContext(context, word)
       const textToTranslate = contextWords.length > 1 ? contextWords.join(' ') : word
 
-      this.logger.debug('Preparing translation request', {
+      this.logger?.debug('Preparing translation request', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           word,
@@ -670,7 +670,7 @@ export class DualSubtitleManager {
         toLanguage: this.targetLanguage,
       })
 
-      this.logger.debug('Raw translation received', {
+      this.logger?.debug('Raw translation received', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           word,
@@ -685,7 +685,7 @@ export class DualSubtitleManager {
           ? this.extractWordFromTranslation(translation, word, contextWords)
           : translation
 
-      this.logger.debug('Final word translation extracted', {
+      this.logger?.debug('Final word translation extracted', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           word,
@@ -706,7 +706,7 @@ export class DualSubtitleManager {
 
       return wordTranslation
     } catch (error) {
-      this.logger.error('Word translation failed', {
+      this.logger?.error('Word translation failed', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           word,
@@ -724,7 +724,7 @@ export class DualSubtitleManager {
           translationError.code === 'UNAUTHORIZED' ||
           translationError.code === 'SERVICE_NOT_CONFIGURED'
         ) {
-          this.logger.warn('Translation service authentication failed', {
+          this.logger?.warn('Translation service authentication failed', {
             component: ComponentType.SUBTITLE_MANAGER,
             metadata: {
               word,
@@ -734,7 +734,7 @@ export class DualSubtitleManager {
           })
           return `[Translation Error: API key needed]`
         } else if (translationError.code === 'MISSING_API_KEY') {
-          this.logger.warn('Translation API key missing', {
+          this.logger?.warn('Translation API key missing', {
             component: ComponentType.SUBTITLE_MANAGER,
             metadata: {
               word,
@@ -814,7 +814,7 @@ export class DualSubtitleManager {
       const result = await this.storageService.saveWord(vocabularyItem)
 
       if (result.success) {
-        this.logger.info('Vocabulary item saved', {
+        this.logger?.info('Vocabulary item saved', {
           component: ComponentType.SUBTITLE_MANAGER,
           metadata: {
             word: entry.word,
@@ -825,7 +825,7 @@ export class DualSubtitleManager {
           }
         })
       } else {
-        this.logger.error('Failed to save vocabulary item', {
+        this.logger?.error('Failed to save vocabulary item', {
           component: ComponentType.SUBTITLE_MANAGER,
           metadata: {
             word: entry.word,
@@ -834,7 +834,7 @@ export class DualSubtitleManager {
         })
       }
     } catch (error) {
-      this.logger.error('Vocabulary save error', {
+      this.logger?.error('Vocabulary save error', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           word: entry.word,
@@ -860,7 +860,7 @@ export class DualSubtitleManager {
     translation: string,
     position: { x: number; y: number },
   ): void {
-    this.logger.debug('Showing translation tooltip', {
+    this.logger?.debug('Showing translation tooltip', {
       component: ComponentType.SUBTITLE_MANAGER,
       metadata: {
         word,
@@ -882,7 +882,7 @@ export class DualSubtitleManager {
       })
     } else {
       // Fallback logging if popup is not available
-      this.logger.info('Translation fallback display', {
+      this.logger?.info('Translation fallback display', {
         component: ComponentType.SUBTITLE_MANAGER,
         metadata: {
           word,

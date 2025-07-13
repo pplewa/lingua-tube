@@ -47,7 +47,7 @@ export class LinguaTubeSubtitleDiscoveryService implements SubtitleDiscoveryServ
 
   async discoverSubtitles(): Promise<SubtitleDiscoveryResult> {
     try {
-      this.logger.info('Starting subtitle discovery...', {
+      this.logger?.info('Starting subtitle discovery...', {
         component: ComponentType.YOUTUBE_INTEGRATION
       })
 
@@ -121,12 +121,12 @@ export class LinguaTubeSubtitleDiscoveryService implements SubtitleDiscoveryServ
       // Emit event
       this.emitEvent(SubtitleDiscoveryEvent.TRACKS_DISCOVERED, result)
 
-      this.logger.info(`Successfully discovered ${filteredTracks.length} subtitle tracks`, {
+      this.logger?.info(`Successfully discovered ${filteredTracks.length} subtitle tracks`, {
         component: ComponentType.YOUTUBE_INTEGRATION
       })
       return result
     } catch (error) {
-      this.logger.error('Subtitle discovery failed', {
+      this.logger?.error('Subtitle discovery failed', {
         component: ComponentType.YOUTUBE_INTEGRATION,
         metadata: {
           error: error instanceof Error ? error.message : String(error)
@@ -196,13 +196,13 @@ export class LinguaTubeSubtitleDiscoveryService implements SubtitleDiscoveryServ
 
   startMonitoring(): void {
     if (this.isMonitoringActive) {
-      this.logger.warn('Monitoring already active', {
+      this.logger?.warn('Monitoring already active', {
         component: ComponentType.YOUTUBE_INTEGRATION
       })
       return
     }
 
-    this.logger.info('Starting subtitle discovery monitoring...', {
+    this.logger?.info('Starting subtitle discovery monitoring...', {
       component: ComponentType.YOUTUBE_INTEGRATION
     })
     this.isMonitoringActive = true
@@ -226,7 +226,7 @@ export class LinguaTubeSubtitleDiscoveryService implements SubtitleDiscoveryServ
       return
     }
 
-    this.logger.info('Stopping subtitle discovery monitoring...', {
+    this.logger?.info('Stopping subtitle discovery monitoring...', {
       component: ComponentType.YOUTUBE_INTEGRATION
     })
     this.isMonitoringActive = false
@@ -274,7 +274,7 @@ export class LinguaTubeSubtitleDiscoveryService implements SubtitleDiscoveryServ
 
   updateConfig(config: Partial<SubtitleDiscoveryConfig>): void {
     this.config = { ...this.config, ...config }
-    this.logger.info('Configuration updated', {
+    this.logger?.info('Configuration updated', {
       component: ComponentType.YOUTUBE_INTEGRATION,
       metadata: {
         config: this.config
@@ -337,7 +337,7 @@ export class LinguaTubeSubtitleDiscoveryService implements SubtitleDiscoveryServ
         try {
           listener(eventData)
         } catch (error) {
-          this.logger.error('Event listener error', {
+          this.logger?.error('Event listener error', {
             component: ComponentType.YOUTUBE_INTEGRATION,
             metadata: {
               error: error instanceof Error ? error.message : String(error)
@@ -414,7 +414,7 @@ export class LinguaTubeSubtitleDiscoveryService implements SubtitleDiscoveryServ
     const newVideoId = YouTubePlayerResponseParser.getCurrentVideoId()
 
     if (newVideoId && newVideoId !== this.currentVideoId) {
-      this.logger.info('Video change detected', {
+      this.logger?.info('Video change detected', {
         component: ComponentType.YOUTUBE_INTEGRATION,
         metadata: {
           videoId: newVideoId
@@ -431,7 +431,7 @@ export class LinguaTubeSubtitleDiscoveryService implements SubtitleDiscoveryServ
         try {
           await this.discoverSubtitles()
         } catch (error) {
-          this.logger.error('Auto-discovery failed after video change', {
+          this.logger?.error('Auto-discovery failed after video change', {
             component: ComponentType.YOUTUBE_INTEGRATION,
             metadata: {
               error: error instanceof Error ? error.message : String(error)

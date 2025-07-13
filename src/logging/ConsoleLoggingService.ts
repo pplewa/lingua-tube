@@ -822,6 +822,6 @@ Configuration:
 /**
  * Factory function to create console logging service
  */
-export function createConsoleLoggingService(config?: Partial<ConsoleLoggingConfig>): ConsoleLoggingService {
+export function createConsoleLoggingService(config?: Partial<ConsoleLoggingConfig>): ConsoleLoggingService | null {
   return ConsoleLoggingService.getInstance(config)
 } 

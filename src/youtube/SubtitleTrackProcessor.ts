@@ -22,16 +22,16 @@ export class SubtitleTrackProcessor {
    * Process raw captions data into normalized subtitle tracks
    */
   static processSubtitleTracks(captionsData: YTPlayerCaptions): SubtitleTrack[] {
-    const logger = Logger.getInstance()
+    const logger = Logger?.getInstance()
     try {
-      logger.info('Processing subtitle tracks', {
+      logger?.info('Processing subtitle tracks', {
         component: ComponentType.YOUTUBE_INTEGRATION
       })
 
       const rawTracks = captionsData.playerCaptionsTracklistRenderer?.captionTracks
 
       if (!rawTracks || rawTracks.length === 0) {
-        logger.warn('No caption tracks found', {
+        logger?.warn('No caption tracks found', {
           component: ComponentType.YOUTUBE_INTEGRATION
         })
         return []
@@ -46,7 +46,7 @@ export class SubtitleTrackProcessor {
             processedTracks.push(track)
           }
         } catch (error) {
-          logger.warn('Failed to process track', {
+          logger?.warn('Failed to process track', {
             component: ComponentType.YOUTUBE_INTEGRATION,
             metadata: {
               rawTrack,
@@ -56,12 +56,12 @@ export class SubtitleTrackProcessor {
         }
       }
 
-      logger.info(`Processed ${processedTracks.length} subtitle tracks`, {
+      logger?.info(`Processed ${processedTracks.length} subtitle tracks`, {
         component: ComponentType.YOUTUBE_INTEGRATION
       })
       return SubtitleTrackProcessor.sortAndDeduplicate(processedTracks)
     } catch (error) {
-      logger.error('Subtitle track processing failed', {
+      logger?.error('Subtitle track processing failed', {
         component: ComponentType.YOUTUBE_INTEGRATION,
         metadata: {
           error: error instanceof Error ? error.message : String(error)
