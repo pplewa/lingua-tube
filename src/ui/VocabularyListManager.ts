@@ -10,6 +10,8 @@ import {
 } from './VocabularyListComponent'
 import { VocabularyManager } from '../vocabulary/VocabularyManager'
 import { VocabularyItem } from '../storage/types'
+import { Logger } from '../logging/Logger'
+import { ComponentType } from '../logging/types'
 
 // ========================================
 // Types and Interfaces
@@ -77,6 +79,7 @@ export class VocabularyListManager {
   private keyboardHandler: ((event: KeyboardEvent) => void) | null = null
   private clickOutsideHandler: ((event: Event) => void) | null = null
   private resizeHandler: ((event: Event) => void) | null = null
+  private readonly logger = Logger.getInstance()
 
   private constructor(config: Partial<VocabularyListManagerConfig> = {}) {
     this.config = { ...DEFAULT_MANAGER_CONFIG, ...config }
@@ -111,9 +114,21 @@ export class VocabularyListManager {
         await this.show()
       }
 
-      console.log('[VocabularyListManager] Initialized successfully')
+      this.logger.info('Initialized successfully', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: {
+          position: this.config.position,
+          theme: this.config.theme,
+          autoShow: this.config.autoShow
+        }
+      })
     } catch (error) {
-      console.error('[VocabularyListManager] Initialization failed:', error)
+      this.logger.error('Initialization failed', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error)
+        }
+      })
       throw error
     }
   }
@@ -143,9 +158,21 @@ export class VocabularyListManager {
       this.setupContainerInteractions()
       this.applyTheme()
 
-      console.log('[VocabularyListManager] Vocabulary list shown')
+      this.logger.info('Vocabulary list shown', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: {
+          position: this.config.position,
+          hasContainer: !!container
+        }
+      })
     } catch (error) {
-      console.error('[VocabularyListManager] Failed to show vocabulary list:', error)
+      this.logger.error('Failed to show vocabulary list', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+          position: this.config.position
+        }
+      })
       throw error
     }
   }
@@ -174,9 +201,16 @@ export class VocabularyListManager {
         activeComponent: null,
       }
 
-      console.log('[VocabularyListManager] Vocabulary list hidden')
+      this.logger.info('Vocabulary list hidden', {
+        component: ComponentType.WORD_LOOKUP
+      })
     } catch (error) {
-      console.error('[VocabularyListManager] Failed to hide vocabulary list:', error)
+      this.logger.error('Failed to hide vocabulary list', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error)
+        }
+      })
     }
   }
 
@@ -422,12 +456,24 @@ export class VocabularyListManager {
   }
 
   private handleWordSelect(word: VocabularyItem): void {
-    console.log('[VocabularyListManager] Word selected:', word.word)
+    this.logger.info('Word selected', {
+      component: ComponentType.WORD_LOOKUP,
+      metadata: {
+        word: word.word,
+        wordId: word.id
+      }
+    })
     // Could emit custom events or trigger other actions
   }
 
   private async handleWordEdit(word: VocabularyItem): Promise<void> {
-    console.log('[VocabularyListManager] Edit word:', word.word)
+    this.logger.info('Edit word', {
+      component: ComponentType.WORD_LOOKUP,
+      metadata: {
+        word: word.word,
+        wordId: word.id
+      }
+    })
     // Could open edit dialog or integrate with existing edit functionality
   }
 
@@ -436,37 +482,74 @@ export class VocabularyListManager {
       try {
         const result = await this.vocabularyManager.removeWords([word.id])
         if (result.successful.length > 0) {
-          console.log('[VocabularyListManager] Word deleted:', word.word)
+          this.logger.info('Word deleted', {
+            component: ComponentType.WORD_LOOKUP,
+            metadata: {
+              word: word.word,
+              wordId: word.id
+            }
+          })
           await this.refresh()
         } else {
-          console.error(
-            '[VocabularyListManager] Failed to delete word:',
-            result.failed[0]?.error || 'Unknown error',
-          )
+          this.logger.error('Failed to delete word', {
+            component: ComponentType.WORD_LOOKUP,
+            metadata: {
+              word: word.word,
+              error: result.failed[0]?.error || 'Unknown error'
+            }
+          })
         }
       } catch (error) {
-        console.error('[VocabularyListManager] Error deleting word:', error)
+        this.logger.error('Error deleting word', {
+          component: ComponentType.WORD_LOOKUP,
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+            word: word.word
+          }
+        })
       }
     }
   }
 
   private async handleBulkAction(action: string, words: VocabularyItem[]): Promise<void> {
-    console.log('[VocabularyListManager] Bulk action:', action, words.length, 'words')
+    this.logger.info('Bulk action', {
+      component: ComponentType.WORD_LOOKUP,
+      metadata: {
+        action: action,
+        wordCount: words.length
+      }
+    })
 
     switch (action) {
       case 'bulk-delete':
         if (confirm(`Are you sure you want to delete ${words.length} words?`)) {
           try {
             const result = await this.vocabularyManager.removeWords(words.map((w) => w.id))
-            console.log(
-              `[VocabularyListManager] Deleted ${result.successful.length}/${words.length} words`,
-            )
+            this.logger.info('Deleted words', {
+              component: ComponentType.WORD_LOOKUP,
+              metadata: {
+                successful: result.successful.length,
+                total: words.length
+              }
+            })
             if (result.failed.length > 0) {
-              console.error('[VocabularyListManager] Failed to delete some words:', result.failed)
+              this.logger.error('Failed to delete some words', {
+                component: ComponentType.WORD_LOOKUP,
+                metadata: {
+                  failedCount: result.failed.length,
+                  failedEntries: result.failed
+                }
+              })
             }
             await this.refresh()
           } catch (error) {
-            console.error('[VocabularyListManager] Error in bulk delete:', error)
+            this.logger.error('Error in bulk delete', {
+              component: ComponentType.WORD_LOOKUP,
+              metadata: {
+                error: error instanceof Error ? error.message : String(error),
+                wordCount: words.length
+              }
+            })
           }
         }
         break
@@ -478,29 +561,55 @@ export class VocabularyListManager {
             this.downloadFile(result.data, 'vocabulary-export.json', 'application/json')
           }
         } catch (error) {
-          console.error('[VocabularyListManager] Error in bulk export:', error)
+          this.logger.error('Error in bulk export', {
+            component: ComponentType.WORD_LOOKUP,
+            metadata: {
+              error: error instanceof Error ? error.message : String(error)
+            }
+          })
         }
         break
     }
   }
 
   private handleSearchChange(query: string): void {
-    console.log('[VocabularyListManager] Search query changed:', query)
+    this.logger.info('Search query changed', {
+      component: ComponentType.WORD_LOOKUP,
+      metadata: {
+        query: query,
+        queryLength: query.length
+      }
+    })
   }
 
   private handleFilterChange(filters: any): void {
-    console.log('[VocabularyListManager] Filters changed:', filters)
+    this.logger.info('Filters changed', {
+      component: ComponentType.WORD_LOOKUP,
+      metadata: {
+        filters: filters
+      }
+    })
   }
 
   private async handleImportRequest(format: 'json' | 'csv' | 'anki'): Promise<void> {
-    console.log('[VocabularyListManager] Import completed:', format)
+    this.logger.info('Import completed', {
+      component: ComponentType.WORD_LOOKUP,
+      metadata: {
+        format: format
+      }
+    })
     // The actual import is handled by the VocabularyListComponent
     // This is just for logging and potential additional actions
     await this.refresh()
   }
 
   private async handleExportRequest(format: 'json' | 'csv' | 'anki'): Promise<void> {
-    console.log('[VocabularyListManager] Export requested:', format)
+    this.logger.info('Export requested', {
+      component: ComponentType.WORD_LOOKUP,
+      metadata: {
+        format: format
+      }
+    })
 
     try {
       const result = await this.vocabularyManager.exportVocabulary(format)
@@ -508,15 +617,30 @@ export class VocabularyListManager {
         const filename = `vocabulary-export.${format}`
         const mimeType = format === 'json' ? 'application/json' : 'text/plain'
         this.downloadFile(result.data, filename, mimeType)
-        console.log('[VocabularyListManager] Export completed:', filename)
+        this.logger.info('Export completed', {
+          component: ComponentType.WORD_LOOKUP,
+          metadata: {
+            filename: filename,
+            format: format
+          }
+        })
       } else {
-        console.error(
-          '[VocabularyListManager] Export failed:',
-          result.error?.message || 'Unknown error',
-        )
+        this.logger.error('Export failed', {
+          component: ComponentType.WORD_LOOKUP,
+          metadata: {
+            error: result.error?.message || 'Unknown error',
+            format: format
+          }
+        })
       }
     } catch (error) {
-      console.error('[VocabularyListManager] Error during export:', error)
+      this.logger.error('Error during export', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+          format: format
+        }
+      })
     }
   }
 

@@ -6,6 +6,8 @@
 import { VocabularyManager } from '../vocabulary/VocabularyManager'
 import { VocabularyObserver, VocabularyEventType } from '../vocabulary/VocabularyObserver'
 import { VocabularyItem } from '../storage/types'
+import { Logger } from '../logging/Logger'
+import { ComponentType } from '../logging/types'
 
 // ========================================
 // Types and Interfaces
@@ -419,6 +421,7 @@ export class VocabularyListComponent {
 
   private config: VocabularyListConfig
   private events: { [K in keyof VocabularyListEvents]?: VocabularyListEvents[K] } = {}
+  private readonly logger = Logger.getInstance()
 
   private state: ListState = {
     words: [],
@@ -1017,18 +1020,37 @@ export class VocabularyListComponent {
         const result = await this.vocabularyManager.importVocabulary(text, format)
 
         if (result.successful.length > 0) {
-          console.log(`Successfully imported ${result.successful.length} words`)
+          this.logger.info(`Successfully imported ${result.successful.length} words`, {
+            component: ComponentType.WORD_LOOKUP,
+            metadata: {
+              importedCount: result.successful.length,
+              format: format
+            }
+          })
           await this.refresh()
         }
 
         if (result.failed.length > 0) {
-          console.warn(`Failed to import ${result.failed.length} words:`, result.failed)
+          this.logger.warn(`Failed to import ${result.failed.length} words`, {
+            component: ComponentType.WORD_LOOKUP,
+            metadata: {
+              failedCount: result.failed.length,
+              format: format,
+              failedEntries: result.failed
+            }
+          })
         }
 
         // Trigger event for external handling
         this.events.onImportRequest?.(format)
       } catch (error) {
-        console.error('Import error:', error)
+        this.logger.error('Import error', {
+          component: ComponentType.WORD_LOOKUP,
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+            format: format
+          }
+        })
       }
 
       // Reset file input

@@ -8,6 +8,8 @@ import {
   TranslationError,
   LanguageCode,
 } from './types'
+import { Logger } from '../logging/Logger'
+import { ComponentType } from '../logging/types'
 
 // ============================================================================
 // Configuration Keys for Chrome Storage
@@ -395,9 +397,15 @@ export class ConfigService {
     this.configUpdateListeners.forEach((listener) => {
       try {
         listener(config)
-      } catch (error) {
-        console.warn('Error in config update listener:', error)
-      }
+              } catch (error) {
+          const logger = Logger.getInstance()
+          logger.warn('Error in config update listener', {
+            component: ComponentType.TRANSLATION_SERVICE,
+            metadata: {
+              error: error instanceof Error ? error.message : String(error)
+            }
+          })
+        }
     })
   }
 

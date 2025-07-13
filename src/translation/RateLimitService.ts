@@ -4,6 +4,8 @@
 import { RateLimitConfig, TranslationErrorCode, TranslationError } from './types'
 import { configService } from './ConfigService'
 import { TranslationErrorImpl } from './TranslationApiService'
+import { Logger } from '../logging/Logger'
+import { ComponentType } from '../logging/types'
 
 // ============================================================================
 // Rate Limiting Storage Keys
@@ -431,9 +433,15 @@ export class RateLimitService {
         [RATE_LIMIT_STORAGE_KEYS.REQUEST_TOKENS]: this.usageStats.requestBucket,
         [RATE_LIMIT_STORAGE_KEYS.LAST_RESET]: Date.now(),
       })
-    } catch (error) {
-      console.warn('Failed to save rate limit usage stats:', error)
-    }
+          } catch (error) {
+        const logger = Logger.getInstance()
+        logger.warn('Failed to save rate limit usage stats', {
+          component: ComponentType.TRANSLATION_SERVICE,
+          metadata: {
+            error: error instanceof Error ? error.message : String(error)
+          }
+        })
+      }
   }
 
   /**

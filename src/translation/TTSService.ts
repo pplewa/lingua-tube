@@ -13,6 +13,8 @@ import {
   LanguageCode,
 } from './types'
 import { dictionaryApiService } from './DictionaryApiService'
+import { Logger } from '../logging/Logger'
+import { ComponentType } from '../logging/types'
 
 // ============================================================================
 // TTS Error Implementation
@@ -33,14 +35,14 @@ export class TTSErrorImpl extends Error implements TTSError {
     this.timestamp = Date.now()
   }
 
+  // Determine if error type allows retries
   private isRetryableError(code: TTSErrorCode): boolean {
-    const retryableCodes = [
+    return [
       TTSErrorCode.SYNTHESIS_FAILED,
       TTSErrorCode.AUDIO_INTERRUPTED,
       TTSErrorCode.BROWSER_LIMITATION,
-    ]
-
-    return retryableCodes.includes(code)
+      TTSErrorCode.QUEUE_TIMEOUT,
+    ].includes(code)
   }
 }
 
@@ -58,6 +60,7 @@ export class TTSService implements ITTSService {
   private preferredVoices: Map<string, SpeechSynthesisVoice> = new Map()
   private stats: TTSStats
   private queueTimeouts: Map<string, NodeJS.Timeout> = new Map()
+  private readonly logger = Logger.getInstance()
 
   constructor() {
     this.config = {
@@ -103,7 +106,9 @@ export class TTSService implements ITTSService {
    */
   private async initializeVoices(): Promise<void> {
     if (!this.isSupported()) {
-      console.warn('Speech synthesis not supported in this browser')
+              this.logger.warn('Speech synthesis not supported in this browser', {
+          component: ComponentType.TTS_SERVICE
+        })
       return
     }
 
@@ -132,7 +137,12 @@ export class TTSService implements ITTSService {
     // Auto-select preferred voices for each language
     this.selectPreferredVoices()
 
-    console.log(`TTS Service: Loaded ${this.voices.length} voices`)
+    this.logger.info(`TTS Service: Loaded ${this.voices.length} voices`, {
+      component: ComponentType.TTS_SERVICE,
+      metadata: {
+        voiceCount: this.voices.length
+      }
+    })
   }
 
   /**
@@ -412,7 +422,14 @@ export class TTSService implements ITTSService {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
     const errorForLog = error instanceof Error ? error : new Error(String(error || 'Unknown error'))
 
-    console.error('TTS Error:', errorForLog)
+    this.logger.error('TTS Error', {
+      component: ComponentType.TTS_SERVICE,
+      metadata: {
+        error: errorForLog.message,
+        errorType: errorForLog.name,
+        stack: errorForLog.stack
+      }
+    })
 
     // Try fallback to audio URL if enabled
     if (this.config.fallbackToAudio && item.text.split(' ').length === 1) {
@@ -422,7 +439,13 @@ export class TTSService implements ITTSService {
         this.handleSpeechEnd(item, startTime)
         return
       } catch (fallbackError) {
-        console.error('Audio fallback failed:', fallbackError)
+        this.logger.error('Audio fallback failed', {
+          component: ComponentType.TTS_SERVICE,
+          metadata: {
+            error: fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
+            errorType: fallbackError instanceof Error ? fallbackError.name : 'Unknown'
+          }
+        })
       }
     }
 

@@ -22,6 +22,8 @@ import {
   createDefaultSettings,
   validateUserSettings,
 } from './defaults'
+import { Logger } from '../logging/Logger'
+import { ComponentType } from '../logging/types'
 
 /**
  * Cache entry structure for internal caching
@@ -47,6 +49,7 @@ export class LinguaTubeStorageService implements StorageService {
   private cache = new Map<string, CacheEntry>()
   private eventListeners = new Map<StorageEventType, Set<(event: StorageEvent) => void>>()
   private isInitialized = false
+  private readonly logger = Logger.getInstance()
 
   constructor() {
     this.setupStorageListener()
@@ -66,10 +69,16 @@ export class LinguaTubeStorageService implements StorageService {
       await this.ensureSchemaVersion()
       await this.ensureDefaultSettings()
       this.isInitialized = true
-    } catch (error) {
-      console.error('[LinguaTube] Storage initialization failed:', error)
-      throw error
-    }
+          } catch (error) {
+        this.logger.error('Storage initialization failed', {
+          component: ComponentType.STORAGE_SERVICE,
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+            errorType: error instanceof Error ? error.name : 'Unknown'
+          }
+        })
+        throw error
+      }
   }
 
   /**
@@ -417,9 +426,15 @@ export class LinguaTubeStorageService implements StorageService {
       listeners.forEach((listener) => {
         try {
           listener(event)
-        } catch (error) {
-          console.error('[LinguaTube] Event listener error:', error)
-        }
+                  } catch (error) {
+            this.logger.error('Event listener error', {
+              component: ComponentType.STORAGE_SERVICE,
+              metadata: {
+                error: error instanceof Error ? error.message : String(error),
+                errorType: error instanceof Error ? error.name : 'Unknown'
+              }
+            })
+          }
       })
     }
   }

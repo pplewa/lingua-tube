@@ -10,6 +10,8 @@ import { TranslationApiService } from '../translation/TranslationApiService'
 import { translationCacheService } from '../translation/TranslationCacheService'
 import { UserSettings } from '../storage/types'
 import { WordLookupPopup } from './WordLookupPopup'
+import { Logger } from '../logging/Logger'
+import { ComponentType } from '../logging/types'
 
 // ========================================
 // Types and Interfaces
@@ -69,6 +71,7 @@ export class DualSubtitleManager {
   private translationCallbacks: Set<TranslationCallback> = new Set()
 
   private isInitialized: boolean = false
+  private readonly logger = Logger.getInstance()
 
   constructor(
     playerService: PlayerInteractionService,
@@ -105,78 +108,134 @@ export class DualSubtitleManager {
 
       if (response.success && response.status) {
         const status = response.status
-        console.log('[DualSubtitleManager] Translation status:', status)
+        this.logger.info('Translation status', {
+          component: ComponentType.SUBTITLE_MANAGER,
+          metadata: {
+            configured: status.configured,
+            hasApiKey: status.hasApiKey,
+            lastError: status.lastError
+          }
+        })
 
         if (!status.configured || !status.hasApiKey) {
-          console.warn('[DualSubtitleManager] ⚠️ Translation service not properly configured')
-          console.warn('[DualSubtitleManager] API key configured:', status.hasApiKey)
-          console.warn('[DualSubtitleManager] Service configured:', status.configured)
-
-          if (status.lastError) {
-            console.warn('[DualSubtitleManager] Last error:', status.lastError)
-          }
+          this.logger.warn('Translation service not properly configured', {
+            component: ComponentType.SUBTITLE_MANAGER,
+            metadata: {
+              hasApiKey: status.hasApiKey,
+              configured: status.configured,
+              lastError: status.lastError
+            }
+          })
         } else {
-          console.log('[DualSubtitleManager] ✅ Translation service is ready')
+          this.logger.info('Translation service is ready', {
+            component: ComponentType.SUBTITLE_MANAGER
+          })
         }
       } else {
-        console.warn(
-          '[DualSubtitleManager] Failed to get translation status from background service',
-        )
+        this.logger.warn('Failed to get translation status from background service', {
+          component: ComponentType.SUBTITLE_MANAGER,
+          metadata: {
+            responseSuccess: response?.success,
+            hasStatus: !!response?.status
+          }
+        })
       }
     } catch (error) {
-      console.warn('[DualSubtitleManager] Error checking translation status:', error)
+      this.logger.warn('Error checking translation status', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error)
+        }
+      })
     }
   }
 
   public async initialize(): Promise<boolean> {
     try {
       if (this.isInitialized) {
-        console.warn('[DualSubtitleManager] Already initialized')
+        this.logger.warn('Already initialized', {
+          component: ComponentType.SUBTITLE_MANAGER
+        })
         return true
       }
 
-      console.log('[DualSubtitleManager] Starting initialization...')
+      this.logger.info('Starting initialization', {
+        component: ComponentType.SUBTITLE_MANAGER
+      })
 
       // Check translation service status from background service (non-blocking)
       this.checkTranslationStatus().catch((error) => {
-        console.warn('[DualSubtitleManager] Translation status check failed:', error)
+        this.logger.warn('Translation status check failed', {
+          component: ComponentType.SUBTITLE_MANAGER,
+          metadata: {
+            error: error instanceof Error ? error.message : String(error)
+          }
+        })
       })
 
       // Load user settings
-      console.log('[DualSubtitleManager] Loading user settings...')
+      this.logger.info('Loading user settings', {
+        component: ComponentType.SUBTITLE_MANAGER
+      })
       await this.loadUserSettings()
-      console.log('[DualSubtitleManager] User settings loaded')
+      this.logger.info('User settings loaded', {
+        component: ComponentType.SUBTITLE_MANAGER
+      })
 
       // Initialize subtitle component
-      console.log('[DualSubtitleManager] Creating subtitle component...')
+      this.logger.info('Creating subtitle component', {
+        component: ComponentType.SUBTITLE_MANAGER
+      })
       this.subtitleComponent = new DualSubtitleComponent(
         this.playerService,
         this.storageService,
         await this.createSubtitleConfig(),
       )
-      console.log('[DualSubtitleManager] Subtitle component created')
+      this.logger.info('Subtitle component created', {
+        component: ComponentType.SUBTITLE_MANAGER
+      })
 
-      console.log('[DualSubtitleManager] Initializing subtitle component...')
+      this.logger.info('Initializing subtitle component', {
+        component: ComponentType.SUBTITLE_MANAGER
+      })
       const initSuccess = await this.subtitleComponent.initialize()
       if (!initSuccess) {
-        console.error('[DualSubtitleManager] Failed to initialize subtitle component')
+        this.logger.error('Failed to initialize subtitle component', {
+          component: ComponentType.SUBTITLE_MANAGER
+        })
         return false
       }
-      console.log('[DualSubtitleManager] Subtitle component initialized')
+      this.logger.info('Subtitle component initialized', {
+        component: ComponentType.SUBTITLE_MANAGER
+      })
 
       // Set up subtitle component event handlers
-      console.log('[DualSubtitleManager] Setting up event handlers...')
+      this.logger.info('Setting up event handlers', {
+        component: ComponentType.SUBTITLE_MANAGER
+      })
       this.setupSubtitleEventHandlers()
-      console.log('[DualSubtitleManager] Event handlers set up')
+      this.logger.info('Event handlers set up', {
+        component: ComponentType.SUBTITLE_MANAGER
+      })
 
       // Get current video ID
       this.currentVideoId = this.extractVideoId(window.location.href)
 
       this.isInitialized = true
-      console.log('[DualSubtitleManager] Initialized successfully')
+      this.logger.info('Initialized successfully', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {
+          currentVideoId: this.currentVideoId
+        }
+      })
       return true
     } catch (error) {
-      console.error('[DualSubtitleManager] Initialization failed:', error)
+      this.logger.error('Initialization failed', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error)
+        }
+      })
       return false
     }
   }

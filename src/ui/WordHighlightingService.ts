@@ -6,6 +6,8 @@
 import { VocabularyManager } from '../vocabulary/VocabularyManager'
 import { VocabularyObserver, VocabularyEventType } from '../vocabulary/VocabularyObserver'
 import { VocabularyItem } from '../storage/types'
+import { Logger } from '../logging/Logger'
+import { ComponentType } from '../logging/types'
 
 // ========================================
 // Types and Interfaces
@@ -115,6 +117,7 @@ export class WordHighlightingService {
 
   private highlightContexts = new Map<string, HighlightContext>()
   private styleSheet: CSSStyleSheet | null = null
+  private readonly logger = Logger.getInstance()
 
   private stats: HighlightStats = {
     totalWords: 0,
@@ -186,7 +189,13 @@ export class WordHighlightingService {
 
       return this.updateStats(startTime, result.totalWords, result.highlightedWords.length, 1)
     } catch (error) {
-      console.error('[WordHighlightingService] Error highlighting element:', error)
+      this.logger.error('Error highlighting element', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+          elementTag: element.tagName
+        }
+      })
       return this.updateStats(startTime, 0, 0, 1)
     }
   }
@@ -236,7 +245,13 @@ export class WordHighlightingService {
         // Re-highlight with current vocabulary
         await this.highlightElement(context.element, context.config)
       } catch (error) {
-        console.error('[WordHighlightingService] Error refreshing highlighting:', error)
+        this.logger.error('Error refreshing highlighting', {
+          component: ComponentType.WORD_LOOKUP,
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+            contextId: contextId
+          }
+        })
         this.highlightContexts.delete(contextId)
       }
     }
@@ -395,7 +410,12 @@ export class WordHighlightingService {
 
       document.adoptedStyleSheets = [...document.adoptedStyleSheets, this.styleSheet]
     } catch (error) {
-      console.warn('[WordHighlightingService] Could not create stylesheet:', error)
+      this.logger.warn('Could not create stylesheet', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error)
+        }
+      })
     }
   }
 
