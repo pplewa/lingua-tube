@@ -902,9 +902,7 @@ export class DualSubtitleComponent {
 
     if (combinedNative || combinedTarget) {
       this.showSubtitles();
-    } else {
-      this.hideSubtitles();
-    }
+    } 
   }
 
   private renderTargetLine(text: string): void {
