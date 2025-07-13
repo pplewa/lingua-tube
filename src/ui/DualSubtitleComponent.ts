@@ -749,9 +749,10 @@ export class DualSubtitleComponent {
    * Thai word segmentation using linguistic rules
    */
   private segmentThaiText(text: string): WordSegment[] {
-    // const segmenter = new Intl.Segmenter('th', { granularity: 'word' })
     const segmenter = new Intl.Segmenter('th', { granularity: 'sentence' })
-    const words = Array.from(segmenter.segment(text)).map((word) => word.segment.split(/\s+/g)).flat();
+    const words = Array.from(segmenter.segment(text))
+      .map((word) => word.segment.split(/\s+/g))
+      .flat()
 
     const segments = words.map((word, index) => ({
       text: word,
@@ -815,7 +816,10 @@ export class DualSubtitleComponent {
       this.nativeLine.textContent = combinedNative
     }
 
-    this.showSubtitles()
+    if (combinedNative || combinedTarget) {
+      this.subtitleContainer?.classList.remove('hidden')
+      this.showSubtitles()
+    }
   }
 
   private renderTargetLine(text: string): void {
@@ -963,7 +967,7 @@ export class DualSubtitleComponent {
       setTimeout(() => {
         if (this.subtitleContainer) {
           this.subtitleContainer.classList.remove('fade-out')
-          this.subtitleContainer.classList.add('hidden')
+      this.subtitleContainer.classList.add('hidden')
         }
       }, this.config.transitionDuration)
     } else {
@@ -992,7 +996,7 @@ export class DualSubtitleComponent {
 
     // Calculate vertical position based on offset percentage
     const verticalPixels = (this.config.verticalOffset / 100) * height
-    const bottomPosition = Math.max(50,  Math.abs(verticalPixels)- height * 0.1)
+    const bottomPosition = Math.max(50, Math.abs(verticalPixels) - height * 0.1)
 
     // Calculate horizontal position based on alignment
     let leftPosition = '50%' // Center by default

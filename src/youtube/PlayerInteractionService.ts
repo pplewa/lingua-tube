@@ -365,9 +365,9 @@ export interface YouTubeSubtitleData {
 export const DEFAULT_SUBTITLE_SYNC_CONFIG: SubtitleSyncConfig = {
   enabled: true,
   timeOffset: 0,
-  lookAheadTime: 2.0, // 2 seconds ahead
-  lookBehindTime: 1.0, // 1 second behind
-  timingTolerance: 0.2, // 200ms tolerance
+  lookAheadTime: 0, 
+  lookBehindTime: 0, 
+  timingTolerance: 0, 
   autoCorrectTiming: true,
   enableSmoothing: true,
   maxConcurrentCues: 3,
