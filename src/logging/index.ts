@@ -6,6 +6,54 @@ export * from './types'
 export { Logger } from './Logger'
 export * from './StackTraceProcessor'
 export { PerformanceMonitor } from './PerformanceMonitor'
+export { ErrorNotificationService, NotificationType } from './ErrorNotificationService'
+export type { NotificationConfig, ErrorMessage, NotificationAction, EnhancedNotification } from './ErrorNotificationService'
+export { RateLimitingService, createRateLimitingServiceFromConfig } from './RateLimitingService'
+export type { 
+  RateLimitConfig, 
+  DeduplicationConfig, 
+  RateLimitStats, 
+  DeduplicationStats 
+} from './RateLimitingService'
+export { DebugModeService, createDebugModeService } from './DebugModeService'
+export type {
+  DebugModeConfig,
+  DebugStats,
+  MemorySnapshot,
+  NetworkRequestInfo,
+  ConsoleEntry,
+  ErrorPattern
+} from './DebugModeService'
+export { GracefulDegradationService } from './GracefulDegradationService'
+export type {
+  FeatureState,
+  DegradationLevel,
+  FeatureConfig,
+  FallbackOption,
+  RecoveryStrategy,
+  FeatureStatus,
+  HealthCheckResult,
+  SystemHealth,
+  DegradationEvent,
+  UserNotificationConfig
+} from './GracefulDegradationService'
+export { ErrorRecoveryService } from './ErrorRecoveryService'
+export type {
+  RecoveryStrategyType,
+  RecoveryResult,
+  RecoveryAttempt,
+  RecoveryContext,
+  RecoveryStats,
+  RecoveryConfig
+} from './ErrorRecoveryService'
+export { ConsoleLoggingService, createConsoleLoggingService, ConsoleFormat, ConsoleColorScheme, DEFAULT_CONSOLE_LOGGING_CONFIG } from './ConsoleLoggingService'
+export type {
+  ConsoleLoggingConfig,
+  ConsoleGrouping,
+  ConsoleFiltering,
+  ConsoleFormatting,
+  ConsolePerformanceStats
+} from './ConsoleLoggingService'
 
 import { Logger } from './Logger'
 import { ComponentType, LogLevel, LoggerConfig } from './types'

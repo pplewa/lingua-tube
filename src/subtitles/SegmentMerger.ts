@@ -10,6 +10,8 @@ import {
   SubtitleSegmentMetadata,
   SubtitleStyling,
 } from './types'
+import { Logger } from '../logging/Logger'
+import { ComponentType } from '../logging/types'
 
 /**
  * Merge operation result
@@ -60,6 +62,7 @@ export const DEFAULT_MERGE_CONFIG: MergeConfig = {
  */
 export class SegmentMerger {
   private readonly config: MergeConfig
+  private readonly logger = Logger.getInstance()
 
   constructor(config: Partial<MergeConfig> = {}) {
     this.config = { ...DEFAULT_MERGE_CONFIG, ...config }
@@ -74,14 +77,29 @@ export class SegmentMerger {
    */
   async mergeFile(subtitleFile: SubtitleFile): Promise<MergeResult> {
     const startTime = Date.now()
-    console.log(`[LinguaTube] Starting segment merge for ${subtitleFile.segments.length} segments`)
+    this.logger.info('Starting segment merge', {
+      component: ComponentType.SUBTITLE_MANAGER,
+      metadata: {
+        segmentCount: subtitleFile.segments.length,
+        mergeStrategy: this.config.mergeStrategy,
+        maxGap: this.config.maxGap
+      }
+    })
 
     const result = await this.mergeSegments(subtitleFile.segments)
 
     const processingTime = Date.now() - startTime
-    console.log(
-      `[LinguaTube] Merge completed: ${result.originalCount} → ${result.mergedCount} segments (${processingTime}ms)`,
-    )
+    this.logger.info('Segment merge completed', {
+      component: ComponentType.SUBTITLE_MANAGER,
+      metadata: {
+        originalCount: result.originalCount,
+        mergedCount: result.mergedCount,
+        reductionPercent: Math.round(((result.originalCount - result.mergedCount) / result.originalCount) * 100),
+        processingTime,
+        operationsCount: result.operations.length,
+        warningsCount: result.warnings.length
+      }
+    })
 
     return result
   }

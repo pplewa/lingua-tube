@@ -4,6 +4,8 @@
  */
 
 import { RetryConfig, SubtitleErrorCode, SubtitleFetchError, DEFAULT_RETRY_CONFIG } from './types'
+import { Logger } from '../logging/Logger'
+import { ComponentType } from '../logging/types'
 
 /**
  * Retry attempt information
@@ -42,9 +44,11 @@ export type AsyncOperation<T> = () => Promise<T>
  */
 export class RetryService {
   private readonly config: RetryConfig
+  private readonly logger: Logger
 
   constructor(config: Partial<RetryConfig> = {}) {
     this.config = { ...DEFAULT_RETRY_CONFIG, ...config }
+    this.logger = Logger.getInstance()
   }
 
   // ========================================
@@ -64,12 +68,18 @@ export class RetryService {
 
     for (let attempt = 1; attempt <= config.maxAttempts; attempt++) {
       try {
-        console.log(`[LinguaTube] Retry attempt ${attempt}/${config.maxAttempts}`)
+        this.logger.debug('Retry attempt', { 
+          component: ComponentType.SUBTITLE_MANAGER,
+          metadata: { attempt, maxAttempts: config.maxAttempts }
+        })
 
         const result = await operation()
 
         const totalTime = Date.now() - startTime
-        console.log(`[LinguaTube] Operation succeeded on attempt ${attempt} (${totalTime}ms)`)
+        this.logger.info('Operation succeeded', { 
+          component: ComponentType.SUBTITLE_MANAGER,
+          metadata: { attempt, totalTime }
+        })
 
         return {
           success: true,
@@ -92,23 +102,35 @@ export class RetryService {
 
         attempts.push(attemptInfo)
 
-        console.warn(`[LinguaTube] Attempt ${attempt} failed:`, fetchError.message)
+        this.logger.warn('Attempt failed', { 
+          component: ComponentType.SUBTITLE_MANAGER,
+          metadata: { attempt, error: fetchError.message, errorCode: fetchError.code }
+        })
 
         // Check if we should retry
         if (attempt >= config.maxAttempts) {
-          console.error(`[LinguaTube] All ${config.maxAttempts} attempts failed`)
+          this.logger.error('All retry attempts failed', { 
+            component: ComponentType.SUBTITLE_MANAGER,
+            metadata: { maxAttempts: config.maxAttempts }
+          })
           break
         }
 
         if (!this.shouldRetry(fetchError, attempt, config)) {
-          console.log(`[LinguaTube] Not retrying due to error type: ${fetchError.code}`)
+          this.logger.info('Not retrying due to error type', { 
+            component: ComponentType.SUBTITLE_MANAGER,
+            metadata: { errorCode: fetchError.code, attempt }
+          })
           break
         }
 
         // Calculate delay and wait
         const delay = this.calculateDelay(attempt, config)
 
-        console.log(`[LinguaTube] Waiting ${delay}ms before retry...`)
+        this.logger.debug('Waiting before retry', { 
+          component: ComponentType.SUBTITLE_MANAGER,
+          metadata: { delay, attempt }
+        })
         await this.sleep(delay)
 
         // Update the attempt info with the actual delay used

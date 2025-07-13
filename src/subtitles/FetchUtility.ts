@@ -12,6 +12,8 @@ import {
   DEFAULT_RETRY_CONFIG,
   DEFAULT_FETCH_TIMEOUT,
 } from './types'
+import { Logger } from '../logging/Logger'
+import { ComponentType } from '../logging/types'
 
 /**
  * Response data from a fetch operation
@@ -32,6 +34,7 @@ interface FetchResponse {
 export class SubtitleFetchUtility {
   private readonly abortController: AbortController
   private retryDelay = 0
+  private readonly logger = Logger.getInstance()
 
   constructor() {
     this.abortController = new AbortController()
@@ -51,7 +54,14 @@ export class SubtitleFetchUtility {
 
     while (attempt < config.retryConfig.maxAttempts) {
       try {
-        console.log(`[LinguaTube] Fetching subtitles: ${request.url} (attempt ${attempt + 1})`)
+        this.logger.info('Fetching subtitles from URL', {
+          component: ComponentType.SUBTITLE_MANAGER,
+          url: request.url,
+          metadata: {
+            attempt: attempt + 1,
+            maxAttempts: config.retryConfig.maxAttempts
+          }
+        })
 
         // Add delay for retries
         if (attempt > 0) {
@@ -62,9 +72,15 @@ export class SubtitleFetchUtility {
 
         // Check if response indicates success
         if (response.status >= 200 && response.status < 300) {
-          console.log(
-            `[LinguaTube] Successfully fetched subtitles: ${response.contentLength} bytes`,
-          )
+          this.logger.info('Successfully fetched subtitles', {
+            component: ComponentType.SUBTITLE_MANAGER,
+            url: request.url,
+            metadata: {
+              contentLength: response.contentLength,
+              contentType: response.contentType,
+              status: response.status
+            }
+          })
           return response
         }
 
@@ -82,7 +98,15 @@ export class SubtitleFetchUtility {
           throw this.convertToSubtitleError(error, request.url)
         }
 
-        console.warn(`[LinguaTube] Fetch attempt ${attempt + 1} failed:`, error)
+        this.logger.warn('Fetch attempt failed', {
+          component: ComponentType.SUBTITLE_MANAGER,
+          url: request.url,
+          metadata: {
+            attempt: attempt + 1,
+            maxAttempts: config.retryConfig.maxAttempts,
+            error: error instanceof Error ? error.message : String(error)
+          }
+        })
       }
 
       attempt++
@@ -202,7 +226,11 @@ export class SubtitleFetchUtility {
       // Cross-origin requests
       return 'cors'
     } catch (error) {
-      console.warn('[LinguaTube] Invalid URL, using CORS mode:', url)
+             this.logger.warn('Invalid URL, using CORS mode', {
+         component: ComponentType.SUBTITLE_MANAGER,
+         url,
+         metadata: { error: error instanceof Error ? error.message : String(error) }
+       })
       return 'cors'
     }
   }

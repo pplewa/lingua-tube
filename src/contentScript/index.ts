@@ -19,7 +19,7 @@ import { WordLookupPopup } from '../ui/WordLookupPopup'
 import { DictionaryApiService } from '../translation/DictionaryApiService'
 import { TTSService } from '../translation/TTSService'
 
-console.log('[LinguaTube] All imports loaded successfully')
+Logger.getInstance().info('All imports loaded successfully', { component: ComponentType.CONTENT_SCRIPT })
 
 // ========================================
 // Content Script State
@@ -54,8 +54,8 @@ class LinguaTubeContentScript {
   private initializationAttempts = 0
 
   constructor() {
-    console.log('[LinguaTube] Creating LinguaTubeContentScript instance')
     this.logger = Logger.getInstance()
+    this.logger.info('Creating LinguaTubeContentScript instance', { component: ComponentType.CONTENT_SCRIPT })
     this.state = {
       isInitialized: false,
       currentVideoId: null,
@@ -72,7 +72,7 @@ class LinguaTubeContentScript {
       },
     }
 
-    console.log('[LinguaTube] LinguaTubeContentScript constructor completed')
+    this.logger.info('LinguaTubeContentScript constructor completed', { component: ComponentType.CONTENT_SCRIPT })
     this.logger.info('LinguaTube Content Script starting', {
       component: ComponentType.CONTENT_SCRIPT,
       action: 'constructor',
@@ -88,16 +88,18 @@ class LinguaTubeContentScript {
   // ========================================
 
   public async initialize(): Promise<boolean> {
-    console.log('[LinguaTube] Starting initialization...')
+    this.logger.info('Starting initialization...', { component: ComponentType.CONTENT_SCRIPT })
     try {
       if (this.state.isInitialized) {
-        console.log('[LinguaTube] Already initialized, skipping')
-        this.logger.warn('Content script already initialized')
+        this.logger.info('Already initialized, skipping', { component: ComponentType.CONTENT_SCRIPT })
         return true
       }
 
       this.initializationAttempts++
-      console.log('[LinguaTube] Initialization attempt:', this.initializationAttempts)
+      this.logger.info('Initialization attempt', { 
+        component: ComponentType.CONTENT_SCRIPT,
+        metadata: { attempt: this.initializationAttempts }
+      })
       this.logger.info('Starting LinguaTube initialization', {
         component: ComponentType.CONTENT_SCRIPT,
         action: 'initialize',
@@ -105,31 +107,31 @@ class LinguaTubeContentScript {
       })
 
       // Wait for YouTube player to be available
-      console.log('[LinguaTube] Waiting for YouTube player...')
+      this.logger.info('Waiting for YouTube player...', { component: ComponentType.CONTENT_SCRIPT })
       const playerReady = await this.waitForYouTubePlayer()
       if (!playerReady) {
-        console.error('[LinguaTube] YouTube player not available')
+        this.logger.error('YouTube player not available', { component: ComponentType.CONTENT_SCRIPT })
         throw new Error('YouTube player not available')
       }
-      console.log('[LinguaTube] YouTube player ready')
+      this.logger.info('YouTube player ready', { component: ComponentType.CONTENT_SCRIPT })
 
       // Initialize core services
-      console.log('[LinguaTube] Initializing core services...')
+      this.logger.info('Initializing core services...', { component: ComponentType.CONTENT_SCRIPT })
       await this.initializeCoreServices()
-      console.log('[LinguaTube] Core services initialized')
+      this.logger.info('Core services initialized', { component: ComponentType.CONTENT_SCRIPT })
 
       // Initialize UI components
-      console.log('[LinguaTube] Initializing UI components...')
+      this.logger.info('Initializing UI components...', { component: ComponentType.CONTENT_SCRIPT })
       await this.initializeUIComponents()
-      console.log('[LinguaTube] UI components initialized')
+      this.logger.info('UI components initialized', { component: ComponentType.CONTENT_SCRIPT })
 
       // Setup basic event listeners
-      console.log('[LinguaTube] Setting up event listeners...')
+      this.logger.info('Setting up event listeners...', { component: ComponentType.CONTENT_SCRIPT })
       this.setupBasicEventListeners()
-      console.log('[LinguaTube] Event listeners set up')
+      this.logger.info('Event listeners set up', { component: ComponentType.CONTENT_SCRIPT })
 
       this.state.isInitialized = true
-      console.log('[LinguaTube] ✅ Initialization completed successfully!')
+      this.logger.info('✅ Initialization completed successfully!', { component: ComponentType.CONTENT_SCRIPT })
       this.logger.info('LinguaTube initialization completed successfully', {
         component: ComponentType.CONTENT_SCRIPT,
         action: 'initialize_complete',
@@ -139,19 +141,24 @@ class LinguaTubeContentScript {
       return true
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
-      console.error('[LinguaTube] ❌ Initialization failed:', errorMessage)
-      this.logger.error('LinguaTube initialization failed', {
+      this.logger.error('❌ Initialization failed', {
         component: ComponentType.CONTENT_SCRIPT,
         action: 'initialize_error',
         metadata: {
           attempt: this.initializationAttempts,
           error: errorMessage,
         },
-      })
+      }, error instanceof Error ? error : undefined)
 
       // Simple retry logic
       if (this.initializationAttempts < 3 && !this.isDestroyed) {
-        console.log('[LinguaTube] Scheduling retry in', 2000 * this.initializationAttempts, 'ms')
+        this.logger.info('Scheduling retry', { 
+          component: ComponentType.CONTENT_SCRIPT,
+          metadata: { 
+            retryDelay: 2000 * this.initializationAttempts,
+            attempt: this.initializationAttempts
+          }
+        })
         this.retryTimeout = window.setTimeout(() => {
           this.initialize()
         }, 2000 * this.initializationAttempts)
@@ -295,38 +302,55 @@ class LinguaTubeContentScript {
     subtitleDiscoveryService.addEventListener(
       SubtitleDiscoveryEvent.TRACKS_DISCOVERED,
       async (event: any) => {
-        console.log('[LinguaTube] Subtitles discovered, loading into player service...', event)
+        this.logger.info('Subtitles discovered, loading into player service...', { 
+          component: ComponentType.CONTENT_SCRIPT,
+          metadata: { event }
+        })
 
         if (!this.state.components.playerService) {
-          console.warn('[LinguaTube] Player service not available for subtitle loading')
+          this.logger.warn('Player service not available for subtitle loading', { component: ComponentType.CONTENT_SCRIPT })
           return
         }
 
         // Get the tracks from the event data property
         const tracks = event.data?.tracks || event.tracks || []
-        console.log('[LinguaTube] Available tracks:', tracks)
+        this.logger.debug('Available tracks', { 
+          component: ComponentType.CONTENT_SCRIPT,
+          metadata: { tracksCount: tracks.length, tracks }
+        })
 
         // Enhanced debugging for language detection
-        console.log(`[LinguaTube] 🔍 Subtitle Track Language Analysis:`)
+        this.logger.debug('🔍 Subtitle Track Language Analysis', { component: ComponentType.CONTENT_SCRIPT })
         tracks.forEach((track: any, index: number) => {
-          console.log(`[LinguaTube] Track ${index}:`, {
-            languageCode: track.languageCode,
-            languageName: track.languageName,
-            name: track.name,
-            isAutoGenerated: track.isAutoGenerated,
-            vssId: track.vssId,
+          this.logger.debug('Track details', { 
+            component: ComponentType.CONTENT_SCRIPT,
+            metadata: {
+              index,
+              languageCode: track.languageCode,
+              languageName: track.languageName,
+              name: track.name,
+              isAutoGenerated: track.isAutoGenerated,
+              vssId: track.vssId,
+            }
           })
         })
 
         if (tracks.length === 0) {
-          console.log('[LinguaTube] No tracks available in event data')
+          this.logger.info('No tracks available in event data', { component: ComponentType.CONTENT_SCRIPT })
           return
         }
 
         // Get the first available subtitle track (prioritize human-created over auto-generated)
         const preferredTrack = tracks.find((track: any) => track.languageCode === 'th') || tracks[0]
         const nativeTrack = tracks.find((track: any) => track.languageCode === 'en') || tracks[0]
-        console.log('[LinguaTube] Selected track:', preferredTrack)
+        this.logger.info('Selected track', { 
+          component: ComponentType.CONTENT_SCRIPT,
+          metadata: { 
+            languageCode: preferredTrack?.languageCode,
+            name: preferredTrack?.name,
+            isAutoGenerated: preferredTrack?.isAutoGenerated
+          }
+        })
 
         if (preferredTrack) {
           try {
@@ -339,22 +363,25 @@ class LinguaTubeContentScript {
             this.state.components.playerService.loadSubtitleTrack(subtitleTrack)
 
             // Skip API fetch - directly start DOM-based subtitle observation
-            console.log(
-              `[LinguaTube] Starting DOM-based subtitle observation for: ${preferredTrack.languageCode}`,
-            )
+            this.logger.info('Starting DOM-based subtitle observation', { 
+              component: ComponentType.CONTENT_SCRIPT,
+              metadata: { languageCode: preferredTrack.languageCode }
+            })
             // this.startDOMSubtitleObservation(preferredTrack)
           } catch (error) {
-            console.error('[LinguaTube] Failed to start subtitle observation:', error)
+            this.logger.error('Failed to start subtitle observation', { 
+              component: ComponentType.CONTENT_SCRIPT 
+            }, error instanceof Error ? error : undefined)
           }
         } else {
-          console.log('[LinguaTube] No suitable subtitle tracks found')
+          this.logger.info('No suitable subtitle tracks found', { component: ComponentType.CONTENT_SCRIPT })
         }
       },
     )
 
     // Listen for video changes to clear old subtitles
     subtitleDiscoveryService.addEventListener(SubtitleDiscoveryEvent.VIDEO_CHANGED, () => {
-      console.log('[LinguaTube] Video changed, clearing subtitle track')
+      this.logger.info('Video changed, clearing subtitle track', { component: ComponentType.CONTENT_SCRIPT })
       if (this.state.components.playerService) {
         this.state.components.playerService.clearSubtitleTrack()
       }
@@ -366,14 +393,15 @@ class LinguaTubeContentScript {
    */
   private async updateLanguageSettings(subtitleLanguageCode: string): Promise<void> {
     try {
-      console.log(
-        `[LinguaTube] Updating language settings for subtitle language: ${subtitleLanguageCode}`,
-      )
+      this.logger.info('Updating language settings for subtitle language', { 
+        component: ComponentType.CONTENT_SCRIPT,
+        metadata: { subtitleLanguageCode }
+      })
 
       // Get current settings
       const settingsResult = await storageService.getSettings()
       if (!settingsResult.success || !settingsResult.data) {
-        console.warn('[LinguaTube] Could not load current settings for language update')
+        this.logger.warn('Could not load current settings for language update', { component: ComponentType.CONTENT_SCRIPT })
         return
       }
 
@@ -391,7 +419,7 @@ class LinguaTubeContentScript {
       // Save the updated settings
       const saveResult = await storageService.saveSettings(updatedSettings)
       if (saveResult.success) {
-        console.log(`[LinguaTube] ✅ Set source language to 'auto' for automatic detection`)
+        this.logger.info('✅ Set source language to auto for automatic detection', { component: ComponentType.CONTENT_SCRIPT })
 
         // Propagate the language change to the subtitle manager if it exists
         if (this.state.components.subtitleManager) {
@@ -399,30 +427,42 @@ class LinguaTubeContentScript {
             'auto',
             currentSettings.languages.nativeLanguage,
           )
-          console.log('[LinguaTube] Updated DualSubtitleManager with auto language detection')
+          this.logger.info('Updated DualSubtitleManager with auto language detection', { component: ComponentType.CONTENT_SCRIPT })
         }
       } else {
-        console.error('[LinguaTube] Failed to save language settings:', saveResult.error)
+        this.logger.error('Failed to save language settings', { 
+          component: ComponentType.CONTENT_SCRIPT,
+          metadata: { error: saveResult.error }
+        })
       }
     } catch (error) {
-      console.error('[LinguaTube] Error updating language settings:', error)
+      this.logger.error('Error updating language settings', { component: ComponentType.CONTENT_SCRIPT }, error instanceof Error ? error : undefined)
     }
   }
 
   private async fetchSubtitleData(track: any, nativeTrack: any): Promise<any> {
     try {
-      console.log('[LinguaTube] Fetching subtitle data for track:', track)
-      console.log('[LinguaTube] Track baseUrl:', track.baseUrl)
+      this.logger.info('Fetching subtitle data for track', { 
+        component: ComponentType.CONTENT_SCRIPT,
+        metadata: { 
+          languageCode: track?.languageCode,
+          name: track?.name 
+        }
+      })
+      this.logger.debug('Track baseUrl', { 
+        component: ComponentType.CONTENT_SCRIPT,
+        metadata: { baseUrl: track?.baseUrl }
+      })
       const pot = (await chrome.storage.local.get(['pot']))?.pot
 
       if (!pot) {
-        console.log('[LinguaTube] No PO TOKEN found, skipping subtitle fetch')
+        this.logger.info('No PO TOKEN found, skipping subtitle fetch', { component: ComponentType.CONTENT_SCRIPT })
         return null
       }
 
       // Parse as YouTube subtitle data if it has the right structure
       if (this.state.components.playerService && track.baseUrl) {
-        console.log('[LinguaTube] Starting fetch from YouTube API...')
+        this.logger.info('Starting fetch from YouTube API...', { component: ComponentType.CONTENT_SCRIPT })
 
         // Fetch the subtitle content from YouTube
         const responses = await Promise.all([
@@ -446,18 +486,20 @@ class LinguaTubeContentScript {
           }),
         ])
         const [response, nativeResponse] = responses
-        console.log('[LinguaTube] Fetch response status:', response.status, response.statusText)
-        console.log(
-          '[LinguaTube] Response headers:',
-          Object.fromEntries(response.headers.entries()),
-        )
+        this.logger.debug('Fetch response status', { 
+          component: ComponentType.CONTENT_SCRIPT,
+          metadata: { status: response.status, statusText: response.statusText }
+        })
+        this.logger.debug('Response headers', { 
+          component: ComponentType.CONTENT_SCRIPT,
+          metadata: { headers: Object.fromEntries(response.headers.entries()) }
+        })
 
         if (!response.ok) {
-          console.error(
-            '[LinguaTube] Failed to fetch subtitles:',
-            response.status,
-            response.statusText,
-          )
+          this.logger.error('Failed to fetch subtitles', { 
+            component: ComponentType.CONTENT_SCRIPT,
+            metadata: { status: response.status, statusText: response.statusText }
+          })
           return null
         }
 
@@ -465,7 +507,10 @@ class LinguaTubeContentScript {
         const nativeTextElements: any[] = (await nativeResponse.json())?.events ?? []
         const cues: any[] = []
         const nativeCues: any[] = []
-        console.log('[LinguaTube] Found', textElements.length, 'text elements')
+        this.logger.info('Found text elements', { 
+          component: ComponentType.CONTENT_SCRIPT,
+          metadata: { textElementsCount: textElements.length }
+        })
 
         textElements.forEach((element, index) => {
           const start = element.tStartMs
@@ -486,7 +531,10 @@ class LinguaTubeContentScript {
           }
         })
 
-        console.log('[LinguaTube] Successfully parsed', cues.length, 'subtitle cues')
+        this.logger.info('Successfully parsed subtitle cues', { 
+          component: ComponentType.CONTENT_SCRIPT,
+          metadata: { cuesCount: cues.length }
+        })
 
         // Create a subtitle track object
         const subtitleTrack = {
@@ -500,14 +548,21 @@ class LinguaTubeContentScript {
           source: 'youtube',
         }
 
-        console.log('[LinguaTube] Created subtitle track:', subtitleTrack)
+        this.logger.info('Created subtitle track', { 
+          component: ComponentType.CONTENT_SCRIPT,
+          metadata: { 
+            trackId: subtitleTrack.id,
+            language: subtitleTrack.language,
+            cuesCount: subtitleTrack.cues.length
+          }
+        })
         return subtitleTrack
       }
 
-      console.log('[LinguaTube] No baseUrl available or player service not ready')
+      this.logger.info('No baseUrl available or player service not ready', { component: ComponentType.CONTENT_SCRIPT })
       return null
     } catch (error) {
-      console.error('[LinguaTube] Error fetching subtitle data:', error)
+      this.logger.error('Error fetching subtitle data', { component: ComponentType.CONTENT_SCRIPT }, error instanceof Error ? error : undefined)
       return null
     }
   }
@@ -537,17 +592,25 @@ class LinguaTubeContentScript {
     const maxAttempts = 30 // 30 seconds
     let attempts = 0
 
-    console.log('[LinguaTube] Waiting for YouTube video element...')
+    this.logger.info('Waiting for YouTube video element...', { component: ComponentType.CONTENT_SCRIPT })
 
     while (attempts < maxAttempts) {
       const videoElement = document.querySelector('video') as HTMLVideoElement
-      console.log(`[LinguaTube] Attempt ${attempts + 1}: videoElement found:`, !!videoElement)
+      this.logger.debug('Player detection attempt', { 
+        component: ComponentType.CONTENT_SCRIPT,
+        metadata: { 
+          attempt: attempts + 1,
+          videoElementFound: !!videoElement
+        }
+      })
 
       if (videoElement) {
-        console.log('[LinguaTube] Video element readyState:', videoElement.readyState)
+        this.logger.debug('Video element readyState', { 
+          component: ComponentType.CONTENT_SCRIPT,
+          metadata: { readyState: videoElement.readyState }
+        })
         if (videoElement.readyState >= 1) {
-          console.log('[LinguaTube] ✓ YouTube player ready!')
-          this.logger.debug('YouTube player detected', {
+          this.logger.info('✓ YouTube player ready!', {
             component: ComponentType.CONTENT_SCRIPT,
             action: 'player_detected',
             metadata: { attempts: attempts + 1 },
@@ -560,8 +623,7 @@ class LinguaTubeContentScript {
       attempts++
     }
 
-    console.error('[LinguaTube] ❌ YouTube player detection timeout after', maxAttempts, 'attempts')
-    this.logger.error('YouTube player detection timeout', {
+    this.logger.error('❌ YouTube player detection timeout', {
       component: ComponentType.CONTENT_SCRIPT,
       action: 'player_timeout',
       metadata: { maxAttempts },
@@ -635,40 +697,47 @@ class LinguaTubeContentScript {
 // Module Initialization
 // ========================================
 
-console.log('[LinguaTube] Module initialization starting...')
-console.log('[LinguaTube] Document ready state:', document.readyState)
+const moduleLogger = Logger.getInstance()
+moduleLogger.info('Module initialization starting...', { component: ComponentType.CONTENT_SCRIPT })
+moduleLogger.debug('Document ready state', { 
+  component: ComponentType.CONTENT_SCRIPT,
+  metadata: { readyState: document.readyState }
+})
 
 let contentScript: LinguaTubeContentScript | null = null
 
 // Initialize when DOM is ready
 if (document.readyState === 'loading') {
-  console.log('[LinguaTube] Document still loading, waiting for DOMContentLoaded')
+  moduleLogger.info('Document still loading, waiting for DOMContentLoaded', { component: ComponentType.CONTENT_SCRIPT })
   document.addEventListener('DOMContentLoaded', () => {
-    console.log('[LinguaTube] DOMContentLoaded event fired')
+    moduleLogger.info('DOMContentLoaded event fired', { component: ComponentType.CONTENT_SCRIPT })
     initializeContentScript()
   })
 } else {
-  console.log('[LinguaTube] Document already ready, initializing immediately')
+  moduleLogger.info('Document already ready, initializing immediately', { component: ComponentType.CONTENT_SCRIPT })
   initializeContentScript()
 }
 
 async function initializeContentScript(): Promise<void> {
-  console.log('[LinguaTube] initializeContentScript called')
-  console.log('[LinguaTube] Current URL:', window.location.href)
+  moduleLogger.info('initializeContentScript called', { component: ComponentType.CONTENT_SCRIPT })
+  moduleLogger.debug('Current URL', { 
+    component: ComponentType.CONTENT_SCRIPT,
+    metadata: { url: window.location.href }
+  })
 
   try {
     // Only initialize on YouTube video pages
     if (!window.location.href.includes('youtube.com/watch')) {
-      console.log('[LinguaTube] Not a YouTube video page, skipping initialization')
-      console.log('[LinguaTube] Expected URL pattern: youtube.com/watch')
+      moduleLogger.info('Not a YouTube video page, skipping initialization', { component: ComponentType.CONTENT_SCRIPT })
+      moduleLogger.debug('Expected URL pattern: youtube.com/watch', { component: ComponentType.CONTENT_SCRIPT })
       return
     }
 
-    console.log('[LinguaTube] ✓ YouTube video page detected, proceeding with initialization')
+    moduleLogger.info('✓ YouTube video page detected, proceeding with initialization', { component: ComponentType.CONTENT_SCRIPT })
     contentScript = new LinguaTubeContentScript()
     await contentScript.initialize()
   } catch (error) {
-    console.error('[LinguaTube] Content script initialization failed:', error)
+    moduleLogger.error('Content script initialization failed', { component: ComponentType.CONTENT_SCRIPT }, error instanceof Error ? error : undefined)
   }
 }
 

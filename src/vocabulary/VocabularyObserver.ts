@@ -5,6 +5,8 @@
 
 import { VocabularyItem, StorageEventType, StorageEvent, storageService } from '../storage'
 import { vocabularyManager, VocabularyFilters } from './VocabularyManager'
+import { Logger } from '../logging/Logger'
+import { ComponentType } from '../logging/types'
 
 // ========================================
 // Vocabulary-Specific Event Types
@@ -118,6 +120,7 @@ export interface VocabularyUIComponent {
 
 export class VocabularyObserver {
   private static instance: VocabularyObserver | null = null
+  private readonly logger: Logger
 
   private eventListeners = new Map<VocabularyEventType, Set<VocabularyObserverCallback>>()
   private globalCallbacks = new Set<VocabularyObserverCallback>()
@@ -131,6 +134,7 @@ export class VocabularyObserver {
   private pendingEvents: VocabularyEvent[] = []
 
   private constructor() {
+    this.logger = Logger.getInstance()
     this.setupStorageEventListeners()
   }
 
@@ -164,9 +168,9 @@ export class VocabularyObserver {
       await this.updateStatistics()
 
       this.isInitialized = true
-      console.log('[VocabularyObserver] Initialized successfully')
+      this.logger.info('Initialized successfully', { component: ComponentType.WORD_LOOKUP })
     } catch (error) {
-      console.error('[VocabularyObserver] Initialization failed:', error)
+      this.logger.error('Initialization failed', { component: ComponentType.WORD_LOOKUP }, error instanceof Error ? error : undefined)
       throw error
     }
   }
@@ -269,7 +273,7 @@ export class VocabularyObserver {
     try {
       await Promise.all(refreshPromises)
     } catch (error) {
-      console.error('[VocabularyObserver] Component refresh failed:', error)
+      this.logger.error('Component refresh failed', { component: ComponentType.WORD_LOOKUP }, error instanceof Error ? error : undefined)
     }
   }
 
@@ -284,7 +288,10 @@ export class VocabularyObserver {
     try {
       await Promise.all(refreshPromises)
     } catch (error) {
-      console.error('[VocabularyObserver] Component refresh failed:', error)
+      this.logger.error('Component refresh by type failed', { 
+        component: ComponentType.WORD_LOOKUP,
+        metadata: { type }
+      }, error instanceof Error ? error : undefined)
     }
   }
 
@@ -309,7 +316,10 @@ export class VocabularyObserver {
           try {
             callback(event)
           } catch (error) {
-            console.error('[VocabularyObserver] Event listener error:', error)
+            this.logger.error('Event listener error', { 
+              component: ComponentType.WORD_LOOKUP,
+              metadata: { eventType: event.type }
+            }, error instanceof Error ? error : undefined)
           }
         })
       }
@@ -319,14 +329,20 @@ export class VocabularyObserver {
         try {
           callback(event)
         } catch (error) {
-          console.error('[VocabularyObserver] Global listener error:', error)
+          this.logger.error('Global listener error', { 
+            component: ComponentType.WORD_LOOKUP,
+            metadata: { eventType: event.type }
+          }, error instanceof Error ? error : undefined)
         }
       })
 
       // Update components
       this.notifyComponents(event)
     } catch (error) {
-      console.error('[VocabularyObserver] Event emission failed:', error)
+      this.logger.error('Event emission failed', { 
+        component: ComponentType.WORD_LOOKUP,
+        metadata: { eventType: event.type }
+      }, error instanceof Error ? error : undefined)
     }
   }
 
@@ -453,7 +469,7 @@ export class VocabularyObserver {
         source: 'system',
       })
     } catch (error) {
-      console.error('[VocabularyObserver] Statistics update failed:', error)
+      this.logger.error('Statistics update failed', { component: ComponentType.WORD_LOOKUP }, error instanceof Error ? error : undefined)
     }
   }
 
@@ -468,7 +484,7 @@ export class VocabularyObserver {
 
     // Update in background
     this.updateStatistics().catch((error) => {
-      console.error('[VocabularyObserver] Async statistics update failed:', error)
+      this.logger.error('Async statistics update failed', { component: ComponentType.WORD_LOOKUP }, error instanceof Error ? error : undefined)
     })
   }
 
@@ -521,7 +537,10 @@ export class VocabularyObserver {
         try {
           component.onVocabularyUpdate(event)
         } catch (error) {
-          console.error(`[VocabularyObserver] Component ${component.id} update failed:`, error)
+          this.logger.error('Component update failed', { 
+            component: ComponentType.WORD_LOOKUP,
+            metadata: { componentId: component.id, eventType: event.type }
+          }, error instanceof Error ? error : undefined)
         }
       }
     })

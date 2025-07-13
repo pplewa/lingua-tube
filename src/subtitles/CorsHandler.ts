@@ -4,6 +4,8 @@
  */
 
 import { SubtitleErrorCode, SubtitleFetchError, FetchConfig } from './types'
+import { Logger } from '../logging/Logger'
+import { ComponentType } from '../logging/types'
 
 /**
  * CORS handling strategy
@@ -54,6 +56,7 @@ export const DEFAULT_CORS_CONFIG: CorsConfig = {
  */
 export class CorsHandler {
   private readonly config: CorsConfig
+  private readonly logger = Logger.getInstance()
 
   constructor(config: Partial<CorsConfig> = {}) {
     this.config = { ...DEFAULT_CORS_CONFIG, ...config }
@@ -71,22 +74,48 @@ export class CorsHandler {
     options: Partial<FetchConfig> = {},
   ): Promise<CorsRequestResult> {
     const startTime = Date.now()
-    console.log(`[LinguaTube] Fetching with CORS handling: ${url}`)
+    this.logger.info('Fetching with CORS handling', {
+      component: ComponentType.SUBTITLE_MANAGER,
+      url,
+      metadata: { strategies: this.config.strategies }
+    })
 
     for (const strategy of this.config.strategies) {
       try {
-        console.log(`[LinguaTube] Trying CORS strategy: ${strategy}`)
+        this.logger.debug('Trying CORS strategy', {
+          component: ComponentType.SUBTITLE_MANAGER,
+          url,
+          metadata: { strategy }
+        })
 
         const result = await this.executeStrategy(strategy, url, options)
 
         if (result.success) {
           const duration = Date.now() - startTime
-          console.log(`[LinguaTube] Success with ${strategy} strategy (${duration}ms)`)
+          this.logger.info('CORS strategy succeeded', {
+            component: ComponentType.SUBTITLE_MANAGER,
+            url,
+            metadata: {
+              strategy,
+              duration,
+              statusCode: result.statusCode,
+              dataLength: result.data?.length
+            }
+          })
           return result
         }
 
         // Log failure but continue to next strategy
-        console.warn(`[LinguaTube] Strategy ${strategy} failed:`, result.error?.message)
+        this.logger.warn('CORS strategy failed', {
+          component: ComponentType.SUBTITLE_MANAGER,
+          url,
+          metadata: {
+            strategy,
+            errorCode: result.error?.code,
+            errorMessage: result.error?.message,
+            retryable: result.error?.retryable
+          }
+        })
 
         // If this was a CORS error and we should retry, continue
         if (result.error?.code === SubtitleErrorCode.CORS_ERROR && this.config.retryOnCorsError) {
@@ -95,11 +124,26 @@ export class CorsHandler {
 
         // For other errors that aren't retryable, break
         if (result.error && !result.error.retryable) {
-          console.log(`[LinguaTube] Non-retryable error, stopping strategy attempts`)
+          this.logger.info('Non-retryable error, stopping strategy attempts', {
+            component: ComponentType.SUBTITLE_MANAGER,
+            url,
+            metadata: {
+              strategy,
+              errorCode: result.error.code,
+              errorMessage: result.error.message
+            }
+          })
           return result
         }
       } catch (error) {
-        console.error(`[LinguaTube] Strategy ${strategy} threw error:`, error)
+        this.logger.error('CORS strategy threw error', {
+          component: ComponentType.SUBTITLE_MANAGER,
+          url,
+          metadata: {
+            strategy,
+            error: error instanceof Error ? error.message : String(error)
+          }
+        })
 
         // Continue to next strategy
         continue
@@ -108,7 +152,15 @@ export class CorsHandler {
 
     // All strategies failed
     const totalDuration = Date.now() - startTime
-    console.error(`[LinguaTube] All CORS strategies failed (${totalDuration}ms)`)
+    this.logger.error('All CORS strategies failed', {
+      component: ComponentType.SUBTITLE_MANAGER,
+      url,
+      metadata: {
+        totalDuration,
+        strategiesAttempted: this.config.strategies.length,
+        strategies: this.config.strategies
+      }
+    })
 
     return {
       success: false,

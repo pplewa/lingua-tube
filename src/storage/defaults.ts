@@ -11,6 +11,7 @@ import {
   VocabularySettings,
   UISettings,
   PrivacySettings,
+  DeveloperSettings,
   KeyboardShortcuts,
   StorageSchema,
   STORAGE_CONFIG,
@@ -108,6 +109,21 @@ export const DEFAULT_PRIVACY_SETTINGS: PrivacySettings = {
 }
 
 // ========================================
+// Default Developer Settings
+// ========================================
+
+export const DEFAULT_DEVELOPER_SETTINGS: DeveloperSettings = {
+  debugMode: false, // Disabled by default, auto-enabled in development
+  verboseLogging: false,
+  consoleTimestamps: true,
+  performanceProfiling: false,
+  memoryMonitoring: false,
+  consoleLogLevel: 'info',
+  enabledComponents: [], // All components enabled when empty
+  autoExportDebugData: false,
+}
+
+// ========================================
 // Complete Default User Settings
 // ========================================
 
@@ -119,6 +135,7 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   vocabulary: DEFAULT_VOCABULARY_SETTINGS,
   ui: DEFAULT_UI_SETTINGS,
   privacy: DEFAULT_PRIVACY_SETTINGS,
+  developer: DEFAULT_DEVELOPER_SETTINGS,
 }
 
 // ========================================
@@ -177,6 +194,10 @@ export const createDefaultSettings = (overrides: Partial<UserSettings> = {}): Us
       ...DEFAULT_USER_SETTINGS.privacy,
       ...overrides.privacy,
     },
+    developer: {
+      ...DEFAULT_USER_SETTINGS.developer,
+      ...overrides.developer,
+    },
   }
 }
 
@@ -195,7 +216,8 @@ export const validateUserSettings = (settings: unknown): settings is UserSetting
     typeof s.playback === 'object' &&
     typeof s.vocabulary === 'object' &&
     typeof s.ui === 'object' &&
-    typeof s.privacy === 'object'
+    typeof s.privacy === 'object' &&
+    typeof s.developer === 'object'
   )
 }
 

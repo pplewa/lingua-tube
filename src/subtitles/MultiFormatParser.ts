@@ -12,6 +12,8 @@ import {
   DEFAULT_PARSER_CONFIG,
 } from './types'
 import { YouTubeXMLParser } from './XmlParser'
+import { Logger } from '../logging/Logger'
+import { ComponentType } from '../logging/types'
 
 /**
  * VTT Cue data structure
@@ -49,10 +51,19 @@ export class MultiFormatSubtitleParser {
     content: string,
     config: Partial<ParserConfig> = DEFAULT_PARSER_CONFIG,
   ): ParseResult {
+    const logger = Logger.getInstance()
     const startTime = performance.now()
 
     try {
-      console.log('[LinguaTube] Starting multi-format subtitle parsing...')
+      logger.info('Starting multi-format subtitle parsing', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {
+          contentLength: content.length,
+          encoding: config.encoding,
+          strict: config.strict,
+          mergeSegments: config.mergeSegments
+        }
+      })
 
       // Validate input
       if (!content || typeof content !== 'string') {
@@ -67,7 +78,13 @@ export class MultiFormatSubtitleParser {
 
       // Detect format
       const format = this.detectFormat(content)
-      console.log(`[LinguaTube] Detected subtitle format: ${format}`)
+      logger.info('Detected subtitle format', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {
+          format,
+          contentLength: content.length
+        }
+      })
 
       // Build complete parser config
       const fullConfig: ParserConfig = {
@@ -105,7 +122,16 @@ export class MultiFormatSubtitleParser {
       }
 
       const parseTime = performance.now() - startTime
-      console.log(`[LinguaTube] Multi-format parsing completed in ${parseTime.toFixed(2)}ms`)
+      logger.info('Multi-format parsing completed', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {
+          parseTime: parseTime.toFixed(2),
+          format,
+          success: result.success,
+          segmentCount: result.success ? (result.segments?.length || 0) : 0,
+          errorCount: result.errors?.length || 0
+        }
+      })
 
       // Add format information to result
       if (result.success && result.metadata) {
@@ -115,7 +141,13 @@ export class MultiFormatSubtitleParser {
 
       return result
     } catch (error) {
-      console.error('[LinguaTube] Multi-format parsing failed:', error)
+      logger.error('Multi-format parsing failed', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {
+          contentLength: content.length,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      })
 
       return this.createErrorResult([
         {
@@ -206,11 +238,18 @@ export class MultiFormatSubtitleParser {
    * Parse WebVTT format
    */
   private static parseVTT(content: string, config: ParserConfig): ParseResult {
+    const logger = Logger.getInstance()
     const errors: ParseError[] = []
     const segments: SubtitleSegment[] = []
 
     try {
-      console.log('[LinguaTube] Parsing VTT/WebVTT format...')
+      logger.info('Parsing VTT/WebVTT format', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {
+          contentLength: content.length,
+          preserveFormatting: config.preserveFormatting
+        }
+      })
 
       const lines = content.split(/\r?\n/)
       let currentCue: Partial<VTTCue> = {}
@@ -300,7 +339,13 @@ export class MultiFormatSubtitleParser {
         }
       }
 
-      console.log(`[LinguaTube] VTT parsing completed: ${segments.length} segments`)
+      logger.info('VTT parsing completed', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {
+          segmentCount: segments.length,
+          errorCount: errors.length
+        }
+      })
 
       return {
         success: true,
@@ -317,7 +362,13 @@ export class MultiFormatSubtitleParser {
         errors: errors.length > 0 ? errors : undefined,
       }
     } catch (error) {
-      console.error('[LinguaTube] VTT parsing failed:', error)
+      logger.error('VTT parsing failed', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {
+          contentLength: content.length,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      })
 
       errors.push({
         message: `VTT parsing error: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -420,11 +471,18 @@ export class MultiFormatSubtitleParser {
    * Parse SRT format
    */
   private static parseSRT(content: string, config: ParserConfig): ParseResult {
+    const logger = Logger.getInstance()
     const errors: ParseError[] = []
     const segments: SubtitleSegment[] = []
 
     try {
-      console.log('[LinguaTube] Parsing SRT format...')
+      logger.info('Parsing SRT format', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {
+          contentLength: content.length,
+          preserveFormatting: config.preserveFormatting
+        }
+      })
 
       // Split into entries (separated by double newlines)
       const entries = content.split(/\r?\n\r?\n/).filter((entry) => entry.trim() !== '')
@@ -445,7 +503,14 @@ export class MultiFormatSubtitleParser {
         }
       }
 
-      console.log(`[LinguaTube] SRT parsing completed: ${segments.length} segments`)
+      logger.info('SRT parsing completed', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {
+          segmentCount: segments.length,
+          errorCount: errors.length,
+          entriesProcessed: entries.length
+        }
+      })
 
       return {
         success: true,
@@ -462,7 +527,13 @@ export class MultiFormatSubtitleParser {
         errors: errors.length > 0 ? errors : undefined,
       }
     } catch (error) {
-      console.error('[LinguaTube] SRT parsing failed:', error)
+      logger.error('SRT parsing failed', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {
+          contentLength: content.length,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      })
 
       errors.push({
         message: `SRT parsing error: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -555,11 +626,18 @@ export class MultiFormatSubtitleParser {
    * Parse generic text format (fallback)
    */
   private static parseGenericText(content: string, config: ParserConfig): ParseResult {
+    const logger = Logger.getInstance()
     const errors: ParseError[] = []
     const segments: SubtitleSegment[] = []
 
     try {
-      console.log('[LinguaTube] Parsing as generic text format...')
+      logger.info('Parsing as generic text format', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {
+          contentLength: content.length,
+          preserveFormatting: config.preserveFormatting
+        }
+      })
 
       // Split into lines and group into segments
       const lines = content.split(/\r?\n/).filter((line) => line.trim() !== '')
@@ -579,7 +657,14 @@ export class MultiFormatSubtitleParser {
         })
       }
 
-      console.log(`[LinguaTube] Generic text parsing completed: ${segments.length} segments`)
+      logger.info('Generic text parsing completed', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {
+          segmentCount: segments.length,
+          errorCount: errors.length,
+          linesProcessed: lines.length
+        }
+      })
 
       return {
         success: true,
@@ -596,7 +681,13 @@ export class MultiFormatSubtitleParser {
         errors: errors.length > 0 ? errors : undefined,
       }
     } catch (error) {
-      console.error('[LinguaTube] Generic text parsing failed:', error)
+      logger.error('Generic text parsing failed', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {
+          contentLength: content.length,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      })
 
       errors.push({
         message: `Text parsing error: ${error instanceof Error ? error.message : 'Unknown error'}`,

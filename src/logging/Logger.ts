@@ -31,6 +31,16 @@ import {
   PerformanceMeasurement,
   PerformanceAnalytics,
 } from './PerformanceMonitor'
+import { ErrorNotificationService, NotificationType } from './ErrorNotificationService'
+import { RateLimitingService, createRateLimitingServiceFromConfig } from './RateLimitingService'
+import type { RateLimitStats, DeduplicationStats } from './RateLimitingService'
+import { DebugModeService, createDebugModeService } from './DebugModeService'
+import { GracefulDegradationService } from './GracefulDegradationService'
+import type { FeatureState, SystemHealth, FeatureStatus } from './GracefulDegradationService'
+import { ErrorRecoveryService, RecoveryResult } from './ErrorRecoveryService'
+import type { RecoveryStats } from './ErrorRecoveryService'
+import { ConsoleLoggingService, createConsoleLoggingService } from './ConsoleLoggingService'
+import type { ConsoleLoggingConfig, ConsolePerformanceStats } from './ConsoleLoggingService'
 
 /**
  * Centralized Logger Service for Chrome Extension
@@ -40,8 +50,6 @@ export class Logger {
   private static instance: Logger | null = null
   private config: LoggerConfig
   private logQueue: LogEntry[] = []
-  private rateLimitTracker: Map<string, number[]> = new Map()
-  private deduplicationCache: Map<string, { count: number; lastSeen: number }> = new Map()
   private performanceMarks: Map<string, number> = new Map()
   private batchTimer: number | null = null
   private isBackground: boolean
@@ -49,6 +57,12 @@ export class Logger {
   private extensionVersion: string
   private stackTraceProcessor: StackTraceProcessor
   private performanceMonitor: PerformanceMonitor | null
+  private notificationService: ErrorNotificationService | null
+  private rateLimitingService: RateLimitingService | null
+  private debugModeService: DebugModeService | null
+  private gracefulDegradationService: GracefulDegradationService | null
+  private errorRecoveryService: ErrorRecoveryService | null
+  private consoleLoggingService: ConsoleLoggingService | null
 
   private constructor(config?: Partial<LoggerConfig>) {
     this.config = { ...DEFAULT_LOGGER_CONFIG, ...config }
@@ -58,6 +72,18 @@ export class Logger {
     this.stackTraceProcessor = StackTraceProcessor.getInstance()
     // Initialize PerformanceMonitor lazily to avoid circular dependency
     this.performanceMonitor = null
+    // Initialize ErrorNotificationService lazily to avoid circular dependency
+    this.notificationService = null
+    // Initialize RateLimitingService
+    this.rateLimitingService = createRateLimitingServiceFromConfig(this.config)
+    // Initialize DebugModeService
+    this.debugModeService = createDebugModeService(this.config)
+    // Initialize GracefulDegradationService
+    this.gracefulDegradationService = GracefulDegradationService.getInstance()
+    // Initialize ErrorRecoveryService
+    this.errorRecoveryService = ErrorRecoveryService.getInstance()
+    // Initialize ConsoleLoggingService
+    this.consoleLoggingService = createConsoleLoggingService()
 
     this.initialize()
   }
@@ -80,6 +106,22 @@ export class Logger {
       this.performanceMonitor = PerformanceMonitor.getInstance()
     }
     return this.performanceMonitor
+  }
+
+  /**
+   * Lazy initialization of ErrorNotificationService to avoid circular dependency
+   */
+  private ensureNotificationService(): ErrorNotificationService {
+    if (!this.notificationService) {
+      this.notificationService = ErrorNotificationService.getInstance()
+      // Initialize the service if we're in a content script or popup context
+      if (!this.isBackground) {
+        this.notificationService.initialize().catch((error) => {
+          console.error('[Logger] Failed to initialize notification service:', error)
+        })
+      }
+    }
+    return this.notificationService
   }
 
   /**
@@ -226,6 +268,53 @@ export class Logger {
         severity: this.determineSeverityFromTrace(processedTrace),
         recoverable: this.isRecoverableError(error, processedTrace),
       }
+
+      // Attempt error recovery before triggering graceful degradation
+      if (this.errorRecoveryService && context.component && enhancedContext.errorType && enhancedContext.severity) {
+        const componentType = context.component
+        this.errorRecoveryService.attemptRecovery(
+          error, 
+          componentType, 
+          enhancedContext.errorType, 
+          enhancedContext.severity,
+          context.metadata
+        ).then((recoveryResult) => {
+          if (recoveryResult === RecoveryResult.SUCCESS || recoveryResult === RecoveryResult.PARTIAL_SUCCESS) {
+            this.log(LogLevel.INFO, `Error recovery succeeded for ${componentType}: ${recoveryResult}`)
+          } else {
+            // If recovery failed, report to graceful degradation service
+            if (this.gracefulDegradationService) {
+              const featureName = this.mapComponentToFeatureName(componentType)
+              if (featureName && enhancedContext.severity !== ErrorSeverity.LOW) {
+                this.gracefulDegradationService.reportFeatureFailure(featureName, error, {
+                  severity: enhancedContext.severity,
+                  userImpact: enhancedContext.severity === ErrorSeverity.CRITICAL ? 'critical' : 
+                             enhancedContext.severity === ErrorSeverity.HIGH ? 'high' : 'medium'
+                }).catch((degradationError) => {
+                  console.error('[Logger] Failed to report feature failure:', degradationError)
+                })
+              }
+            }
+          }
+        }).catch((recoveryError) => {
+          console.error('[Logger] Error recovery attempt failed:', recoveryError)
+          
+          // Still report to graceful degradation service as fallback
+          if (this.gracefulDegradationService) {
+            const featureName = this.mapComponentToFeatureName(componentType)
+            if (featureName && enhancedContext.severity !== ErrorSeverity.LOW) {
+              this.gracefulDegradationService.reportFeatureFailure(featureName, error, {
+                severity: enhancedContext.severity,
+                userImpact: enhancedContext.severity === ErrorSeverity.CRITICAL ? 'critical' : 
+                           enhancedContext.severity === ErrorSeverity.HIGH ? 'high' : 'medium'
+              }).catch((degradationError) => {
+                console.error('[Logger] Failed to report feature failure:', degradationError)
+              })
+            }
+          }
+        })
+      }
+
       this.log(LogLevel.ERROR, message, enhancedContext)
     } else {
       this.log(LogLevel.ERROR, message, context)
@@ -246,6 +335,20 @@ export class Logger {
         severity: ErrorSeverity.CRITICAL,
         recoverable: false,
       }
+
+      // Always report critical errors to graceful degradation service
+      if (this.gracefulDegradationService && context.component) {
+        const featureName = this.mapComponentToFeatureName(context.component)
+        if (featureName) {
+          this.gracefulDegradationService.reportFeatureFailure(featureName, error, {
+            severity: ErrorSeverity.CRITICAL,
+            userImpact: 'critical'
+          }).catch((degradationError) => {
+            console.error('[Logger] Failed to report critical feature failure:', degradationError)
+          })
+        }
+      }
+
       this.log(LogLevel.CRITICAL, message, enhancedContext)
     } else {
       this.log(LogLevel.CRITICAL, message, context)
@@ -489,12 +592,26 @@ export class Logger {
     }
 
     // Deduplication check
-    if (!this.checkDeduplication(entry)) {
+    const dedupResult = this.checkDeduplication(entry)
+    if (!dedupResult.shouldLog) {
       return
     }
 
+    // Use modified entry if available (for deduplication messages)
+    const finalEntry = dedupResult.modifiedEntry || entry
+
+    // Process with debug mode service
+    if (this.debugModeService && this.config.debugMode) {
+      this.debugModeService.processLogEntry(finalEntry)
+    }
+
+    // Show user notification for error conditions (only in content script/popup contexts)
+    if (!this.isBackground && this.config.enableErrorReporting) {
+      this.showUserNotificationIfNeeded(finalEntry)
+    }
+
     // Add to queue
-    this.logQueue.push(entry)
+    this.logQueue.push(finalEntry)
 
     // Console logging
     if (this.config.enableConsole) {
@@ -537,67 +654,72 @@ export class Logger {
    * Check rate limiting
    */
   private checkRateLimit(entry: LogEntry): boolean {
-    if (!this.config.rateLimiting.enabled) return true
-
-    const key = `${entry.context.component}:${entry.level}`
-    const now = Date.now()
-    const windowMs = 1000 // 1 second window
-
-    let timestamps = this.rateLimitTracker.get(key) || []
-    timestamps = timestamps.filter((ts) => now - ts < windowMs)
-
-    if (timestamps.length >= this.config.rateLimiting.maxLogsPerSecond) {
-      return false
-    }
-
-    timestamps.push(now)
-    this.rateLimitTracker.set(key, timestamps)
-    return true
+    if (!this.rateLimitingService) return true
+    return this.rateLimitingService.checkRateLimit(entry)
   }
 
   /**
-   * Check deduplication
+   * Show user notification if conditions are met
    */
-  private checkDeduplication(entry: LogEntry): boolean {
-    if (!this.config.deduplication.enabled || !entry.fingerprint) return true
-
-    const now = Date.now()
-    const cached = this.deduplicationCache.get(entry.fingerprint)
-
-    if (cached && now - cached.lastSeen < this.config.deduplication.windowMs) {
-      if (cached.count >= this.config.deduplication.maxDuplicates) {
-        return false
-      }
-      cached.count++
-      cached.lastSeen = now
-      return false // Skip this duplicate but update count
+  private showUserNotificationIfNeeded(entry: LogEntry): void {
+    try {
+      const notificationService = this.ensureNotificationService()
+      notificationService.showFromLogEntry(entry).catch((error) => {
+        // Don't log notification errors to avoid infinite loops
+        console.error('[Logger] Failed to show user notification:', error)
+      })
+    } catch (error) {
+      // Silently handle notification service errors
+      console.error('[Logger] Notification service error:', error)
     }
+  }
 
-    this.deduplicationCache.set(entry.fingerprint, { count: 1, lastSeen: now })
-    return true
+  /**
+   * Check deduplication and return result with potentially modified entry
+   */
+  private checkDeduplication(entry: LogEntry): { shouldLog: boolean; modifiedEntry?: LogEntry } {
+    if (!this.rateLimitingService) return { shouldLog: true }
+    
+    const result = this.rateLimitingService.checkDeduplication(entry)
+    
+    // Create a modified entry if we have deduplication info
+    if (result.dedupInfo && result.shouldLog && result.dedupInfo.count > 1) {
+      const modifiedEntry: LogEntry = {
+        ...entry,
+        message: result.dedupInfo.message,
+      }
+      return { shouldLog: result.shouldLog, modifiedEntry }
+    }
+    
+    return { shouldLog: result.shouldLog }
   }
 
   /**
    * Log to console with appropriate method
    */
   private logToConsole(entry: LogEntry): void {
-    const prefix = `[${entry.context.component}]`
-    const message = `${prefix} ${entry.message}`
+    if (this.consoleLoggingService) {
+      this.consoleLoggingService.processLogEntry(entry)
+    } else {
+      // Fallback to basic console output
+      const prefix = `[${entry.context.component}]`
+      const message = `${prefix} ${entry.message}`
 
-    switch (entry.level) {
-      case LogLevel.DEBUG:
-        console.debug(message, entry.context)
-        break
-      case LogLevel.INFO:
-        console.info(message, entry.context)
-        break
-      case LogLevel.WARN:
-        console.warn(message, entry.context)
-        break
-      case LogLevel.ERROR:
-      case LogLevel.CRITICAL:
-        console.error(message, entry.context, entry.error)
-        break
+      switch (entry.level) {
+        case LogLevel.DEBUG:
+          console.debug(message, entry.context)
+          break
+        case LogLevel.INFO:
+          console.info(message, entry.context)
+          break
+        case LogLevel.WARN:
+          console.warn(message, entry.context)
+          break
+        case LogLevel.ERROR:
+        case LogLevel.CRITICAL:
+          console.error(message, entry.context, entry.error)
+          break
+      }
     }
   }
 
@@ -1008,6 +1130,323 @@ export class Logger {
   }
 
   /**
+   * Map component type to graceful degradation feature name
+   */
+  private mapComponentToFeatureName(component: ComponentType): string | null {
+    switch (component) {
+      case ComponentType.TRANSLATION_SERVICE:
+        return 'translation'
+      case ComponentType.SUBTITLE_MANAGER:
+        return 'subtitles'
+      case ComponentType.DICTIONARY_SERVICE:
+        return 'dictionary'
+      case ComponentType.TTS_SERVICE:
+        return 'tts'
+      case ComponentType.STORAGE_SERVICE:
+        return 'storage'
+      case ComponentType.YOUTUBE_INTEGRATION:
+        return 'youtube'
+      default:
+        return null
+    }
+  }
+
+  /**
+   * Get rate limiting statistics
+   */
+  public getRateLimitingStats(): RateLimitStats | null {
+    if (!this.rateLimitingService) return null
+    return this.rateLimitingService.getRateLimitStats()
+  }
+
+  /**
+   * Get deduplication statistics
+   */
+  public getDeduplicationStats(): DeduplicationStats | null {
+    if (!this.rateLimitingService) return null
+    return this.rateLimitingService.getDeduplicationStats()
+  }
+
+  /**
+   * Reset rate limiting and deduplication statistics
+   */
+  public resetRateLimitingStats(): void {
+    if (this.rateLimitingService) {
+      this.rateLimitingService.reset()
+    }
+  }
+
+  /**
+   * Update rate limiting and deduplication configuration
+   */
+  public updateRateLimitingConfig(config: {
+    rateLimiting?: Partial<import('./RateLimitingService').RateLimitConfig>
+    deduplication?: Partial<import('./RateLimitingService').DeduplicationConfig>
+  }): void {
+    if (this.rateLimitingService) {
+      this.rateLimitingService.updateConfig(config.rateLimiting, config.deduplication)
+    }
+  }
+
+  /**
+   * Check if debug mode is enabled
+   */
+  public isDebugModeEnabled(): boolean {
+    return this.debugModeService ? this.debugModeService.isEnabled() : false
+  }
+
+  /**
+   * Get debug mode statistics
+   */
+  public getDebugStats(): import('./DebugModeService').DebugStats | null {
+    return this.debugModeService ? this.debugModeService.getStats() : null
+  }
+
+  /**
+   * Update debug mode configuration
+   */
+  public updateDebugModeConfig(config: Partial<import('./DebugModeService').DebugModeConfig>): void {
+    if (this.debugModeService) {
+      this.debugModeService.updateConfig(config)
+    }
+  }
+
+  /**
+   * Export debug data for analysis
+   */
+  public exportDebugData(): string | null {
+    return this.debugModeService ? this.debugModeService.exportDebugData() : null
+  }
+
+  /**
+   * Get system health overview from graceful degradation service
+   */
+  public getSystemHealth(): SystemHealth | null {
+    return this.gracefulDegradationService ? this.gracefulDegradationService.getSystemHealth() : null
+  }
+
+  /**
+   * Get feature status from graceful degradation service
+   */
+  public getFeatureStatus(featureName?: string): FeatureStatus | FeatureStatus[] | null {
+    if (!this.gracefulDegradationService) return null
+    try {
+      return this.gracefulDegradationService.getFeatureStatus(featureName)
+    } catch (error) {
+      console.error('[Logger] Failed to get feature status:', error)
+      return null
+    }
+  }
+
+  /**
+   * Attempt to recover a specific feature
+   */
+  public async attemptFeatureRecovery(featureName: string): Promise<boolean> {
+    if (!this.gracefulDegradationService) return false
+    try {
+      return await this.gracefulDegradationService.attemptFeatureRecovery(featureName)
+    } catch (error) {
+      console.error('[Logger] Failed to attempt feature recovery:', error)
+      return false
+    }
+  }
+
+  /**
+   * Get degradation event history
+   */
+  public getDegradationHistory(featureName?: string, limit?: number): import('./GracefulDegradationService').DegradationEvent[] {
+    if (!this.gracefulDegradationService) return []
+    return this.gracefulDegradationService.getDegradationHistory(featureName, limit)
+  }
+
+  /**
+   * Get error recovery statistics
+   */
+  public getRecoveryStats(): RecoveryStats | null {
+    return this.errorRecoveryService ? this.errorRecoveryService.getStats() : null
+  }
+
+  /**
+   * Get error recovery history
+   */
+  public getRecoveryHistory(component?: ComponentType, limit?: number): import('./ErrorRecoveryService').RecoveryAttempt[] {
+    if (!this.errorRecoveryService) return []
+    return this.errorRecoveryService.getHistory(component, limit)
+  }
+
+  /**
+   * Check if a component is currently being recovered
+   */
+  public isComponentRecovering(component: ComponentType): boolean {
+    return this.errorRecoveryService ? this.errorRecoveryService.isRecovering(component) : false
+  }
+
+  /**
+   * Update error recovery configuration
+   */
+  public updateRecoveryConfig(config: Partial<import('./ErrorRecoveryService').RecoveryConfig>): void {
+    if (this.errorRecoveryService) {
+      this.errorRecoveryService.updateConfig(config)
+    }
+  }
+
+  /**
+   * Get console logging configuration
+   */
+  public getConsoleLoggingConfig(): ConsoleLoggingConfig | null {
+    return this.consoleLoggingService?.getConfig() || null
+  }
+
+  /**
+   * Update console logging configuration
+   */
+  public updateConsoleLoggingConfig(config: Partial<ConsoleLoggingConfig>): void {
+    if (this.consoleLoggingService) {
+      this.consoleLoggingService.updateConfig(config)
+    }
+  }
+
+  /**
+   * Get console logging performance statistics
+   */
+  public getConsoleLoggingStats(): ConsolePerformanceStats | null {
+    return this.consoleLoggingService?.getStats() || null
+  }
+
+  /**
+   * Reset console logging statistics
+   */
+  public resetConsoleLoggingStats(): void {
+    if (this.consoleLoggingService) {
+      this.consoleLoggingService.resetStats()
+    }
+  }
+
+  /**
+   * Enable or disable console logging
+   */
+  public setConsoleLoggingEnabled(enabled: boolean): void {
+    if (this.consoleLoggingService) {
+      this.consoleLoggingService.setEnabled(enabled)
+    }
+  }
+
+  /**
+   * Set console log level filtering
+   */
+  public setConsoleLogLevels(levels: LogLevel[]): void {
+    if (this.consoleLoggingService) {
+      this.consoleLoggingService.setEnabledLevels(levels)
+    }
+  }
+
+  /**
+   * Set console component filtering
+   */
+  public setConsoleLogComponents(components: ComponentType[]): void {
+    if (this.consoleLoggingService) {
+      this.consoleLoggingService.setEnabledComponents(components)
+    }
+  }
+
+  /**
+   * Set silent components (suppress console output)
+   */
+  public setSilentComponents(components: ComponentType[]): void {
+    if (this.consoleLoggingService) {
+      this.consoleLoggingService.setSilentComponents(components)
+    }
+  }
+
+  /**
+   * Clear console groups
+   */
+  public clearConsoleGroups(): void {
+    if (this.consoleLoggingService) {
+      this.consoleLoggingService.clearGroups()
+    }
+  }
+
+  /**
+   * Export console logs and statistics
+   */
+  public exportConsoleLogsData(): string | null {
+    return this.consoleLoggingService?.exportLogs() || null
+  }
+
+  /**
+   * Manually show user notification for custom error scenarios
+   */
+  public async showUserNotification(
+    title: string,
+    message: string,
+    severity: ErrorSeverity = ErrorSeverity.MEDIUM,
+    component: ComponentType,
+    options?: {
+      guidance?: string
+      actionLabel?: string
+      action?: () => Promise<void>
+      duration?: number
+    }
+  ): Promise<string | null> {
+    if (this.isBackground) {
+      return null // Only show notifications in content script/popup contexts
+    }
+
+    try {
+      const notificationService = this.ensureNotificationService()
+      const notificationId = `manual-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      
+      // We need to access private methods, so we'll create a simple notification manually
+      // This is a simplified version for manual notifications
+             await notificationService.show({
+         id: notificationId,
+         type: severity === ErrorSeverity.CRITICAL ? NotificationType.POPUP : NotificationType.TOAST,
+         severity,
+         title,
+         message,
+         component,
+         actions: options?.action ? [{
+           label: options.actionLabel || 'Action',
+           type: 'primary',
+           action: options.action
+         }] : [{
+           label: 'Dismiss',
+           type: 'secondary',
+           action: async () => {
+             await notificationService.hide(notificationId)
+           }
+         }],
+         duration: options?.duration || (severity === ErrorSeverity.CRITICAL ? 0 : 5000),
+         dismissible: true,
+         config: {
+           type: severity === ErrorSeverity.CRITICAL ? NotificationType.POPUP : NotificationType.TOAST,
+           position: 'top-right',
+           duration: options?.duration || (severity === ErrorSeverity.CRITICAL ? 0 : 5000),
+           dismissible: true,
+           autoHide: severity !== ErrorSeverity.CRITICAL,
+           showProgress: true,
+           allowMultiple: true,
+           stackable: true,
+           maxStack: 5,
+           animationDuration: 300,
+           theme: 'auto',
+         },
+         retryable: false,
+         retryCount: 0,
+         maxRetries: 0,
+         timestamp: Date.now(),
+         context: options?.guidance ? { guidance: options.guidance } : undefined,
+       })
+
+      return notificationId
+    } catch (error) {
+      console.error('[Logger] Failed to show manual notification:', error)
+      return null
+    }
+  }
+
+  /**
    * Destroy logger instance
    */
   public destroy(): void {
@@ -1021,15 +1460,44 @@ export class Logger {
       this.flushLogs()
     }
 
+    // Clean up notification service
+    if (this.notificationService) {
+      this.notificationService.destroy()
+      this.notificationService = null
+    }
+
     // Clean up resources
     this.logQueue = []
-    this.rateLimitTracker.clear()
-    this.deduplicationCache.clear()
     this.performanceMarks.clear()
 
     // Clean up PerformanceMonitor
     if (this.performanceMonitor) {
       this.performanceMonitor.destroy()
+    }
+
+    // Clean up RateLimitingService
+    if (this.rateLimitingService) {
+      this.rateLimitingService.destroy()
+    }
+
+    // Clean up DebugModeService
+    if (this.debugModeService) {
+      this.debugModeService.destroy()
+    }
+
+    // Clean up GracefulDegradationService
+    if (this.gracefulDegradationService) {
+      this.gracefulDegradationService.destroy()
+    }
+
+    // Clean up ErrorRecoveryService
+    if (this.errorRecoveryService) {
+      this.errorRecoveryService.destroy()
+    }
+
+    // Clean up ConsoleLoggingService
+    if (this.consoleLoggingService) {
+      this.consoleLoggingService.destroy()
     }
 
     Logger.instance = null

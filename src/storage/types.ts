@@ -42,6 +42,7 @@ export interface UserSettings {
   readonly vocabulary: VocabularySettings
   readonly ui: UISettings
   readonly privacy: PrivacySettings
+  readonly developer: DeveloperSettings
 }
 
 /**
@@ -126,6 +127,20 @@ export interface PrivacySettings {
   readonly maxCacheSize: number // MB
   readonly autoDeleteOldData: boolean
   readonly dataRetentionDays: number
+}
+
+/**
+ * Developer and debug settings
+ */
+export interface DeveloperSettings {
+  readonly debugMode: boolean
+  readonly verboseLogging: boolean
+  readonly consoleTimestamps: boolean
+  readonly performanceProfiling: boolean
+  readonly memoryMonitoring: boolean
+  readonly consoleLogLevel: 'debug' | 'info' | 'warn' | 'error' | 'critical'
+  readonly enabledComponents: string[]
+  readonly autoExportDebugData: boolean
 }
 
 // ========================================

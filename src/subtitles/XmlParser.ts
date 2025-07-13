@@ -13,6 +13,8 @@ import {
   SubtitleStyling,
   SubtitlePosition,
 } from './types'
+import { Logger } from '../logging/Logger'
+import { ComponentType } from '../logging/types'
 
 /**
  * Raw XML element structure for YouTube subtitles
@@ -45,11 +47,19 @@ export class YouTubeXMLParser {
    * Parse YouTube XML subtitle content
    */
   static parseXML(content: string, config: ParserConfig): ParseResult {
+    const logger = Logger.getInstance()
     const startTime = performance.now()
     const errors: ParseError[] = []
 
     try {
-      console.log('[LinguaTube] Parsing XML subtitle content...')
+      logger.info('Parsing XML subtitle content', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {
+          contentLength: content.length,
+          configMaxSegmentGap: config.maxSegmentGap,
+          preserveFormatting: config.preserveFormatting
+        }
+      })
 
       // Validate and clean content
       const cleanedContent = this.preprocessXML(content)
@@ -65,7 +75,13 @@ export class YouTubeXMLParser {
 
       // Detect specific YouTube XML format
       const detectedFormat = this.detectYouTubeFormat(cleanedContent)
-      console.log(`[LinguaTube] Detected YouTube format: ${detectedFormat}`)
+      logger.info('Detected YouTube XML format', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {
+          format: detectedFormat,
+          contentLength: cleanedContent.length
+        }
+      })
 
       // Parse based on detected format
       let segments: SubtitleSegment[]
@@ -90,9 +106,17 @@ export class YouTubeXMLParser {
       segments = this.postProcessSegments(segments, config)
 
       const parseTime = performance.now() - startTime
-      console.log(
-        `[LinguaTube] XML parsing completed: ${segments.length} segments in ${parseTime.toFixed(2)}ms`,
-      )
+      logger.info('XML parsing completed successfully', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {
+          segmentCount: segments.length,
+          parseTime: parseTime.toFixed(2),
+          format: detectedFormat,
+          errorsCount: errors.length,
+          averageSegmentDuration: segments.length > 0 ? 
+            (segments.reduce((sum, s) => sum + (s.endTime - s.startTime), 0) / segments.length).toFixed(2) : 0
+        }
+      })
 
       return {
         success: true,
@@ -109,7 +133,13 @@ export class YouTubeXMLParser {
         errors: errors.length > 0 ? errors : undefined,
       }
     } catch (error) {
-      console.error('[LinguaTube] XML parsing failed:', error)
+      logger.error('XML parsing failed', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {
+          contentLength: content.length,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      })
 
       const parseError: ParseError = {
         message: error instanceof Error ? error.message : 'Unknown parsing error',
