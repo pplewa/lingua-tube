@@ -557,7 +557,6 @@ class LinguaTubeContentScript {
         const textElements: any[] = (await response.json())?.events ?? [];
         const nativeTextElements: any[] = (await nativeResponse.json())?.events ?? [];
         const cues: any[] = [];
-        const nativeCues: any[] = [];
         this.logger?.info('Found text elements', {
           component: ComponentType.CONTENT_SCRIPT,
           metadata: { textElementsCount: textElements.length },
@@ -566,9 +565,23 @@ class LinguaTubeContentScript {
         textElements.forEach((element, index) => {
           const start = element.tStartMs;
           const dur = element.dDurationMs;
-          const text = element.segs?.[0]?.utf8?.trim() || '';
+          const text =
+            element?.segs
+              ?.reduce((reducer: string, e: any) => {
+                reducer = `${reducer}${e.utf8}`;
+                return reducer;
+              }, '')
+              .trim() || '';
           const nativeText =
-            nativeTextElements.find((e) => e.tStartMs === start)?.segs?.[0]?.utf8?.trim() || '';
+            nativeTrack.baseUrl === track.baseUrl
+              ? ''
+              : nativeTextElements
+                  .find((e) => e.tStartMs === start)
+                  ?.segs?.reduce((reducer: string, e: any) => {
+                    reducer = `${reducer}${e.utf8}`;
+                    return reducer;
+                  }, '')
+                  .trim() || '';
 
           if (text) {
             cues.push({
