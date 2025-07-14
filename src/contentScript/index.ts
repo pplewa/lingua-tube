@@ -19,7 +19,9 @@ import { WordLookupPopup } from '../ui/WordLookupPopup';
 import { DictionaryApiService } from '../translation/DictionaryApiService';
 import { TTSService } from '../translation/TTSService';
 
-console.log('[LinguaTube] All imports loaded successfully');
+Logger.getInstance()?.info('All imports loaded successfully', {
+  component: ComponentType.CONTENT_SCRIPT,
+});
 
 // ========================================
 // Content Script State
@@ -29,7 +31,6 @@ interface ContentScriptState {
   isInitialized: boolean;
   currentVideoId: string | null;
   captionObserverCleanup?: () => void;
-  currentDOMTrack?: any;
   components: {
     subtitleManager: DualSubtitleManager | null;
     vocabularyManager: VocabularyManager | null;
@@ -48,15 +49,17 @@ interface ContentScriptState {
 // ========================================
 
 class LinguaTubeContentScript {
-  private logger: Logger;
+  private logger: Logger | null = null;
   private state: ContentScriptState;
   private isDestroyed = false;
   private retryTimeout: number | null = null;
   private initializationAttempts = 0;
 
   constructor() {
-    console.log('[LinguaTube] Creating LinguaTubeContentScript instance');
     this.logger = Logger.getInstance();
+    this.logger?.info('Creating LinguaTubeContentScript instance', {
+      component: ComponentType.CONTENT_SCRIPT,
+    });
     this.state = {
       isInitialized: false,
       currentVideoId: null,
@@ -69,18 +72,20 @@ class LinguaTubeContentScript {
         translationService: null,
         wordLookupPopup: null,
         dictionaryService: null,
-        ttsService: null
-      }
+        ttsService: null,
+      },
     };
 
-    console.log('[LinguaTube] LinguaTubeContentScript constructor completed');
-    this.logger.info('LinguaTube Content Script starting', {
+    this.logger?.info('LinguaTubeContentScript constructor completed', {
+      component: ComponentType.CONTENT_SCRIPT,
+    });
+    this.logger?.info('LinguaTube Content Script starting', {
       component: ComponentType.CONTENT_SCRIPT,
       action: 'constructor',
       metadata: {
         url: window.location.href,
-        timestamp: Date.now()
-      }
+        timestamp: Date.now(),
+      },
     });
   }
 
@@ -89,71 +94,95 @@ class LinguaTubeContentScript {
   // ========================================
 
   public async initialize(): Promise<boolean> {
-    console.log('[LinguaTube] Starting initialization...');
+    this.logger?.info('Starting initialization...', { component: ComponentType.CONTENT_SCRIPT });
     try {
       if (this.state.isInitialized) {
-        console.log('[LinguaTube] Already initialized, skipping');
-        this.logger.warn('Content script already initialized');
+        this.logger?.info('Already initialized, skipping', {
+          component: ComponentType.CONTENT_SCRIPT,
+        });
         return true;
       }
 
       this.initializationAttempts++;
-      console.log('[LinguaTube] Initialization attempt:', this.initializationAttempts);
-      this.logger.info('Starting LinguaTube initialization', {
+      this.logger?.info('Initialization attempt', {
+        component: ComponentType.CONTENT_SCRIPT,
+        metadata: { attempt: this.initializationAttempts },
+      });
+      this.logger?.info('Starting LinguaTube initialization', {
         component: ComponentType.CONTENT_SCRIPT,
         action: 'initialize',
-        metadata: { attempt: this.initializationAttempts }
+        metadata: { attempt: this.initializationAttempts },
       });
 
       // Wait for YouTube player to be available
-      console.log('[LinguaTube] Waiting for YouTube player...');
+      this.logger?.info('Waiting for YouTube player...', {
+        component: ComponentType.CONTENT_SCRIPT,
+      });
       const playerReady = await this.waitForYouTubePlayer();
       if (!playerReady) {
-        console.error('[LinguaTube] YouTube player not available');
+        this.logger?.error('YouTube player not available', {
+          component: ComponentType.CONTENT_SCRIPT,
+        });
         throw new Error('YouTube player not available');
       }
-      console.log('[LinguaTube] YouTube player ready');
+      this.logger?.info('YouTube player ready', { component: ComponentType.CONTENT_SCRIPT });
 
       // Initialize core services
-      console.log('[LinguaTube] Initializing core services...');
+      this.logger?.info('Initializing core services...', {
+        component: ComponentType.CONTENT_SCRIPT,
+      });
       await this.initializeCoreServices();
-      console.log('[LinguaTube] Core services initialized');
+      this.logger?.info('Core services initialized', { component: ComponentType.CONTENT_SCRIPT });
 
       // Initialize UI components
-      console.log('[LinguaTube] Initializing UI components...');
+      this.logger?.info('Initializing UI components...', {
+        component: ComponentType.CONTENT_SCRIPT,
+      });
       await this.initializeUIComponents();
-      console.log('[LinguaTube] UI components initialized');
+      this.logger?.info('UI components initialized', { component: ComponentType.CONTENT_SCRIPT });
 
       // Setup basic event listeners
-      console.log('[LinguaTube] Setting up event listeners...');
+      this.logger?.info('Setting up event listeners...', {
+        component: ComponentType.CONTENT_SCRIPT,
+      });
       this.setupBasicEventListeners();
-      console.log('[LinguaTube] Event listeners set up');
+      this.logger?.info('Event listeners set up', { component: ComponentType.CONTENT_SCRIPT });
 
       this.state.isInitialized = true;
-      console.log('[LinguaTube] ✅ Initialization completed successfully!');
-      this.logger.info('LinguaTube initialization completed successfully', {
+      this.logger?.info('✅ Initialization completed successfully!', {
+        component: ComponentType.CONTENT_SCRIPT,
+      });
+      this.logger?.info('LinguaTube initialization completed successfully', {
         component: ComponentType.CONTENT_SCRIPT,
         action: 'initialize_complete',
-        metadata: { attempts: this.initializationAttempts }
+        metadata: { attempts: this.initializationAttempts },
       });
 
       return true;
-
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error('[LinguaTube] ❌ Initialization failed:', errorMessage);
-      this.logger.error('LinguaTube initialization failed', {
-        component: ComponentType.CONTENT_SCRIPT,
-        action: 'initialize_error',
-        metadata: {
-          attempt: this.initializationAttempts,
-          error: errorMessage
-        }
-      });
+      this.logger?.error(
+        '❌ Initialization failed',
+        {
+          component: ComponentType.CONTENT_SCRIPT,
+          action: 'initialize_error',
+          metadata: {
+            attempt: this.initializationAttempts,
+            error: errorMessage,
+          },
+        },
+        error instanceof Error ? error : undefined,
+      );
 
       // Simple retry logic
       if (this.initializationAttempts < 3 && !this.isDestroyed) {
-        console.log('[LinguaTube] Scheduling retry in', 2000 * this.initializationAttempts, 'ms');
+        this.logger?.info('Scheduling retry', {
+          component: ComponentType.CONTENT_SCRIPT,
+          metadata: {
+            retryDelay: 2000 * this.initializationAttempts,
+            attempt: this.initializationAttempts,
+          },
+        });
         this.retryTimeout = window.setTimeout(() => {
           this.initialize();
         }, 2000 * this.initializationAttempts);
@@ -170,24 +199,24 @@ class LinguaTubeContentScript {
   private async initializeCoreServices(): Promise<void> {
     // Initialize storage service
     await storageService.initialize();
-    this.logger.debug('Storage service initialized', {
+    this.logger?.debug('Storage service initialized', {
       component: ComponentType.CONTENT_SCRIPT,
-      action: 'storage_ready'
+      action: 'storage_ready',
     });
 
     // Initialize player interaction service
     this.state.components.playerService = PlayerInteractionService.getInstance();
     await this.state.components.playerService.initialize();
-    this.logger.debug('Player service initialized', {
+    this.logger?.debug('Player service initialized', {
       component: ComponentType.CONTENT_SCRIPT,
-      action: 'player_ready'
+      action: 'player_ready',
     });
 
     // Initialize vocabulary manager
     this.state.components.vocabularyManager = VocabularyManager.getInstance();
-    this.logger.debug('Vocabulary manager initialized', {
+    this.logger?.debug('Vocabulary manager initialized', {
       component: ComponentType.CONTENT_SCRIPT,
-      action: 'vocabulary_ready'
+      action: 'vocabulary_ready',
     });
 
     // Initialize translation service if configured
@@ -195,9 +224,9 @@ class LinguaTubeContentScript {
     const isConfigured = await configService.isConfigured();
     if (isConfigured) {
       this.state.components.translationService = new TranslationApiService();
-      this.logger.debug('Translation service initialized', {
+      this.logger?.debug('Translation service initialized', {
         component: ComponentType.CONTENT_SCRIPT,
-        action: 'translation_ready'
+        action: 'translation_ready',
       });
     }
   }
@@ -220,34 +249,33 @@ class LinguaTubeContentScript {
       this.state.components.dictionaryService,
       this.state.components.translationService || new TranslationApiService(),
       this.state.components.ttsService,
-      storageService
+      storageService,
     );
 
     // Initialize dual subtitle manager with word lookup popup
     this.state.components.subtitleManager = new DualSubtitleManager(
       this.state.components.playerService,
       storageService,
-      this.state.components.translationService || new TranslationApiService(),
-      this.state.components.wordLookupPopup
+      this.state.components.wordLookupPopup,
     );
     await this.state.components.subtitleManager.initialize();
-    this.logger.debug('Subtitle manager initialized', {
+    this.logger?.debug('Subtitle manager initialized', {
       component: ComponentType.CONTENT_SCRIPT,
-      action: 'subtitle_manager_ready'
+      action: 'subtitle_manager_ready',
     });
 
     // Initialize vocabulary list manager
     try {
       this.state.components.vocabularyListManager = VocabularyListManager.getInstance();
       await this.state.components.vocabularyListManager.initialize();
-      this.logger.debug('Vocabulary list manager initialized', {
+      this.logger?.debug('Vocabulary list manager initialized', {
         component: ComponentType.CONTENT_SCRIPT,
-        action: 'vocabulary_list_ready'
+        action: 'vocabulary_list_ready',
       });
     } catch (error) {
-      this.logger.warn('Vocabulary list manager initialization failed - continuing without it', {
+      this.logger?.warn('Vocabulary list manager initialization failed - continuing without it', {
         component: ComponentType.CONTENT_SCRIPT,
-        action: 'vocabulary_list_warning'
+        action: 'vocabulary_list_warning',
       });
     }
 
@@ -255,18 +283,21 @@ class LinguaTubeContentScript {
     try {
       this.state.components.playbackControls = new EnhancedPlaybackControlsComponent(
         this.state.components.playerService,
-        storageService
+        storageService,
       );
       await this.state.components.playbackControls.initialize();
-      this.logger.debug('Enhanced playback controls initialized', {
+      this.logger?.debug('Enhanced playback controls initialized', {
         component: ComponentType.CONTENT_SCRIPT,
-        action: 'playback_controls_ready'
+        action: 'playback_controls_ready',
       });
     } catch (error) {
-      this.logger.warn('Enhanced playback controls initialization failed - continuing without them', {
-        component: ComponentType.CONTENT_SCRIPT,
-        action: 'playback_controls_warning'
-      });
+      this.logger?.warn(
+        'Enhanced playback controls initialization failed - continuing without them',
+        {
+          component: ComponentType.CONTENT_SCRIPT,
+          action: 'playback_controls_warning',
+        },
+      );
     }
   }
 
@@ -277,9 +308,9 @@ class LinguaTubeContentScript {
   private setupBasicEventListeners(): void {
     // Start subtitle discovery monitoring
     subtitleDiscoveryService.startMonitoring();
-    this.logger.debug('Subtitle discovery monitoring started', {
+    this.logger?.debug('Subtitle discovery monitoring started', {
       component: ComponentType.CONTENT_SCRIPT,
-      action: 'subtitle_discovery_started'
+      action: 'subtitle_discovery_started',
     });
 
     // Listen for subtitle discovery events
@@ -291,58 +322,104 @@ class LinguaTubeContentScript {
 
   private setupSubtitleDiscoveryEventListeners(): void {
     // Listen for when subtitles are discovered
-    subtitleDiscoveryService.addEventListener(SubtitleDiscoveryEvent.TRACKS_DISCOVERED, async (event: any) => {
-      console.log('[LinguaTube] Subtitles discovered, loading into player service...', event);
-      
-      if (!this.state.components.playerService) {
-        console.warn('[LinguaTube] Player service not available for subtitle loading');
-        return;
-      }
-
-      // Get the tracks from the event data property
-      const tracks = event.data?.tracks || event.tracks || [];
-      console.log('[LinguaTube] Available tracks:', tracks);
-      
-      // Enhanced debugging for language detection
-      console.log(`[LinguaTube] 🔍 Subtitle Track Language Analysis:`);
-      tracks.forEach((track: any, index: number) => {
-        console.log(`[LinguaTube] Track ${index}:`, {
-          languageCode: track.languageCode,
-          languageName: track.languageName,
-          name: track.name,
-          isAutoGenerated: track.isAutoGenerated,
-          vssId: track.vssId
+    subtitleDiscoveryService.addEventListener(
+      SubtitleDiscoveryEvent.TRACKS_DISCOVERED,
+      async (event: any) => {
+        this.logger?.info('Subtitles discovered, loading into player service...', {
+          component: ComponentType.CONTENT_SCRIPT,
+          metadata: { event },
         });
-      });
-      
-      if (tracks.length === 0) {
-        console.log('[LinguaTube] No tracks available in event data');
-        return;
-      }
 
-      // Get the first available subtitle track (prioritize human-created over auto-generated)
-      const preferredTrack = tracks.find((track: any) => !track.isAutoGenerated) || tracks[0];
-      console.log('[LinguaTube] Selected track:', preferredTrack);
-      
-      if (preferredTrack) {
-        try {
-          // Update language settings based on selected subtitle track
-          await this.updateLanguageSettings(preferredTrack.languageCode);
-          
-          // Skip API fetch - directly start DOM-based subtitle observation
-          console.log(`[LinguaTube] Starting DOM-based subtitle observation for: ${preferredTrack.languageCode}`);
-          this.startDOMSubtitleObservation(preferredTrack);
-        } catch (error) {
-          console.error('[LinguaTube] Failed to start subtitle observation:', error);
+        if (!this.state.components.playerService) {
+          this.logger?.warn('Player service not available for subtitle loading', {
+            component: ComponentType.CONTENT_SCRIPT,
+          });
+          return;
         }
-      } else {
-        console.log('[LinguaTube] No suitable subtitle tracks found');
-      }
-    });
+
+        // Get the tracks from the event data property
+        const tracks = event.data?.tracks || event.tracks || [];
+        this.logger?.debug('Available tracks', {
+          component: ComponentType.CONTENT_SCRIPT,
+          metadata: { tracksCount: tracks.length, tracks },
+        });
+
+        // Enhanced debugging for language detection
+        this.logger?.debug('🔍 Subtitle Track Language Analysis', {
+          component: ComponentType.CONTENT_SCRIPT,
+        });
+        tracks.forEach((track: any, index: number) => {
+          this.logger?.debug('Track details', {
+            component: ComponentType.CONTENT_SCRIPT,
+            metadata: {
+              index,
+              languageCode: track.languageCode,
+              languageName: track.languageName,
+              name: track.name,
+              isAutoGenerated: track.isAutoGenerated,
+              vssId: track.vssId,
+            },
+          });
+        });
+
+        if (tracks.length === 0) {
+          this.logger?.info('No tracks available in event data', {
+            component: ComponentType.CONTENT_SCRIPT,
+          });
+          return;
+        }
+
+        // Get the first available subtitle track (prioritize human-created over auto-generated)
+        const preferredTrack =
+          tracks.find((track: any) => track.languageCode === 'th') || tracks[0];
+        const nativeTrack = tracks.find((track: any) => track.languageCode === 'en') || tracks[0];
+        this.logger?.info('Selected track', {
+          component: ComponentType.CONTENT_SCRIPT,
+          metadata: {
+            languageCode: preferredTrack?.languageCode,
+            name: preferredTrack?.name,
+            isAutoGenerated: preferredTrack?.isAutoGenerated,
+          },
+        });
+
+        if (preferredTrack) {
+          try {
+            // Update language settings based on selected subtitle track
+            await this.updateLanguageSettings(preferredTrack.languageCode);
+
+            //
+            const subtitleTrack = await this.fetchSubtitleData(preferredTrack, nativeTrack);
+
+            this.state.components.playerService.loadSubtitleTrack(subtitleTrack);
+
+            // Skip API fetch - directly start DOM-based subtitle observation
+            this.logger?.info('Starting DOM-based subtitle observation', {
+              component: ComponentType.CONTENT_SCRIPT,
+              metadata: { languageCode: preferredTrack.languageCode },
+            });
+            // this.startDOMSubtitleObservation(preferredTrack)
+          } catch (error) {
+            this.logger?.error(
+              'Failed to start subtitle observation',
+              {
+                component: ComponentType.CONTENT_SCRIPT,
+              },
+              error instanceof Error ? error : undefined,
+            );
+          }
+        } else {
+          this.logger?.info('No suitable subtitle tracks found', {
+            component: ComponentType.CONTENT_SCRIPT,
+          });
+        }
+      },
+    );
 
     // Listen for video changes to clear old subtitles
     subtitleDiscoveryService.addEventListener(SubtitleDiscoveryEvent.VIDEO_CHANGED, () => {
-      console.log('[LinguaTube] Video changed, clearing subtitle track');
+      this.logger?.info('Video changed, clearing subtitle track', {
+        component: ComponentType.CONTENT_SCRIPT,
+      });
       if (this.state.components.playerService) {
         this.state.components.playerService.clearSubtitleTrack();
       }
@@ -354,123 +431,162 @@ class LinguaTubeContentScript {
    */
   private async updateLanguageSettings(subtitleLanguageCode: string): Promise<void> {
     try {
-      console.log(`[LinguaTube] Updating language settings for subtitle language: ${subtitleLanguageCode}`);
-      
+      this.logger?.info('Updating language settings for subtitle language', {
+        component: ComponentType.CONTENT_SCRIPT,
+        metadata: { subtitleLanguageCode },
+      });
+
       // Get current settings
       const settingsResult = await storageService.getSettings();
       if (!settingsResult.success || !settingsResult.data) {
-        console.warn('[LinguaTube] Could not load current settings for language update');
+        this.logger?.warn('Could not load current settings for language update', {
+          component: ComponentType.CONTENT_SCRIPT,
+        });
         return;
       }
 
       const currentSettings = settingsResult.data;
-      
-      // Use 'auto' for source language to let translation API handle detection
+
       const updatedSettings = {
         ...currentSettings,
         languages: {
           ...currentSettings.languages,
-          sourceLanguage: 'auto' // Let translation API auto-detect the language
-        }
+          sourceLanguage: subtitleLanguageCode,
+        },
       };
 
       // Save the updated settings
       const saveResult = await storageService.saveSettings(updatedSettings);
       if (saveResult.success) {
-        console.log(`[LinguaTube] ✅ Set source language to 'auto' for automatic detection`);
-        
+        this.logger?.info('✅ Set source language to auto for automatic detection', {
+          component: ComponentType.CONTENT_SCRIPT,
+        });
+
         // Propagate the language change to the subtitle manager if it exists
         if (this.state.components.subtitleManager) {
           this.state.components.subtitleManager.setLanguages(
-            'auto',
-            currentSettings.languages.nativeLanguage
+            currentSettings.languages.sourceLanguage,
+            currentSettings.languages.nativeLanguage,
           );
-          console.log('[LinguaTube] Updated DualSubtitleManager with auto language detection');
+          this.logger?.info('Updated DualSubtitleManager with auto language detection', {
+            component: ComponentType.CONTENT_SCRIPT,
+          });
         }
       } else {
-        console.error('[LinguaTube] Failed to save language settings:', saveResult.error);
+        this.logger?.error('Failed to save language settings', {
+          component: ComponentType.CONTENT_SCRIPT,
+          metadata: { error: saveResult.error },
+        });
       }
     } catch (error) {
-      console.error('[LinguaTube] Error updating language settings:', error);
+      this.logger?.error(
+        'Error updating language settings',
+        { component: ComponentType.CONTENT_SCRIPT },
+        error instanceof Error ? error : undefined,
+      );
     }
   }
 
-
-
-  private async fetchSubtitleData(track: any): Promise<any> {
+  private async fetchSubtitleData(track: any, nativeTrack: any): Promise<any> {
     try {
-      console.log('[LinguaTube] Fetching subtitle data for track:', track);
-      console.log('[LinguaTube] Track baseUrl:', track.baseUrl);
-      
+      this.logger?.info('Fetching subtitle data for track', {
+        component: ComponentType.CONTENT_SCRIPT,
+        metadata: {
+          languageCode: track?.languageCode,
+          name: track?.name,
+        },
+      });
+      this.logger?.debug('Track baseUrl', {
+        component: ComponentType.CONTENT_SCRIPT,
+        metadata: { baseUrl: track?.baseUrl },
+      });
+      const pot = (await chrome.storage.local.get(['pot']))?.pot;
+
+      if (!pot) {
+        this.logger?.info('No PO TOKEN found, skipping subtitle fetch', {
+          component: ComponentType.CONTENT_SCRIPT,
+        });
+        return null;
+      }
+
       // Parse as YouTube subtitle data if it has the right structure
       if (this.state.components.playerService && track.baseUrl) {
-        console.log('[LinguaTube] Starting fetch from YouTube API...');
-        
-        // Fetch the subtitle content from YouTube
-        const response = await fetch(track.baseUrl, {
-          method: 'GET',
-          mode: 'cors',
-          credentials: 'omit',
-          headers: {
-            'Accept': 'application/xml, text/xml, */*',
-            'User-Agent': 'Mozilla/5.0 (compatible; LinguaTube)'
-          }
+        this.logger?.info('Starting fetch from YouTube API...', {
+          component: ComponentType.CONTENT_SCRIPT,
         });
-        console.log('[LinguaTube] Fetch response status:', response.status, response.statusText);
-        console.log('[LinguaTube] Response headers:', Object.fromEntries(response.headers.entries()));
-        
+
+        // Fetch the subtitle content from YouTube
+        const responses = await Promise.all([
+          fetch(track.baseUrl + `&pot=${pot}&fmt=json3&c=WEB`, {
+            method: 'GET',
+            mode: 'cors',
+            credentials: 'include',
+            headers: {
+              Accept: 'application/xml, text/xml, */*',
+              'User-Agent': 'Mozilla/5.0 (compatible; LinguaTube)',
+            },
+          }),
+          fetch(nativeTrack.baseUrl + `&pot=${pot}&fmt=json3&c=WEB`, {
+            method: 'GET',
+            mode: 'cors',
+            credentials: 'include',
+            headers: {
+              Accept: 'application/xml, text/xml, */*',
+              'User-Agent': 'Mozilla/5.0 (compatible; LinguaTube)',
+            },
+          }),
+        ]);
+        const [response, nativeResponse] = responses;
+        this.logger?.debug('Fetch response status', {
+          component: ComponentType.CONTENT_SCRIPT,
+          metadata: { status: response.status, statusText: response.statusText },
+        });
+        this.logger?.debug('Response headers', {
+          component: ComponentType.CONTENT_SCRIPT,
+          metadata: { headers: Object.fromEntries(response.headers.entries()) },
+        });
+
         if (!response.ok) {
-          console.error('[LinguaTube] Failed to fetch subtitles:', response.status, response.statusText);
+          this.logger?.error('Failed to fetch subtitles', {
+            component: ComponentType.CONTENT_SCRIPT,
+            metadata: { status: response.status, statusText: response.statusText },
+          });
           return null;
         }
-        
-        const xmlText = await response.text();
-        console.log('[LinguaTube] Received XML length:', xmlText.length);
-        console.log('[LinguaTube] First 200 chars of XML:', xmlText.substring(0, 200));
-        
-        // If we got an empty response, YouTube is blocking us - try alternative approach
-        if (xmlText.length === 0) {
-          console.log('[LinguaTube] Empty response from YouTube API - trying alternative approach...');
-          return await this.tryAlternativeSubtitleApproach(track);
-        }
-        
-        // Parse XML subtitle format (YouTube uses TTML/XML format)
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
-        
-        // Check for XML parsing errors
-        const parserError = xmlDoc.querySelector('parsererror');
-        if (parserError) {
-          console.error('[LinguaTube] XML parsing error:', parserError.textContent);
-          return null;
-        }
-        
+
+        const textElements: any[] = (await response.json())?.events ?? [];
+        const nativeTextElements: any[] = (await nativeResponse.json())?.events ?? [];
         const cues: any[] = [];
-        
-        // Extract subtitle cues from XML (try both 'text' and 'p' elements)
-        const textElements = xmlDoc.querySelectorAll('text, p');
-        console.log('[LinguaTube] Found', textElements.length, 'text elements');
-        
+        const nativeCues: any[] = [];
+        this.logger?.info('Found text elements', {
+          component: ComponentType.CONTENT_SCRIPT,
+          metadata: { textElementsCount: textElements.length },
+        });
+
         textElements.forEach((element, index) => {
-          const start = parseFloat(element.getAttribute('start') || element.getAttribute('t') || '0');
-          const dur = parseFloat(element.getAttribute('dur') || element.getAttribute('d') || '0');
-          const text = element.textContent?.trim() || '';
-          
-          console.log(`[LinguaTube] Processing cue ${index}: start=${start}, dur=${dur}, text="${text.substring(0, 50)}..."`);
-          
+          const start = element.tStartMs;
+          const dur = element.dDurationMs;
+          const text = element.segs?.[0]?.utf8?.trim() || '';
+          const nativeText =
+            nativeTextElements.find((e) => e.tStartMs === start)?.segs?.[0]?.utf8?.trim() || '';
+
           if (text) {
             cues.push({
               id: `cue_${index}`,
-              startTime: start,
-              endTime: start + dur,
+              startTime: start / 1000,
+              endTime: (start + dur) / 1000,
               text: text,
+              nativeText: nativeText,
               language: track.languageCode || 'unknown',
-              confidence: track.isAutoGenerated ? 0.85 : 1.0
+              confidence: track.isAutoGenerated ? 0.85 : 1.0,
             });
           }
         });
 
-        console.log('[LinguaTube] Successfully parsed', cues.length, 'subtitle cues');
+        this.logger?.info('Successfully parsed subtitle cues', {
+          component: ComponentType.CONTENT_SCRIPT,
+          metadata: { cuesCount: cues.length },
+        });
 
         // Create a subtitle track object
         const subtitleTrack = {
@@ -481,313 +597,37 @@ class LinguaTubeContentScript {
           isDefault: false,
           isAutoGenerated: track.kind === 'asr',
           cues: cues,
-          source: 'youtube'
+          source: 'youtube',
         };
-        
-        console.log('[LinguaTube] Created subtitle track:', subtitleTrack);
+
+        this.logger?.info('Created subtitle track', {
+          component: ComponentType.CONTENT_SCRIPT,
+          metadata: {
+            trackId: subtitleTrack.id,
+            language: subtitleTrack.language,
+            cuesCount: subtitleTrack.cues.length,
+          },
+        });
         return subtitleTrack;
       }
-      
-      console.log('[LinguaTube] No baseUrl available or player service not ready');
+
+      this.logger?.info('No baseUrl available or player service not ready', {
+        component: ComponentType.CONTENT_SCRIPT,
+      });
       return null;
     } catch (error) {
-      console.error('[LinguaTube] Error fetching subtitle data:', error);
-      return null;
-    }
-  }
-
-  private startDOMSubtitleObservation(track: any): void {
-    console.log('[LinguaTube] Setting up DOM-based subtitle observation...');
-    
-    if (!this.state.components.playerService) {
-      console.error('[LinguaTube] Player service not available for DOM observation');
-      return;
-    }
-
-    // Create and load initial empty track (once)
-    this.state.currentDOMTrack = {
-      id: `dom_track_${track.languageCode}_${Date.now()}`,
-      language: track.languageCode || 'unknown',
-      label: track.languageName || 'Unknown Language',
-      kind: 'subtitles' as const,
-      isDefault: false,
-      isAutoGenerated: track.kind === 'asr',
-      cues: [], // Start empty
-      source: 'youtube' as const,
-      originalTrack: track
-    };
-
-    // Load track once initially
-    console.log('[LinguaTube] Loading initial DOM track...');
-    this.state.components.playerService.loadSubtitleTrack(this.state.currentDOMTrack);
-
-    // Start observing YouTube's caption elements with caption state detection
-    this.setupYouTubeCaptionObserver();
-  }
-
-  private setupYouTubeCaptionObserver(): void {
-    console.log('[LinguaTube] Setting up simplified YouTube caption observer...');
-
-    if (!this.state.currentDOMTrack) {
-      console.error('[LinguaTube] No DOM track available for population');
-      return;
-    }
-
-    let lastCaptionText = '';
-    let cueId = 0;
-
-    const syncWithNativeCaptions = () => {
-      try {
-        // Check if YouTube captions are enabled
-        const captionButton = document.querySelector('.ytp-subtitles-button') as HTMLElement;
-        const isCaptionsEnabled = captionButton?.getAttribute('aria-pressed') === 'true';
-        
-        if (!isCaptionsEnabled) {
-          // Clear overlay if captions are disabled
-          if (lastCaptionText) {
-            this.sendCaptionEvent('cue_end', lastCaptionText, cueId);
-            lastCaptionText = '';
-          }
-          return;
-        }
-
-                 // Get current caption text directly from YouTube's caption window
-         const captionWindow = document.querySelector('.caption-window');
-         const currentCaptionText = captionWindow?.textContent?.trim() || '';
-         
-         // Also check if video is paused (captions should still show when paused)
-         const videoElement = document.querySelector('video') as HTMLVideoElement;
-         const isPaused = videoElement?.paused || false;
-
-                 // Handle caption text changes
-         if (currentCaptionText !== lastCaptionText) {
-           console.log(`[LinguaTube] Caption sync: "${lastCaptionText}" → "${currentCaptionText}" (paused: ${isPaused})`);
-           
-           // Check if this is a true word-by-word extension (very strict)
-           const isExtension = lastCaptionText && 
-             currentCaptionText.length > lastCaptionText.length &&
-             currentCaptionText.startsWith(lastCaptionText.trim()) &&
-             (currentCaptionText.length - lastCaptionText.length) < 50; // Max 50 chars added
-           
-           // Detect if we have duplicate/accumulated text (error state)
-           const hasDuplicates = currentCaptionText.length > 200 || 
-             (currentCaptionText.match(/\./g) || []).length > 3;
-           
-           if (hasDuplicates) {
-             console.log('[LinguaTube] Detected duplicate/accumulated text, clearing...');
-             // Force clear and restart
-             if (lastCaptionText) {
-               this.sendCaptionEvent('cue_end', lastCaptionText, cueId);
-             }
-             lastCaptionText = '';
-             return; // Skip this update to reset
-           }
-           
-           if (isExtension) {
-             // True word extension - update in-place without clearing (no flicker!)
-             console.log('[LinguaTube] True extension detected, updating in-place...');
-             this.sendCaptionEvent('cue_update', currentCaptionText, cueId);
-           } else {
-             // New sentence or different content
-             console.log('[LinguaTube] New caption content...');
-             
-             // Clear previous caption if we had one
-             if (lastCaptionText) {
-               this.sendCaptionEvent('cue_end', lastCaptionText, cueId);
-             }
-
-             // Show new caption if we have one
-             if (currentCaptionText) {
-               this.sendCaptionEvent('cue_start', currentCaptionText, ++cueId);
-             }
-           }
-
-           lastCaptionText = currentCaptionText;
-         }
-         
-         // CRITICAL: Keep caption visible when paused
-         // Only refresh if we just paused (not on every mutation when already paused)
-         if (isPaused && lastCaptionText && currentCaptionText) {
-           const videoElement = document.querySelector('video') as HTMLVideoElement;
-           if (videoElement && !videoElement.dataset.linguaTubePausedHandled) {
-             // Mark as handled to prevent spam
-             videoElement.dataset.linguaTubePausedHandled = 'true';
-             console.log('[LinguaTube] Video paused, ensuring caption stays visible...');
-             this.sendCaptionEvent('cue_update', currentCaptionText, cueId);
-           }
-         } else if (!isPaused) {
-           // Clear the pause flag when playing
-           const videoElement = document.querySelector('video') as HTMLVideoElement;
-           if (videoElement) {
-             delete videoElement.dataset.linguaTubePausedHandled;
-           }
-         }
-      } catch (error) {
-        console.error('[LinguaTube] Error syncing captions:', error);
-      }
-    };
-
-    // Watch for changes in the caption window only
-    const captionObserver = new MutationObserver(() => {
-      syncWithNativeCaptions();
-    });
-
-    // Find and observe the caption container
-    const findAndObserveCaptionContainer = () => {
-      const captionContainer = document.querySelector('.caption-window') || 
-                              document.querySelector('.ytp-caption-window-container') ||
-                              document.querySelector('#movie_player');
-      
-      if (captionContainer) {
-        captionObserver.observe(captionContainer, {
-          childList: true,
-          subtree: true,
-          characterData: true
-        });
-        console.log('[LinguaTube] Simplified caption observer started');
-        
-        // Initial sync
-        syncWithNativeCaptions();
-        return true;
-      }
-      return false;
-    };
-
-    // Try to find caption container immediately, or wait a bit
-    if (!findAndObserveCaptionContainer()) {
-      setTimeout(findAndObserveCaptionContainer, 1000);
-    }
-
-    // Also watch for caption button state changes
-    const buttonObserver = new MutationObserver(() => {
-      syncWithNativeCaptions();
-    });
-
-    const captionButton = document.querySelector('.ytp-subtitles-button');
-    if (captionButton) {
-      buttonObserver.observe(captionButton, {
-        attributes: true,
-        attributeFilter: ['aria-pressed']
-      });
-    }
-
-    // Watch for play/pause state changes to ensure captions stay visible when paused
-    const videoElement = document.querySelector('video') as HTMLVideoElement;
-    const handlePauseStateChange = () => {
-      setTimeout(() => {
-        // Small delay to ensure state is updated
-        syncWithNativeCaptions();
-      }, 100);
-    };
-
-    if (videoElement) {
-      videoElement.addEventListener('play', handlePauseStateChange);
-      videoElement.addEventListener('pause', handlePauseStateChange);
-    }
-
-    // Store cleanup function
-    this.state.captionObserverCleanup = () => {
-      console.log('[LinguaTube] Cleaning up simplified caption observer...');
-      captionObserver.disconnect();
-      buttonObserver.disconnect();
-      if (videoElement) {
-        videoElement.removeEventListener('play', handlePauseStateChange);
-        videoElement.removeEventListener('pause', handlePauseStateChange);
-      }
-    };
-  }
-
-  private sendCaptionEvent(type: 'cue_start' | 'cue_end' | 'cue_update', text: string, cueId: number): void {
-    if (!this.state.components.playerService) return;
-
-    const videoElement = document.querySelector('video') as HTMLVideoElement;
-    const currentTime = videoElement?.currentTime || 0;
-
-    const cue = {
-      id: `dom_cue_${cueId}`,
-      text: text,
-      startTime: currentTime,
-      endTime: currentTime + 5,
-      language: this.state.currentDOMTrack?.language || 'unknown',
-      confidence: 0.9
-    };
-
-    // Send the event as specified type
-    const event = {
-      type: type,
-      cue,
-      activeCues: (type === 'cue_start' || type === 'cue_update') ? [{
-        ...cue,
-        isActive: true,
-        timeRemaining: 5,
-        displayOrder: 0,
-        adjustedStartTime: cue.startTime,
-        adjustedEndTime: cue.endTime
-      }] : [],
-      timestamp: Date.now()
-    };
-
-    const playerService = this.state.components.playerService as any;
-    if (playerService.subtitleSyncListeners) {
-      playerService.subtitleSyncListeners.forEach((listener: any) => {
-        try {
-          listener(event);
-        } catch (error) {
-          console.error('[LinguaTube] Error sending caption event:', error);
-        }
-      });
-    }
-  }
-
-  private async tryAlternativeSubtitleApproach(track: any): Promise<any> {
-    console.log('[LinguaTube] Attempting alternative subtitle extraction...');
-    
-    try {
-      // Alternative 1: Try to hook into YouTube's existing caption system
-      const captionWindow = document.querySelector('.caption-window');
-      if (captionWindow) {
-        console.log('[LinguaTube] Found existing caption window, creating mock track...');
-        
-        // Create a basic track structure that will trigger subtitle sync
-        const mockTrack = {
-          id: `mock_track_${track.languageCode}_${Date.now()}`,
-          language: track.languageCode || 'unknown',
-          label: track.languageName || 'Unknown Language',
-          kind: 'subtitles',
-          isDefault: false,
-          isAutoGenerated: track.kind === 'asr',
-          cues: [], // Start with empty cues - will be populated by observing YouTube's captions
-          source: 'youtube_dom',
-          originalTrack: track
-        };
-
-        console.log('[LinguaTube] Created mock track for DOM observation:', mockTrack);
-        return mockTrack;
-      }
-
-      // Alternative 2: If no captions visible, create a minimal track for sync purposes
-      console.log('[LinguaTube] No caption window found, creating minimal sync track...');
-      return {
-        id: `sync_track_${track.languageCode}_${Date.now()}`,
-        language: track.languageCode || 'unknown', 
-        label: track.languageName || 'Unknown Language',
-        kind: 'subtitles',
-        isDefault: false,
-        isAutoGenerated: track.kind === 'asr',
-        cues: [],
-        source: 'sync_fallback',
-        originalTrack: track
-      };
-
-    } catch (error) {
-      console.error('[LinguaTube] Alternative subtitle approach failed:', error);
+      this.logger?.error(
+        'Error fetching subtitle data',
+        { component: ComponentType.CONTENT_SCRIPT },
+        error instanceof Error ? error : undefined,
+      );
       return null;
     }
   }
 
   private setupNavigationListener(): void {
     let currentUrl = window.location.href;
-    
+
     const checkForNavigation = () => {
       if (window.location.href !== currentUrl) {
         const newVideoId = this.extractVideoId(window.location.href);
@@ -810,34 +650,43 @@ class LinguaTubeContentScript {
     const maxAttempts = 30; // 30 seconds
     let attempts = 0;
 
-    console.log('[LinguaTube] Waiting for YouTube video element...');
+    this.logger?.info('Waiting for YouTube video element...', {
+      component: ComponentType.CONTENT_SCRIPT,
+    });
 
     while (attempts < maxAttempts) {
       const videoElement = document.querySelector('video') as HTMLVideoElement;
-      console.log(`[LinguaTube] Attempt ${attempts + 1}: videoElement found:`, !!videoElement);
-      
+      this.logger?.debug('Player detection attempt', {
+        component: ComponentType.CONTENT_SCRIPT,
+        metadata: {
+          attempt: attempts + 1,
+          videoElementFound: !!videoElement,
+        },
+      });
+
       if (videoElement) {
-        console.log('[LinguaTube] Video element readyState:', videoElement.readyState);
+        this.logger?.debug('Video element readyState', {
+          component: ComponentType.CONTENT_SCRIPT,
+          metadata: { readyState: videoElement.readyState },
+        });
         if (videoElement.readyState >= 1) {
-          console.log('[LinguaTube] ✓ YouTube player ready!');
-          this.logger.debug('YouTube player detected', {
+          this.logger?.info('✓ YouTube player ready!', {
             component: ComponentType.CONTENT_SCRIPT,
             action: 'player_detected',
-            metadata: { attempts: attempts + 1 }
+            metadata: { attempts: attempts + 1 },
           });
           return true;
         }
       }
 
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
       attempts++;
     }
 
-    console.error('[LinguaTube] ❌ YouTube player detection timeout after', maxAttempts, 'attempts');
-    this.logger.error('YouTube player detection timeout', {
+    this.logger?.error('❌ YouTube player detection timeout', {
       component: ComponentType.CONTENT_SCRIPT,
       action: 'player_timeout',
-      metadata: { maxAttempts }
+      metadata: { maxAttempts },
     });
     return false;
   }
@@ -849,10 +698,10 @@ class LinguaTubeContentScript {
 
   private handleVideoChange(newVideoId: string | null): void {
     this.state.currentVideoId = newVideoId;
-    this.logger.info('Video changed', {
+    this.logger?.info('Video changed', {
       component: ComponentType.CONTENT_SCRIPT,
       action: 'video_change',
-      metadata: { newVideoId }
+      metadata: { newVideoId },
     });
 
     // Notify components about video change if they support it
@@ -867,9 +716,9 @@ class LinguaTubeContentScript {
   public destroy(): void {
     if (this.isDestroyed) return;
 
-    this.logger.info('Destroying LinguaTube content script', {
+    this.logger?.info('Destroying LinguaTube content script', {
       component: ComponentType.CONTENT_SCRIPT,
-      action: 'destroy'
+      action: 'destroy',
     });
 
     this.isDestroyed = true;
@@ -888,18 +737,18 @@ class LinguaTubeContentScript {
       this.state.components.wordLookupPopup?.destroy();
       this.state.components.playerService?.shutdown();
     } catch (error) {
-      this.logger.warn('Error during component cleanup', {
+      this.logger?.warn('Error during component cleanup', {
         component: ComponentType.CONTENT_SCRIPT,
-        action: 'cleanup_warning'
+        action: 'cleanup_warning',
       });
     }
 
     // Stop subtitle discovery
     subtitleDiscoveryService.stopMonitoring();
 
-    this.logger.info('LinguaTube content script destroyed', {
+    this.logger?.info('LinguaTube content script destroyed', {
       component: ComponentType.CONTENT_SCRIPT,
-      action: 'destroy_complete'
+      action: 'destroy_complete',
     });
   }
 }
@@ -908,40 +757,63 @@ class LinguaTubeContentScript {
 // Module Initialization
 // ========================================
 
-console.log('[LinguaTube] Module initialization starting...');
-console.log('[LinguaTube] Document ready state:', document.readyState);
+const moduleLogger = Logger.getInstance();
+moduleLogger?.info('Module initialization starting...', {
+  component: ComponentType.CONTENT_SCRIPT,
+});
+moduleLogger?.debug('Document ready state', {
+  component: ComponentType.CONTENT_SCRIPT,
+  metadata: { readyState: document.readyState },
+});
 
 let contentScript: LinguaTubeContentScript | null = null;
 
 // Initialize when DOM is ready
 if (document.readyState === 'loading') {
-  console.log('[LinguaTube] Document still loading, waiting for DOMContentLoaded');
+  moduleLogger?.info('Document still loading, waiting for DOMContentLoaded', {
+    component: ComponentType.CONTENT_SCRIPT,
+  });
   document.addEventListener('DOMContentLoaded', () => {
-    console.log('[LinguaTube] DOMContentLoaded event fired');
+    moduleLogger?.info('DOMContentLoaded event fired', { component: ComponentType.CONTENT_SCRIPT });
     initializeContentScript();
   });
 } else {
-  console.log('[LinguaTube] Document already ready, initializing immediately');
+  moduleLogger?.info('Document already ready, initializing immediately', {
+    component: ComponentType.CONTENT_SCRIPT,
+  });
   initializeContentScript();
 }
 
 async function initializeContentScript(): Promise<void> {
-  console.log('[LinguaTube] initializeContentScript called');
-  console.log('[LinguaTube] Current URL:', window.location.href);
-  
+  moduleLogger?.info('initializeContentScript called', { component: ComponentType.CONTENT_SCRIPT });
+  moduleLogger?.debug('Current URL', {
+    component: ComponentType.CONTENT_SCRIPT,
+    metadata: { url: window.location.href },
+  });
+
   try {
     // Only initialize on YouTube video pages
     if (!window.location.href.includes('youtube.com/watch')) {
-      console.log('[LinguaTube] Not a YouTube video page, skipping initialization');
-      console.log('[LinguaTube] Expected URL pattern: youtube.com/watch');
+      moduleLogger?.info('Not a YouTube video page, skipping initialization', {
+        component: ComponentType.CONTENT_SCRIPT,
+      });
+      moduleLogger?.debug('Expected URL pattern: youtube.com/watch', {
+        component: ComponentType.CONTENT_SCRIPT,
+      });
       return;
     }
 
-    console.log('[LinguaTube] ✓ YouTube video page detected, proceeding with initialization');
+    moduleLogger?.info('✓ YouTube video page detected, proceeding with initialization', {
+      component: ComponentType.CONTENT_SCRIPT,
+    });
     contentScript = new LinguaTubeContentScript();
     await contentScript.initialize();
   } catch (error) {
-    console.error('[LinguaTube] Content script initialization failed:', error);
+    moduleLogger?.error(
+      'Content script initialization failed',
+      { component: ComponentType.CONTENT_SCRIPT },
+      error instanceof Error ? error : undefined,
+    );
   }
 }
 

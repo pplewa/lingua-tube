@@ -10,8 +10,10 @@ import {
   SubtitleErrorCode,
   RetryConfig,
   DEFAULT_RETRY_CONFIG,
-  DEFAULT_FETCH_TIMEOUT
+  DEFAULT_FETCH_TIMEOUT,
 } from './types';
+import { Logger } from '../logging/Logger';
+import { ComponentType } from '../logging/types';
 
 /**
  * Response data from a fetch operation
@@ -32,6 +34,7 @@ interface FetchResponse {
 export class SubtitleFetchUtility {
   private readonly abortController: AbortController;
   private retryDelay = 0;
+  private readonly logger = Logger.getInstance();
 
   constructor() {
     this.abortController = new AbortController();
@@ -51,18 +54,33 @@ export class SubtitleFetchUtility {
 
     while (attempt < config.retryConfig.maxAttempts) {
       try {
-        console.log(`[LinguaTube] Fetching subtitles: ${request.url} (attempt ${attempt + 1})`);
-        
+        this.logger?.info('Fetching subtitles from URL', {
+          component: ComponentType.SUBTITLE_MANAGER,
+          url: request.url,
+          metadata: {
+            attempt: attempt + 1,
+            maxAttempts: config.retryConfig.maxAttempts,
+          },
+        });
+
         // Add delay for retries
         if (attempt > 0) {
           await this.delay(this.calculateRetryDelay(attempt, config.retryConfig));
         }
 
         const response = await this.performFetch(request.url, config);
-        
+
         // Check if response indicates success
         if (response.status >= 200 && response.status < 300) {
-          console.log(`[LinguaTube] Successfully fetched subtitles: ${response.contentLength} bytes`);
+          this.logger?.info('Successfully fetched subtitles', {
+            component: ComponentType.SUBTITLE_MANAGER,
+            url: request.url,
+            metadata: {
+              contentLength: response.contentLength,
+              contentType: response.contentType,
+              status: response.status,
+            },
+          });
           return response;
         }
 
@@ -72,25 +90,32 @@ export class SubtitleFetchUtility {
         }
 
         lastError = this.createHttpError(response.status, response.statusText);
-        
       } catch (error) {
         lastError = error as Error;
-        
+
         // Check if error is retryable
         if (!this.isRetryableError(error, config.retryConfig)) {
           throw this.convertToSubtitleError(error, request.url);
         }
-        
-        console.warn(`[LinguaTube] Fetch attempt ${attempt + 1} failed:`, error);
+
+        this.logger?.warn('Fetch attempt failed', {
+          component: ComponentType.SUBTITLE_MANAGER,
+          url: request.url,
+          metadata: {
+            attempt: attempt + 1,
+            maxAttempts: config.retryConfig.maxAttempts,
+            error: error instanceof Error ? error.message : String(error),
+          },
+        });
       }
-      
+
       attempt++;
     }
 
     // All retries exhausted
     throw this.convertToSubtitleError(
       lastError || new Error('Maximum retry attempts exceeded'),
-      request.url
+      request.url,
     );
   }
 
@@ -99,7 +124,7 @@ export class SubtitleFetchUtility {
    */
   private async performFetch(url: string, config: FetchConfig): Promise<FetchResponse> {
     const controller = new AbortController();
-    
+
     // Set up timeout
     const timeoutId = setTimeout(() => {
       controller.abort();
@@ -112,7 +137,7 @@ export class SubtitleFetchUtility {
         signal: controller.signal,
         mode: config.corsMode,
         cache: 'default',
-        redirect: 'follow'
+        redirect: 'follow',
       });
 
       clearTimeout(timeoutId);
@@ -131,16 +156,15 @@ export class SubtitleFetchUtility {
         etag,
         lastModified,
         status: response.status,
-        statusText: response.statusText
+        statusText: response.statusText,
       };
-
     } catch (error) {
       clearTimeout(timeoutId);
-      
+
       if (controller.signal.aborted) {
         throw new Error('Request timeout');
       }
-      
+
       throw error;
     }
   }
@@ -157,7 +181,7 @@ export class SubtitleFetchUtility {
       timeout: request.timeout || DEFAULT_FETCH_TIMEOUT,
       headers: this.buildHeaders(request),
       retryConfig: { ...DEFAULT_RETRY_CONFIG, ...request.retryConfig },
-      corsMode: this.determineCorsMode(request.url)
+      corsMode: this.determineCorsMode(request.url),
     };
   }
 
@@ -166,11 +190,11 @@ export class SubtitleFetchUtility {
    */
   private buildHeaders(request: SubtitleFetchRequest): Record<string, string> {
     const headers: Record<string, string> = {
-      'Accept': 'text/plain, text/xml, application/xml, text/vtt, */*',
+      Accept: 'text/plain, text/xml, application/xml, text/vtt, */*',
       'Accept-Language': 'en-US,en;q=0.9',
       'Cache-Control': 'no-cache',
       'User-Agent': 'Mozilla/5.0 (compatible; LinguaTube Extension)',
-      ...request.headers
+      ...request.headers,
     };
 
     // Add language-specific headers if provided
@@ -188,22 +212,25 @@ export class SubtitleFetchUtility {
     try {
       const urlObj = new URL(url);
       const currentOrigin = window.location.origin;
-      
+
       // Same origin requests
       if (urlObj.origin === currentOrigin) {
         return 'same-origin';
       }
-      
+
       // YouTube requests
       if (urlObj.hostname.includes('youtube.com') || urlObj.hostname.includes('googlevideo.com')) {
         return 'cors';
       }
-      
+
       // Cross-origin requests
       return 'cors';
-      
     } catch (error) {
-      console.warn('[LinguaTube] Invalid URL, using CORS mode:', url);
+      this.logger?.warn('Invalid URL, using CORS mode', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        url,
+        metadata: { error: error instanceof Error ? error.message : String(error) },
+      });
       return 'cors';
     }
   }
@@ -222,7 +249,7 @@ export class SubtitleFetchUtility {
 
     const exponentialDelay = config.baseDelay * Math.pow(2, attempt - 1);
     const jitter = Math.random() * 0.1 * exponentialDelay; // 10% jitter
-    
+
     return Math.min(exponentialDelay + jitter, config.maxDelay);
   }
 
@@ -233,7 +260,7 @@ export class SubtitleFetchUtility {
     if (!config.retryOn) {
       return status >= 500; // Retry on server errors by default
     }
-    
+
     return config.retryOn.includes(status);
   }
 
@@ -243,7 +270,7 @@ export class SubtitleFetchUtility {
   private isRetryableError(error: unknown, config: RetryConfig): boolean {
     if (error instanceof Error) {
       const message = error.message.toLowerCase();
-      
+
       // Network errors that are typically retryable
       const retryableMessages = [
         'network error',
@@ -251,12 +278,12 @@ export class SubtitleFetchUtility {
         'connection',
         'timeout',
         'aborted',
-        'interrupted'
+        'interrupted',
       ];
-      
-      return retryableMessages.some(msg => message.includes(msg));
+
+      return retryableMessages.some((msg) => message.includes(msg));
     }
-    
+
     return false;
   }
 
@@ -264,7 +291,7 @@ export class SubtitleFetchUtility {
    * Delay execution for retry
    */
   private delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   // ========================================
@@ -287,7 +314,7 @@ export class SubtitleFetchUtility {
   private convertToSubtitleError(error: unknown, url: string): SubtitleFetchError {
     if (error instanceof Error) {
       const httpStatus = (error as any).status;
-      
+
       // Network errors
       if (error.message.includes('timeout') || error.message.includes('aborted')) {
         return {
@@ -295,20 +322,20 @@ export class SubtitleFetchUtility {
           message: `Request timeout while fetching: ${url}`,
           httpStatus,
           originalError: error,
-          retryable: true
+          retryable: true,
         };
       }
-      
+
       if (error.message.includes('network') || error.message.includes('fetch failed')) {
         return {
           code: SubtitleErrorCode.NETWORK_ERROR,
           message: `Network error while fetching: ${url}`,
           httpStatus,
           originalError: error,
-          retryable: true
+          retryable: true,
         };
       }
-      
+
       // CORS errors
       if (error.message.includes('cors') || error.message.includes('cross-origin')) {
         return {
@@ -316,37 +343,41 @@ export class SubtitleFetchUtility {
           message: `CORS error while fetching: ${url}`,
           httpStatus,
           originalError: error,
-          retryable: false
+          retryable: false,
         };
       }
-      
+
       // HTTP status errors
       if (httpStatus) {
         return this.convertHttpStatusToError(httpStatus, url, error);
       }
-      
+
       // Generic error
       return {
         code: SubtitleErrorCode.UNKNOWN_ERROR,
         message: `Failed to fetch: ${error.message}`,
         httpStatus,
         originalError: error,
-        retryable: false
+        retryable: false,
       };
     }
-    
+
     return {
       code: SubtitleErrorCode.UNKNOWN_ERROR,
       message: `Unknown error while fetching: ${url}`,
       originalError: error,
-      retryable: false
+      retryable: false,
     };
   }
 
   /**
    * Convert HTTP status to specific error
    */
-  private convertHttpStatusToError(status: number, url: string, originalError: Error): SubtitleFetchError {
+  private convertHttpStatusToError(
+    status: number,
+    url: string,
+    originalError: Error,
+  ): SubtitleFetchError {
     switch (status) {
       case 401:
         return {
@@ -354,27 +385,27 @@ export class SubtitleFetchUtility {
           message: `Unauthorized access to: ${url}`,
           httpStatus: status,
           originalError,
-          retryable: false
+          retryable: false,
         };
-        
+
       case 403:
         return {
           code: SubtitleErrorCode.FORBIDDEN,
           message: `Access forbidden to: ${url}`,
           httpStatus: status,
           originalError,
-          retryable: false
+          retryable: false,
         };
-        
+
       case 404:
         return {
           code: SubtitleErrorCode.NOT_FOUND,
           message: `Subtitle file not found: ${url}`,
           httpStatus: status,
           originalError,
-          retryable: false
+          retryable: false,
         };
-        
+
       case 429:
         const retryAfter = this.extractRetryAfter(originalError);
         return {
@@ -383,18 +414,18 @@ export class SubtitleFetchUtility {
           httpStatus: status,
           originalError,
           retryable: true,
-          retryAfter
+          retryAfter,
         };
-        
+
       case 503:
         return {
           code: SubtitleErrorCode.SERVICE_UNAVAILABLE,
           message: `Service unavailable: ${url}`,
           httpStatus: status,
           originalError,
-          retryable: true
+          retryable: true,
         };
-        
+
       default:
         if (status >= 500) {
           return {
@@ -402,16 +433,16 @@ export class SubtitleFetchUtility {
             message: `Server error ${status} while fetching: ${url}`,
             httpStatus: status,
             originalError,
-            retryable: true
+            retryable: true,
           };
         }
-        
+
         return {
           code: SubtitleErrorCode.UNKNOWN_ERROR,
           message: `HTTP ${status} error while fetching: ${url}`,
           httpStatus: status,
           originalError,
-          retryable: false
+          retryable: false,
         };
     }
   }
@@ -449,11 +480,11 @@ export class SubtitleFetchUtility {
       const urlObj = new URL(url);
       const pathname = urlObj.pathname;
       const lastDot = pathname.lastIndexOf('.');
-      
+
       if (lastDot > 0 && lastDot < pathname.length - 1) {
         return pathname.substring(lastDot + 1).toLowerCase();
       }
-      
+
       return null;
     } catch {
       return null;
@@ -467,10 +498,12 @@ export class SubtitleFetchUtility {
     try {
       const urlObj = new URL(url);
       const hostname = urlObj.hostname.toLowerCase();
-      
-      return hostname.includes('youtube.com') ||
-             hostname.includes('googlevideo.com') ||
-             hostname.includes('ytimg.com');
+
+      return (
+        hostname.includes('youtube.com') ||
+        hostname.includes('googlevideo.com') ||
+        hostname.includes('ytimg.com')
+      );
     } catch {
       return false;
     }
@@ -514,13 +547,13 @@ export function createFetchUtility(): SubtitleFetchUtility {
  */
 export function createFetchRequest(
   url: string,
-  options: Partial<SubtitleFetchRequest> = {}
+  options: Partial<SubtitleFetchRequest> = {},
 ): SubtitleFetchRequest {
   return {
     url,
     timeout: DEFAULT_FETCH_TIMEOUT,
     useCache: true,
     retryConfig: DEFAULT_RETRY_CONFIG,
-    ...options
+    ...options,
   };
-} 
+}

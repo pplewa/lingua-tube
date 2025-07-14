@@ -1,14 +1,14 @@
-import { defineConfig, loadEnv } from 'vite'
-import { crx } from '@crxjs/vite-plugin'
-import react from '@vitejs/plugin-react'
+import { defineConfig, loadEnv } from 'vite';
+import { crx } from '@crxjs/vite-plugin';
+import react from '@vitejs/plugin-react';
 
-import manifest from './src/manifest'
+import manifest from './src/manifest';
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   // Load environment variables
-  const env = loadEnv(mode, process.cwd(), '')
-  
+  const env = loadEnv(mode, process.cwd(), '');
+
   return {
     build: {
       emptyOutDir: true,
@@ -26,7 +26,9 @@ export default defineConfig(({ mode }) => {
     define: {
       // Explicitly expose environment variables to the extension
       'import.meta.env.VITE_TRANSLATION_API_KEY': JSON.stringify(env.VITE_TRANSLATION_API_KEY),
-      'import.meta.env.VITE_TRANSLATION_API_REGION': JSON.stringify(env.VITE_TRANSLATION_API_REGION),
+      'import.meta.env.VITE_TRANSLATION_API_REGION': JSON.stringify(
+        env.VITE_TRANSLATION_API_REGION,
+      ),
     },
-  }
-})
+  };
+});

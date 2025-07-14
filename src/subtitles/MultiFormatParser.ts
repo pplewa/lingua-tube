@@ -9,9 +9,11 @@ import {
   ParseResult,
   ParseError,
   ParserConfig,
-  DEFAULT_PARSER_CONFIG
+  DEFAULT_PARSER_CONFIG,
 } from './types';
 import { YouTubeXMLParser } from './XmlParser';
+import { Logger } from '../logging/Logger';
+import { ComponentType } from '../logging/types';
 
 /**
  * VTT Cue data structure
@@ -38,7 +40,6 @@ interface SRTEntry {
  * Multi-format subtitle parser with automatic format detection
  */
 export class MultiFormatSubtitleParser {
-
   // ========================================
   // Main Parsing Interface
   // ========================================
@@ -46,24 +47,44 @@ export class MultiFormatSubtitleParser {
   /**
    * Parse subtitle content with automatic format detection
    */
-  static parse(content: string, config: Partial<ParserConfig> = DEFAULT_PARSER_CONFIG): ParseResult {
+  static parse(
+    content: string,
+    config: Partial<ParserConfig> = DEFAULT_PARSER_CONFIG,
+  ): ParseResult {
+    const logger = Logger.getInstance();
     const startTime = performance.now();
-    
+
     try {
-      console.log('[LinguaTube] Starting multi-format subtitle parsing...');
-      
+      logger?.info('Starting multi-format subtitle parsing', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {
+          contentLength: content.length,
+          encoding: config.encoding,
+          strict: config.strict,
+          mergeSegments: config.mergeSegments,
+        },
+      });
+
       // Validate input
       if (!content || typeof content !== 'string') {
-        return this.createErrorResult([{
-          message: 'Empty or invalid subtitle content',
-          code: 'EMPTY_CONTENT',
-          severity: 'error'
-        }]);
+        return this.createErrorResult([
+          {
+            message: 'Empty or invalid subtitle content',
+            code: 'EMPTY_CONTENT',
+            severity: 'error',
+          },
+        ]);
       }
 
       // Detect format
       const format = this.detectFormat(content);
-      console.log(`[LinguaTube] Detected subtitle format: ${format}`);
+      logger?.info('Detected subtitle format', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {
+          format,
+          contentLength: content.length,
+        },
+      });
 
       // Build complete parser config
       const fullConfig: ParserConfig = {
@@ -72,22 +93,22 @@ export class MultiFormatSubtitleParser {
         strict: config.strict || false,
         mergeSegments: config.mergeSegments || false,
         maxSegmentGap: config.maxSegmentGap || 2.0,
-        preserveFormatting: config.preserveFormatting || true
+        preserveFormatting: config.preserveFormatting || true,
       };
 
       // Parse based on detected format
       let result: ParseResult;
-      
+
       switch (format) {
         case SubtitleFormat.VTT:
         case SubtitleFormat.WEBVTT:
           result = this.parseVTT(content, fullConfig);
           break;
-          
+
         case SubtitleFormat.SRT:
           result = this.parseSRT(content, fullConfig);
           break;
-          
+
         case SubtitleFormat.YOUTUBE_XML:
         case SubtitleFormat.YOUTUBE_SRV1:
         case SubtitleFormat.YOUTUBE_SRV2:
@@ -95,13 +116,22 @@ export class MultiFormatSubtitleParser {
         case SubtitleFormat.TTML:
           result = YouTubeXMLParser.parseXML(content, fullConfig);
           break;
-          
+
         default:
           result = this.parseGenericText(content, fullConfig);
       }
 
       const parseTime = performance.now() - startTime;
-      console.log(`[LinguaTube] Multi-format parsing completed in ${parseTime.toFixed(2)}ms`);
+      logger?.info('Multi-format parsing completed', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {
+          parseTime: parseTime.toFixed(2),
+          format,
+          success: result.success,
+          segmentCount: result.success ? result.segments?.length || 0 : 0,
+          errorCount: result.errors?.length || 0,
+        },
+      });
 
       // Add format information to result
       if (result.success && result.metadata) {
@@ -110,15 +140,22 @@ export class MultiFormatSubtitleParser {
       }
 
       return result;
-
     } catch (error) {
-      console.error('[LinguaTube] Multi-format parsing failed:', error);
-      
-      return this.createErrorResult([{
-        message: error instanceof Error ? error.message : 'Unknown parsing error',
-        code: 'PARSE_ERROR',
-        severity: 'error'
-      }]);
+      logger?.error('Multi-format parsing failed', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {
+          contentLength: content.length,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+
+      return this.createErrorResult([
+        {
+          message: error instanceof Error ? error.message : 'Unknown parsing error',
+          code: 'PARSE_ERROR',
+          severity: 'error',
+        },
+      ]);
     }
   }
 
@@ -136,9 +173,11 @@ export class MultiFormatSubtitleParser {
     if (cleaned.startsWith('webvtt') || cleaned.includes('webvtt')) {
       return SubtitleFormat.WEBVTT;
     }
-    
-    if ((cleaned.includes('-->') && cleaned.includes('note:')) ||
-        (cleaned.includes('-->') && cleaned.includes('cue'))) {
+
+    if (
+      (cleaned.includes('-->') && cleaned.includes('note:')) ||
+      (cleaned.includes('-->') && cleaned.includes('cue'))
+    ) {
       return SubtitleFormat.VTT;
     }
 
@@ -153,23 +192,23 @@ export class MultiFormatSubtitleParser {
       if (cleaned.includes('<transcript>') || cleaned.includes('<text ')) {
         return SubtitleFormat.YOUTUBE_XML;
       }
-      
+
       if (cleaned.includes('srv1')) {
         return SubtitleFormat.YOUTUBE_SRV1;
       }
-      
+
       if (cleaned.includes('srv2')) {
         return SubtitleFormat.YOUTUBE_SRV2;
       }
-      
+
       if (cleaned.includes('srv3')) {
         return SubtitleFormat.YOUTUBE_SRV3;
       }
-      
+
       if (cleaned.includes('tt:') || cleaned.includes('<tt ') || cleaned.includes('ttml')) {
         return SubtitleFormat.TTML;
       }
-      
+
       return SubtitleFormat.YOUTUBE_XML; // Default XML
     }
 
@@ -199,12 +238,19 @@ export class MultiFormatSubtitleParser {
    * Parse WebVTT format
    */
   private static parseVTT(content: string, config: ParserConfig): ParseResult {
+    const logger = Logger.getInstance();
     const errors: ParseError[] = [];
     const segments: SubtitleSegment[] = [];
 
     try {
-      console.log('[LinguaTube] Parsing VTT/WebVTT format...');
-      
+      logger?.info('Parsing VTT/WebVTT format', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {
+          contentLength: content.length,
+          preserveFormatting: config.preserveFormatting,
+        },
+      });
+
       const lines = content.split(/\r?\n/);
       let currentCue: Partial<VTTCue> = {};
       let cueIndex = 0;
@@ -215,10 +261,12 @@ export class MultiFormatSubtitleParser {
         lineIndex = i + 1;
 
         // Skip WebVTT header and STYLE/NOTE blocks
-        if (line.startsWith('WEBVTT') || 
-            line.startsWith('STYLE') || 
-            line.startsWith('NOTE:') ||
-            line.startsWith('REGION:')) {
+        if (
+          line.startsWith('WEBVTT') ||
+          line.startsWith('STYLE') ||
+          line.startsWith('NOTE:') ||
+          line.startsWith('REGION:')
+        ) {
           continue;
         }
 
@@ -238,17 +286,17 @@ export class MultiFormatSubtitleParser {
         // Time line (contains -->)
         if (line.includes('-->')) {
           const timeMatch = line.match(/^(?:(\S+)\s+)?(\S+)\s*-->\s*(\S+)(.*)$/);
-          
+
           if (timeMatch) {
             const [, id, startTime, endTime, settings] = timeMatch;
-            
+
             try {
               const newCue = {
                 id: id || undefined,
                 startTime: this.parseVTTTime(startTime),
                 endTime: this.parseVTTTime(endTime),
                 settings: settings?.trim() || undefined,
-                text: currentCue.text || ''
+                text: currentCue.text || '',
               };
               currentCue = newCue;
             } catch (error) {
@@ -256,7 +304,7 @@ export class MultiFormatSubtitleParser {
                 line: lineIndex,
                 message: `Invalid time format: ${line}`,
                 code: 'TIME_PARSE_ERROR',
-                severity: 'warning'
+                severity: 'warning',
               });
             }
           } else {
@@ -264,13 +312,16 @@ export class MultiFormatSubtitleParser {
               line: lineIndex,
               message: `Malformed time line: ${line}`,
               code: 'MALFORMED_TIME',
-              severity: 'warning'
+              severity: 'warning',
             });
           }
         }
         // Text line
         else if (line !== '' && 'startTime' in currentCue) {
-          const newCue = { ...currentCue, text: (currentCue.text || '') + (currentCue.text ? '\n' : '') + line };
+          const newCue = {
+            ...currentCue,
+            text: (currentCue.text || '') + (currentCue.text ? '\n' : '') + line,
+          };
           currentCue = newCue;
         }
         // Cue ID line (only if not already set and no time data yet)
@@ -288,7 +339,13 @@ export class MultiFormatSubtitleParser {
         }
       }
 
-      console.log(`[LinguaTube] VTT parsing completed: ${segments.length} segments`);
+      logger?.info('VTT parsing completed', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {
+          segmentCount: segments.length,
+          errorCount: errors.length,
+        },
+      });
 
       return {
         success: true,
@@ -299,19 +356,24 @@ export class MultiFormatSubtitleParser {
           source: {
             type: 'vtt',
             isAutoGenerated: false,
-            fetchedAt: Date.now()
-          }
+            fetchedAt: Date.now(),
+          },
         },
-        errors: errors.length > 0 ? errors : undefined
+        errors: errors.length > 0 ? errors : undefined,
       };
-
     } catch (error) {
-      console.error('[LinguaTube] VTT parsing failed:', error);
-      
+      logger?.error('VTT parsing failed', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {
+          contentLength: content.length,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+
       errors.push({
         message: `VTT parsing error: ${error instanceof Error ? error.message : 'Unknown error'}`,
         code: 'VTT_PARSE_ERROR',
-        severity: 'error'
+        severity: 'error',
       });
 
       return this.createErrorResult(errors);
@@ -322,10 +384,12 @@ export class MultiFormatSubtitleParser {
    * Check if VTT cue is valid
    */
   private static isValidVTTCue(cue: Partial<VTTCue>): cue is VTTCue {
-    return typeof cue.startTime === 'number' && 
-           typeof cue.endTime === 'number' && 
-           typeof cue.text === 'string' && 
-           cue.text.trim() !== '';
+    return (
+      typeof cue.startTime === 'number' &&
+      typeof cue.endTime === 'number' &&
+      typeof cue.text === 'string' &&
+      cue.text.trim() !== ''
+    );
   }
 
   /**
@@ -342,7 +406,7 @@ export class MultiFormatSubtitleParser {
       endTime: cue.endTime,
       text: cue.text.trim(),
       styling: this.parseVTTStyling(cue.text),
-      position: this.parseVTTPosition(cue.settings)
+      position: this.parseVTTPosition(cue.settings),
     };
   }
 
@@ -355,20 +419,20 @@ export class MultiFormatSubtitleParser {
 
     // Format: HH:MM:SS.mmm or MM:SS.mmm
     const timeMatch = timeStr.match(/^(?:(\d+):)?(\d+):(\d+)\.(\d+)$/);
-    
+
     if (timeMatch) {
       const [, hours, minutes, seconds, milliseconds] = timeMatch;
-      
+
       let totalSeconds = parseInt(seconds);
       totalSeconds += parseInt(minutes) * 60;
-      
+
       if (hours) {
         totalSeconds += parseInt(hours) * 3600;
       }
-      
+
       // Convert milliseconds (VTT uses 3 digits)
       totalSeconds += parseInt(milliseconds.padEnd(3, '0')) / 1000;
-      
+
       return totalSeconds;
     }
 
@@ -407,14 +471,21 @@ export class MultiFormatSubtitleParser {
    * Parse SRT format
    */
   private static parseSRT(content: string, config: ParserConfig): ParseResult {
+    const logger = Logger.getInstance();
     const errors: ParseError[] = [];
     const segments: SubtitleSegment[] = [];
 
     try {
-      console.log('[LinguaTube] Parsing SRT format...');
-      
+      logger?.info('Parsing SRT format', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {
+          contentLength: content.length,
+          preserveFormatting: config.preserveFormatting,
+        },
+      });
+
       // Split into entries (separated by double newlines)
-      const entries = content.split(/\r?\n\r?\n/).filter(entry => entry.trim() !== '');
+      const entries = content.split(/\r?\n\r?\n/).filter((entry) => entry.trim() !== '');
 
       for (let i = 0; i < entries.length; i++) {
         try {
@@ -427,12 +498,19 @@ export class MultiFormatSubtitleParser {
             line: i + 1,
             message: `Error parsing SRT entry ${i + 1}: ${error instanceof Error ? error.message : 'Unknown error'}`,
             code: 'SRT_ENTRY_ERROR',
-            severity: 'warning'
+            severity: 'warning',
           });
         }
       }
 
-      console.log(`[LinguaTube] SRT parsing completed: ${segments.length} segments`);
+      logger?.info('SRT parsing completed', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {
+          segmentCount: segments.length,
+          errorCount: errors.length,
+          entriesProcessed: entries.length,
+        },
+      });
 
       return {
         success: true,
@@ -443,19 +521,24 @@ export class MultiFormatSubtitleParser {
           source: {
             type: 'srt',
             isAutoGenerated: false,
-            fetchedAt: Date.now()
-          }
+            fetchedAt: Date.now(),
+          },
         },
-        errors: errors.length > 0 ? errors : undefined
+        errors: errors.length > 0 ? errors : undefined,
       };
-
     } catch (error) {
-      console.error('[LinguaTube] SRT parsing failed:', error);
-      
+      logger?.error('SRT parsing failed', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {
+          contentLength: content.length,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+
       errors.push({
         message: `SRT parsing error: ${error instanceof Error ? error.message : 'Unknown error'}`,
         code: 'SRT_PARSE_ERROR',
-        severity: 'error'
+        severity: 'error',
       });
 
       return this.createErrorResult(errors);
@@ -467,18 +550,20 @@ export class MultiFormatSubtitleParser {
    */
   private static parseSRTEntry(entry: string, index: number): SubtitleSegment | null {
     const lines = entry.split(/\r?\n/);
-    
+
     if (lines.length < 3) {
       return null; // Invalid entry
     }
 
     // Line 1: Index (optional validation)
     const entryIndex = parseInt(lines[0].trim());
-    
+
     // Line 2: Time range
     const timeLine = lines[1].trim();
-    const timeMatch = timeLine.match(/^(\d{2}:\d{2}:\d{2},\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2},\d{3})$/);
-    
+    const timeMatch = timeLine.match(
+      /^(\d{2}:\d{2}:\d{2},\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2},\d{3})$/,
+    );
+
     if (!timeMatch) {
       throw new Error(`Invalid SRT time format: ${timeLine}`);
     }
@@ -499,7 +584,7 @@ export class MultiFormatSubtitleParser {
       startTime,
       endTime,
       text,
-      styling: this.parseSRTStyling(text)
+      styling: this.parseSRTStyling(text),
     };
   }
 
@@ -508,18 +593,18 @@ export class MultiFormatSubtitleParser {
    */
   private static parseSRTTime(timeStr: string): number {
     const timeMatch = timeStr.match(/^(\d{2}):(\d{2}):(\d{2}),(\d{3})$/);
-    
+
     if (!timeMatch) {
       throw new Error(`Invalid SRT time format: ${timeStr}`);
     }
 
     const [, hours, minutes, seconds, milliseconds] = timeMatch;
-    
+
     let totalSeconds = parseInt(seconds);
     totalSeconds += parseInt(minutes) * 60;
     totalSeconds += parseInt(hours) * 3600;
     totalSeconds += parseInt(milliseconds) / 1000;
-    
+
     return totalSeconds;
   }
 
@@ -541,31 +626,45 @@ export class MultiFormatSubtitleParser {
    * Parse generic text format (fallback)
    */
   private static parseGenericText(content: string, config: ParserConfig): ParseResult {
+    const logger = Logger.getInstance();
     const errors: ParseError[] = [];
     const segments: SubtitleSegment[] = [];
 
     try {
-      console.log('[LinguaTube] Parsing as generic text format...');
-      
+      logger?.info('Parsing as generic text format', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {
+          contentLength: content.length,
+          preserveFormatting: config.preserveFormatting,
+        },
+      });
+
       // Split into lines and group into segments
-      const lines = content.split(/\r?\n/).filter(line => line.trim() !== '');
-      
+      const lines = content.split(/\r?\n/).filter((line) => line.trim() !== '');
+
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
-        
+
         // Create a simple segment with estimated timing
         const startTime = i * 3; // 3 seconds per line
         const endTime = startTime + 3;
-        
+
         segments.push({
           id: `text_${i.toString().padStart(4, '0')}`,
           startTime,
           endTime,
-          text: line
+          text: line,
         });
       }
 
-      console.log(`[LinguaTube] Generic text parsing completed: ${segments.length} segments`);
+      logger?.info('Generic text parsing completed', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {
+          segmentCount: segments.length,
+          errorCount: errors.length,
+          linesProcessed: lines.length,
+        },
+      });
 
       return {
         success: true,
@@ -576,19 +675,24 @@ export class MultiFormatSubtitleParser {
           source: {
             type: 'text',
             isAutoGenerated: false,
-            fetchedAt: Date.now()
-          }
+            fetchedAt: Date.now(),
+          },
         },
-        errors: errors.length > 0 ? errors : undefined
+        errors: errors.length > 0 ? errors : undefined,
       };
-
     } catch (error) {
-      console.error('[LinguaTube] Generic text parsing failed:', error);
-      
+      logger?.error('Generic text parsing failed', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {
+          contentLength: content.length,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+
       errors.push({
         message: `Text parsing error: ${error instanceof Error ? error.message : 'Unknown error'}`,
         code: 'TEXT_PARSE_ERROR',
-        severity: 'error'
+        severity: 'error',
       });
 
       return this.createErrorResult(errors);
@@ -605,7 +709,7 @@ export class MultiFormatSubtitleParser {
   private static createErrorResult(errors: ParseError[]): ParseResult {
     return {
       success: false,
-      errors
+      errors,
     };
   }
 
@@ -615,7 +719,7 @@ export class MultiFormatSubtitleParser {
   static cleanSubtitleText(text: string): string {
     return text
       .replace(/<[^>]*>/g, '') // Remove HTML tags
-      .replace(/\s+/g, ' ')    // Normalize whitespace
+      .replace(/\s+/g, ' ') // Normalize whitespace
       .trim();
   }
 
@@ -623,10 +727,12 @@ export class MultiFormatSubtitleParser {
    * Validate subtitle segment timing
    */
   static validateTiming(segment: SubtitleSegment): boolean {
-    return segment.startTime >= 0 && 
-           segment.endTime > segment.startTime &&
-           isFinite(segment.startTime) &&
-           isFinite(segment.endTime);
+    return (
+      segment.startTime >= 0 &&
+      segment.endTime > segment.startTime &&
+      isFinite(segment.startTime) &&
+      isFinite(segment.endTime)
+    );
   }
 
   /**
@@ -637,11 +743,11 @@ export class MultiFormatSubtitleParser {
     const minutes = Math.floor((seconds % 3600) / 60);
     const secs = Math.floor(seconds % 60);
     const ms = Math.floor((seconds % 1) * 1000);
-    
+
     if (hours > 0) {
       return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
     } else {
       return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
     }
   }
-} 
+}

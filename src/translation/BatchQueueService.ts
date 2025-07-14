@@ -1,11 +1,7 @@
 // Batching and queueing service for Microsoft Translator API integration
 // Optimizes API usage by grouping requests and managing queue overflow
 
-import {
-  BatchConfig,
-  TranslationErrorCode,
-  TranslateTextRequest
-} from './types';
+import { BatchConfig, TranslationErrorCode, TranslateTextRequest } from './types';
 import { configService } from './ConfigService';
 import { translationApiService, TranslationErrorImpl } from './TranslationApiService';
 import { rateLimitService } from './RateLimitService';
@@ -19,7 +15,7 @@ export enum BatchRequestPriority {
   LOW = 1,
   NORMAL = 2,
   HIGH = 3,
-  URGENT = 4
+  URGENT = 4,
 }
 
 export enum BatchRequestStatus {
@@ -27,7 +23,7 @@ export enum BatchRequestStatus {
   PROCESSING = 'processing',
   COMPLETED = 'completed',
   FAILED = 'failed',
-  CANCELLED = 'cancelled'
+  CANCELLED = 'cancelled',
 }
 
 export interface BatchTranslationRequest {
@@ -40,7 +36,7 @@ export interface BatchTranslationRequest {
   timeout: number;
   category?: string;
   textType?: 'plain' | 'html';
-  
+
   // Callback handling
   resolve: (translation: string) => void;
   reject: (error: Error) => void;
@@ -114,7 +110,7 @@ export class BatchQueueService {
       throw new TranslationErrorImpl(
         'Failed to initialize batch queue service',
         TranslationErrorCode.INVALID_CONFIG,
-        { originalError: error }
+        { originalError: error },
       );
     }
   }
@@ -142,7 +138,7 @@ export class BatchQueueService {
       queueSize: 0,
       cacheHitRate: 0,
       charactersSaved: 0,
-      lastProcessed: 0
+      lastProcessed: 0,
     };
   }
 
@@ -160,12 +156,16 @@ export class BatchQueueService {
     priority: BatchRequestPriority = BatchRequestPriority.NORMAL,
     timeout: number = 30000,
     category?: string,
-    textType?: 'plain' | 'html'
+    textType?: 'plain' | 'html',
   ): Promise<string> {
     await this.ensureInitialized();
 
     // Check cache first
-    const cachedTranslation = await translationCacheService.get(text, fromLanguage || 'auto', toLanguage);
+    const cachedTranslation = await translationCacheService.get(
+      text,
+      fromLanguage || 'auto',
+      toLanguage,
+    );
     if (cachedTranslation) {
       this.stats.charactersSaved += text.length;
       return cachedTranslation;
@@ -184,7 +184,7 @@ export class BatchQueueService {
         category,
         textType,
         resolve,
-        reject
+        reject,
       };
 
       this.addToQueue(request);
@@ -196,10 +196,10 @@ export class BatchQueueService {
    */
   async getStats(): Promise<BatchStats> {
     await this.ensureInitialized();
-    
+
     this.stats.queueSize = this.requestQueue.length;
     this.stats.cacheHitRate = await this.calculateCacheHitRate();
-    
+
     return { ...this.stats };
   }
 
@@ -209,24 +209,28 @@ export class BatchQueueService {
   async getQueueMetrics(): Promise<QueueMetrics> {
     await this.ensureInitialized();
 
-    const completedBatches = Array.from(this.processingBatches.values())
-      .filter(batch => batch.status === BatchRequestStatus.COMPLETED);
-    
-    const failedBatches = Array.from(this.processingBatches.values())
-      .filter(batch => batch.status === BatchRequestStatus.FAILED);
+    const completedBatches = Array.from(this.processingBatches.values()).filter(
+      (batch) => batch.status === BatchRequestStatus.COMPLETED,
+    );
 
-    const processingBatches = Array.from(this.processingBatches.values())
-      .filter(batch => batch.status === BatchRequestStatus.PROCESSING);
+    const failedBatches = Array.from(this.processingBatches.values()).filter(
+      (batch) => batch.status === BatchRequestStatus.FAILED,
+    );
+
+    const processingBatches = Array.from(this.processingBatches.values()).filter(
+      (batch) => batch.status === BatchRequestStatus.PROCESSING,
+    );
 
     // Calculate average wait time
     const now = Date.now();
     const totalWaitTime = this.requestQueue.reduce((sum, req) => sum + (now - req.timestamp), 0);
-    const averageWaitTime = this.requestQueue.length > 0 ? totalWaitTime / this.requestQueue.length : 0;
+    const averageWaitTime =
+      this.requestQueue.length > 0 ? totalWaitTime / this.requestQueue.length : 0;
 
     // Calculate throughput (requests completed in last minute)
     const oneMinuteAgo = now - 60000;
     const recentCompletions = completedBatches
-      .filter(batch => batch.startTime > oneMinuteAgo)
+      .filter((batch) => batch.startTime > oneMinuteAgo)
       .reduce((sum, batch) => sum + batch.requests.length, 0);
 
     return {
@@ -235,7 +239,7 @@ export class BatchQueueService {
       completedBatches: completedBatches.length,
       failedBatches: failedBatches.length,
       averageWaitTime,
-      throughputPerMinute: recentCompletions
+      throughputPerMinute: recentCompletions,
     };
   }
 
@@ -245,10 +249,12 @@ export class BatchQueueService {
   async clearQueue(): Promise<void> {
     // Cancel all pending requests
     for (const request of this.requestQueue) {
-      request.reject(new TranslationErrorImpl(
-        'Request cancelled due to queue clear',
-        TranslationErrorCode.CANCELLED
-      ));
+      request.reject(
+        new TranslationErrorImpl(
+          'Request cancelled due to queue clear',
+          TranslationErrorCode.CANCELLED,
+        ),
+      );
     }
 
     this.requestQueue = [];
@@ -314,7 +320,7 @@ export class BatchQueueService {
     if (!this.isProcessing) {
       this.isProcessing = true;
     }
-    
+
     this.processBatch();
   }
 
@@ -342,11 +348,10 @@ export class BatchQueueService {
     try {
       // Create batch from queue
       const batch = await this.createBatch();
-      
+
       if (batch && batch.requests.length > 0) {
         await this.executeBatch(batch);
       }
-
     } catch (error) {
       console.error('Batch processing error:', error);
     }
@@ -380,13 +385,10 @@ export class BatchQueueService {
 
     for (let i = 0; i < this.requestQueue.length && batchRequests.length < maxBatchSize; i++) {
       const request = this.requestQueue[i];
-      
+
       // Check timeout
       if (now - request.timestamp > request.timeout) {
-        request.reject(new TranslationErrorImpl(
-          'Request timeout',
-          TranslationErrorCode.TIMEOUT
-        ));
+        request.reject(new TranslationErrorImpl('Request timeout', TranslationErrorCode.TIMEOUT));
         this.requestQueue.splice(i, 1);
         i--;
         continue;
@@ -433,12 +435,12 @@ export class BatchQueueService {
         startTime: now,
         status: BatchRequestStatus.PROCESSING,
         retryCount: 0,
-        maxRetries: 3
+        maxRetries: 3,
       };
 
       this.processingBatches.set(batch.id, batch);
       this.stats.batchesCreated++;
-      
+
       return batch;
     }
 
@@ -451,17 +453,17 @@ export class BatchQueueService {
   private async executeBatch(batch: ProcessingBatch): Promise<void> {
     try {
       // Check rate limits
-      const rateLimitStatus = await rateLimitService.checkRateLimit(batch.totalCharacters);
-      
-      if (!rateLimitStatus.allowed) {
+      const rateLimitStatus = await rateLimitService?.checkRateLimit(batch.totalCharacters);
+
+      if (!rateLimitStatus?.allowed) {
         // Rate limit exceeded, requeue requests
         this.requeueBatchRequests(batch, 'Rate limit exceeded');
         return;
       }
 
       // Extract texts for batch translation
-      const texts = batch.requests.map(req => req.text);
-      
+      const texts = batch.requests.map((req) => req.text);
+
       // Call translation API
       const startTime = Date.now();
       const translations = await translationApiService.translateTexts(
@@ -469,13 +471,13 @@ export class BatchQueueService {
         batch.fromLanguage,
         batch.toLanguage,
         batch.requests[0].category,
-        batch.requests[0].textType
+        batch.requests[0].textType,
       );
 
       const processingTime = Date.now() - startTime;
 
       // Record usage
-      await rateLimitService.recordUsage(batch.totalCharacters);
+      await rateLimitService?.recordUsage(batch.totalCharacters);
 
       // Process results
       for (let i = 0; i < batch.requests.length; i++) {
@@ -487,7 +489,7 @@ export class BatchQueueService {
           request.text,
           translation,
           request.fromLanguage || 'auto',
-          request.toLanguage
+          request.toLanguage,
         );
 
         // Resolve the promise
@@ -500,18 +502,17 @@ export class BatchQueueService {
       this.stats.averageProcessingTime = this.updateAverage(
         this.stats.averageProcessingTime,
         processingTime,
-        this.stats.batchesCompleted
+        this.stats.batchesCompleted,
       );
 
       // Update average batch size
       this.stats.averageBatchSize = this.updateAverage(
         this.stats.averageBatchSize,
         batch.requests.length,
-        this.stats.batchesCompleted
+        this.stats.batchesCompleted,
       );
 
       this.stats.lastProcessed = Date.now();
-
     } catch (error) {
       await this.handleBatchError(batch, error);
     }
@@ -525,22 +526,24 @@ export class BatchQueueService {
 
     if (batch.retryCount <= batch.maxRetries && this.isRetryableError(error)) {
       // Retry the batch
-      setTimeout(() => {
-        this.executeBatch(batch);
-      }, Math.pow(2, batch.retryCount) * 1000); // Exponential backoff
+      setTimeout(
+        () => {
+          this.executeBatch(batch);
+        },
+        Math.pow(2, batch.retryCount) * 1000,
+      ); // Exponential backoff
     } else {
       // Fail the batch
       batch.status = BatchRequestStatus.FAILED;
       this.stats.batchesFailed++;
 
       // Reject all requests in the batch
-      const translationError = error instanceof TranslationErrorImpl 
-        ? error 
-        : new TranslationErrorImpl(
-            'Batch translation failed',
-            TranslationErrorCode.BATCH_ERROR,
-            { originalError: error }
-          );
+      const translationError =
+        error instanceof TranslationErrorImpl
+          ? error
+          : new TranslationErrorImpl('Batch translation failed', TranslationErrorCode.BATCH_ERROR, {
+              originalError: error,
+            });
 
       for (const request of batch.requests) {
         request.reject(translationError);
@@ -595,7 +598,7 @@ export class BatchQueueService {
    * Update running average
    */
   private updateAverage(currentAverage: number, newValue: number, count: number): number {
-    return ((currentAverage * (count - 1)) + newValue) / count;
+    return (currentAverage * (count - 1) + newValue) / count;
   }
 
   /**
@@ -629,9 +632,9 @@ export class BatchQueueService {
 
     for (const [batchId, batch] of this.processingBatches.entries()) {
       if (
-        (batch.status === BatchRequestStatus.COMPLETED || 
-         batch.status === BatchRequestStatus.FAILED) &&
-        (now - batch.startTime > maxAge)
+        (batch.status === BatchRequestStatus.COMPLETED ||
+          batch.status === BatchRequestStatus.FAILED) &&
+        now - batch.startTime > maxAge
       ) {
         this.processingBatches.delete(batchId);
       }
@@ -672,14 +675,14 @@ export class BatchQueueService {
     text: string,
     fromLanguage: string | undefined,
     toLanguage: string,
-    priority: BatchRequestPriority = BatchRequestPriority.NORMAL
+    priority: BatchRequestPriority = BatchRequestPriority.NORMAL,
   ): Omit<BatchTranslationRequest, 'id' | 'timestamp' | 'resolve' | 'reject'> {
     return {
       text,
       fromLanguage,
       toLanguage,
       priority,
-      timeout: 30000
+      timeout: 30000,
     };
   }
 
@@ -688,11 +691,16 @@ export class BatchQueueService {
    */
   static getPriority(priority: string): BatchRequestPriority {
     switch (priority.toLowerCase()) {
-      case 'urgent': return BatchRequestPriority.URGENT;
-      case 'high': return BatchRequestPriority.HIGH;
-      case 'normal': return BatchRequestPriority.NORMAL;
-      case 'low': return BatchRequestPriority.LOW;
-      default: return BatchRequestPriority.NORMAL;
+      case 'urgent':
+        return BatchRequestPriority.URGENT;
+      case 'high':
+        return BatchRequestPriority.HIGH;
+      case 'normal':
+        return BatchRequestPriority.NORMAL;
+      case 'low':
+        return BatchRequestPriority.LOW;
+      default:
+        return BatchRequestPriority.NORMAL;
     }
   }
 }
@@ -702,4 +710,4 @@ export class BatchQueueService {
 // ============================================================================
 
 // Export a singleton instance for use throughout the application
-export const batchQueueService = new BatchQueueService(); 
+export const batchQueueService = new BatchQueueService();

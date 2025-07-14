@@ -4,11 +4,17 @@
  * customization options, and proper isolation using shadow DOM
  */
 
-import { PlayerInteractionService, SubtitleSyncEvent, ActiveSubtitleCue } from '../youtube/PlayerInteractionService';
+import {
+  PlayerInteractionService,
+  SubtitleSyncEvent,
+  ActiveSubtitleCue,
+} from '../youtube/PlayerInteractionService';
 import { StorageService } from '../storage';
-import { UserSettings, SubtitleSettings } from '../storage/types';
+import { UserSettings } from '../storage/types';
 import { VocabularyManager } from '../vocabulary/VocabularyManager';
 import { VocabularyObserver, VocabularyEventType } from '../vocabulary/VocabularyObserver';
+import { Logger } from '../logging/Logger';
+import { ComponentType } from '../logging/types';
 
 // ========================================
 // Types and Interfaces
@@ -83,8 +89,8 @@ export type SubtitleVisibilityCallback = (visible: boolean, cueCount: number) =>
 const DEFAULT_CONFIG: DualSubtitleConfig = {
   showTargetLanguage: true,
   showNativeLanguage: true,
-  fontSize: 16,
-  fontFamily: 'Arial, sans-serif',
+  fontSize: 24,
+  fontFamily: '"YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif',
   targetLanguageColor: '#ffffff',
   nativeLanguageColor: '#cccccc',
   backgroundColor: 'rgba(0, 0, 0, 0.8)',
@@ -102,14 +108,14 @@ const DEFAULT_CONFIG: DualSubtitleConfig = {
   wordHighlightColor: '#ffff00',
   autoHideNative: false,
   textShadow: true,
-  textShadowColor: 'rgba(0, 0, 0, 0.8)'
+  textShadowColor: 'rgba(0, 0, 0, 0.8)',
 };
 
 const SUBTITLE_CONTAINER_STYLES = `
   :host {
     /* CSS Custom Properties for theming */
-    --subtitle-font-size: 16px;
-    --subtitle-font-family: Arial, sans-serif;
+    --subtitle-font-size: 24px;
+    --subtitle-font-family: "YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif;
     --subtitle-target-color: #ffffff;
     --subtitle-native-color: #cccccc;
     --subtitle-bg-color: rgba(0, 0, 0, 0.8);
@@ -345,17 +351,17 @@ export class DualSubtitleComponent {
   private subtitleContainer: HTMLElement | null = null;
   private targetLine: HTMLElement | null = null;
   private nativeLine: HTMLElement | null = null;
-  
+
   private config: DualSubtitleConfig = { ...DEFAULT_CONFIG };
   private currentCues: SubtitleCueDisplay[] = [];
   private isVisible: boolean = false;
   private isInitialized: boolean = false;
-  
+
   private playerService: PlayerInteractionService;
   private storageService: StorageService;
   private vocabularyManager: VocabularyManager;
   private vocabularyObserver: VocabularyObserver;
-  
+
   private wordClickListeners: Set<WordClickCallback> = new Set();
   private visibilityListeners: Set<SubtitleVisibilityCallback> = new Set();
 
@@ -365,23 +371,25 @@ export class DualSubtitleComponent {
 
   private subtitleSyncHandler: (event: SubtitleSyncEvent) => void;
   private vocabularyCache: Map<string, string> = new Map();
-  private vocabularyEventListeners: Map<VocabularyEventType, (event: VocabularyEventType) => void> = new Map();
+  private vocabularyEventListeners: Map<VocabularyEventType, (event: VocabularyEventType) => void> =
+    new Map();
+  private readonly logger = Logger.getInstance();
 
   constructor(
     playerService: PlayerInteractionService,
     storageService: StorageService,
-    initialConfig?: Partial<DualSubtitleConfig>
+    initialConfig?: Partial<DualSubtitleConfig>,
   ) {
     this.playerService = playerService;
     this.storageService = storageService;
-    
+
     this.vocabularyManager = VocabularyManager.getInstance();
     this.vocabularyObserver = VocabularyObserver.getInstance();
 
     if (initialConfig) {
       this.config = { ...this.config, ...initialConfig };
     }
-    
+
     this.subtitleSyncHandler = this.handleSubtitleSync.bind(this);
   }
 
@@ -392,65 +400,124 @@ export class DualSubtitleComponent {
   public async initialize(): Promise<boolean> {
     try {
       if (this.isInitialized) {
-        console.warn('[DualSubtitleComponent] Already initialized');
+        this.logger?.warn('Already initialized', {
+          component: ComponentType.SUBTITLE_MANAGER,
+          metadata: {},
+        });
         return true;
       }
 
-      console.log('[DualSubtitleComponent] Starting initialization...');
+      this.logger?.info('Starting initialization', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {},
+      });
 
       // Load config from storage first
-      console.log('[DualSubtitleComponent] Loading config from storage...');
+      this.logger?.debug('Loading config from storage', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {},
+      });
       await this.loadConfigFromStorage();
-      console.log('[DualSubtitleComponent] Config loaded from storage');
+      this.logger?.debug('Config loaded from storage', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {},
+      });
 
       // Find YouTube player container
-      console.log('[DualSubtitleComponent] Finding YouTube player container...');
+      this.logger?.debug('Finding YouTube player container', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {},
+      });
       const playerContainer = this.findPlayerContainer();
       if (!playerContainer) {
-        console.error('[DualSubtitleComponent] Could not find YouTube player container');
+        this.logger?.error('Could not find YouTube player container', {
+          component: ComponentType.SUBTITLE_MANAGER,
+          metadata: {},
+        });
         return false;
       }
-      console.log('[DualSubtitleComponent] Player container found');
+      this.logger?.debug('Player container found', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {},
+      });
 
       // Create shadow DOM container
-      console.log('[DualSubtitleComponent] Creating container...');
+      this.logger?.debug('Creating container', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {},
+      });
       this.container = this.createContainer();
       if (!this.container) {
-        console.error('[DualSubtitleComponent] Failed to create container');
+        this.logger?.error('Failed to create container', {
+          component: ComponentType.SUBTITLE_MANAGER,
+          metadata: {},
+        });
         return false;
       }
-      console.log('[DualSubtitleComponent] Container created');
+      this.logger?.debug('Container created', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {},
+      });
 
       // Attach to player
-      console.log('[DualSubtitleComponent] Attaching to player...');
+      this.logger?.debug('Attaching to player', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {},
+      });
       playerContainer.appendChild(this.container);
-      console.log('[DualSubtitleComponent] Attached to player');
+      this.logger?.debug('Attached to player', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {},
+      });
 
       // Create shadow root and content
-      console.log('[DualSubtitleComponent] Creating shadow DOM...');
+      this.logger?.debug('Creating shadow DOM', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {},
+      });
       this.createShadowDOM();
       this.createSubtitleElements();
       this.applyConfiguration();
-      console.log('[DualSubtitleComponent] Shadow DOM created');
+      this.logger?.debug('Shadow DOM created', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {},
+      });
 
       // Set up observers
-      console.log('[DualSubtitleComponent] Setting up observers...');
+      this.logger?.debug('Setting up observers', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {},
+      });
       this.setupResizeObserver();
       this.setupMutationObserver();
       this.setupVocabularyEventListeners();
-      console.log('[DualSubtitleComponent] Observers set up');
+      this.logger?.debug('Observers set up', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {},
+      });
 
       // Connect to subtitle sync
-      console.log('[DualSubtitleComponent] Connecting to subtitle sync...');
+      this.logger?.debug('Connecting to subtitle sync', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {},
+      });
       this.playerService.addSubtitleSyncListener(this.subtitleSyncHandler);
-      console.log('[DualSubtitleComponent] Connected to subtitle sync');
+      this.logger?.debug('Connected to subtitle sync', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {},
+      });
 
       this.isInitialized = true;
-      console.log('[DualSubtitleComponent] Initialized successfully');
+      this.logger?.info('Initialized successfully', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {},
+      });
       return true;
-
     } catch (error) {
-      console.error('[DualSubtitleComponent] Initialization failed:', error);
+      this.logger?.error('Initialization failed', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: { error: error instanceof Error ? error.message : String(error) },
+      });
       return false;
     }
   }
@@ -484,25 +551,30 @@ export class DualSubtitleComponent {
       this.subtitleContainer = null;
       this.targetLine = null;
       this.nativeLine = null;
-      
+
       // Clear listeners
       this.wordClickListeners.clear();
       this.visibilityListeners.clear();
-      
+
       // Clean up vocabulary event listeners
       this.vocabularyObserver.off(VocabularyEventType.WORD_ADDED);
       this.vocabularyObserver.off(VocabularyEventType.WORD_REMOVED);
       this.vocabularyObserver.off(VocabularyEventType.VOCABULARY_CLEARED);
       this.vocabularyObserver.off(VocabularyEventType.VOCABULARY_IMPORTED);
-      
+
       // Clear vocabulary cache
       this.vocabularyCache.clear();
-      
-      this.isInitialized = false;
-      console.log('[DualSubtitleComponent] Destroyed successfully');
 
+      this.isInitialized = false;
+      this.logger?.info('Destroyed successfully', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {},
+      });
     } catch (error) {
-      console.error('[DualSubtitleComponent] Destroy failed:', error);
+      this.logger?.error('Destroy failed', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: { error: error instanceof Error ? error.message : String(error) },
+      });
     }
   }
 
@@ -511,7 +583,7 @@ export class DualSubtitleComponent {
       '#movie_player',
       '.html5-video-player',
       '[data-layer="0"]',
-      '.ytp-player-content'
+      '.ytp-player-content',
     ];
 
     for (const selector of selectors) {
@@ -548,7 +620,7 @@ export class DualSubtitleComponent {
     if (!this.container) return;
 
     this.shadowRoot = this.container.attachShadow({ mode: 'closed' });
-    
+
     // Create and inject styles
     const styleSheet = document.createElement('style');
     styleSheet.textContent = SUBTITLE_CONTAINER_STYLES;
@@ -587,13 +659,16 @@ export class DualSubtitleComponent {
         this.updateConfigFromSettings(result.data);
       }
     } catch (error) {
-      console.warn('[DualSubtitleComponent] Failed to load config from storage:', error);
+      this.logger?.warn('Failed to load config from storage', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: { error: error instanceof Error ? error.message : String(error) },
+      });
     }
   }
 
   private updateConfigFromSettings(settings: UserSettings): void {
     const { subtitle, ui } = settings;
-    
+
     this.config = {
       ...this.config,
       showTargetLanguage: subtitle.showSource,
@@ -606,8 +681,7 @@ export class DualSubtitleComponent {
       lineSpacing: subtitle.lineHeight,
       wordSpacing: subtitle.wordSpacing,
       animationEnabled: ui.animationsEnabled,
-      verticalOffset: subtitle.position === 'top' ? 10 : 
-                     subtitle.position === 'center' ? 0 : -20
+      verticalOffset: subtitle.position === 'top' ? 10 : subtitle.position === 'center' ? 0 : -20,
     };
 
     if (this.isInitialized) {
@@ -642,16 +716,19 @@ export class DualSubtitleComponent {
     root.style.setProperty('--subtitle-highlight-color', this.config.wordHighlightColor);
     root.style.setProperty('--subtitle-transition-duration', `${this.config.transitionDuration}ms`);
     root.style.setProperty('--subtitle-max-width', `${this.config.maxWidth}%`);
-    
+
     if (this.config.textShadow) {
-      root.style.setProperty('--subtitle-text-shadow', `2px 2px 4px ${this.config.textShadowColor}`);
+      root.style.setProperty(
+        '--subtitle-text-shadow',
+        `2px 2px 4px ${this.config.textShadowColor}`,
+      );
     } else {
       root.style.setProperty('--subtitle-text-shadow', 'none');
     }
 
     // Update positioning
     this.updateSubtitlePosition();
-    
+
     // Update visibility based on config
     if (this.targetLine) {
       this.targetLine.style.display = this.config.showTargetLanguage ? 'block' : 'none';
@@ -691,11 +768,11 @@ export class DualSubtitleComponent {
     const displayCue: SubtitleCueDisplay = {
       id: cue.id,
       targetText: cue.text,
-      nativeText: '', // Will be populated by translation service
+      nativeText: cue.nativeText || '', // Will be populated by translation service
       startTime: cue.startTime,
       endTime: cue.endTime,
       isActive: true,
-      words: this.segmentWords(cue.text)
+      words: this.segmentWords(cue.text),
     };
 
     this.currentCues.push(displayCue);
@@ -703,20 +780,20 @@ export class DualSubtitleComponent {
   }
 
   private removeActiveCue(cueId: string): void {
-    this.currentCues = this.currentCues.filter(cue => cue.id !== cueId);
+    this.currentCues = this.currentCues.filter((cue) => cue.id !== cueId);
     this.updateSubtitleDisplay();
   }
 
   private updateActiveCues(activeCues: ActiveSubtitleCue[]): void {
     // Update existing cues and add new ones
-    const newCueIds = new Set(activeCues.map(cue => cue.id));
-    
+    const newCueIds = new Set(activeCues.map((cue) => cue.id));
+
     // Remove cues that are no longer active
-    this.currentCues = this.currentCues.filter(cue => newCueIds.has(cue.id));
-    
+    this.currentCues = this.currentCues.filter((cue) => newCueIds.has(cue.id));
+
     // Add or update cues
     for (const cue of activeCues) {
-      const existingIndex = this.currentCues.findIndex(c => c.id === cue.id);
+      const existingIndex = this.currentCues.findIndex((c) => c.id === cue.id);
       if (existingIndex === -1) {
         this.addActiveCue(cue);
       }
@@ -729,12 +806,15 @@ export class DualSubtitleComponent {
    */
   private segmentWords(text: string): WordSegment[] {
     if (!text) return [];
-    
-    console.log(`[DualSubtitleComponent] Segmenting text: "${text}"`);
-    
+
+    this.logger?.debug('Segmenting text', {
+      component: ComponentType.SUBTITLE_MANAGER,
+      metadata: { text, textLength: text.length },
+    });
+
     // Detect if text contains Thai characters
     const containsThai = /[\u0E00-\u0E7F]/.test(text);
-    
+
     if (containsThai) {
       return this.segmentThaiText(text);
     } else {
@@ -747,114 +827,27 @@ export class DualSubtitleComponent {
    * Thai word segmentation using linguistic rules
    */
   private segmentThaiText(text: string): WordSegment[] {
-    const words: string[] = [];
-    
-    // Thai syllable boundary markers based on linguistic rules
-    const preposedVowels = /[เแโใไ]/; // Start a syllable
-    const endingSyllableMarkers = /[ะ]/; // End a syllable (with exceptions)
-    const finalVowelMarkers = /[อำ]/; // End a syllable
-    const garanMarker = /อ์/; // การันต์ - usually ends syllable
-    const toneMarks = /[\u0E48-\u0E4B]/; // Tone marks ่ ้ ๊ ๋
-    const vowelMarkers = /[\u0E31\u0E34-\u0E3A\u0E47-\u0E4E]/; // Various vowel markers
-    
-    // For Thai subtitles, we'll use a heuristic approach since
-    // full word segmentation requires complex dictionary lookup
-    
-    // First, split on any existing spaces (some Thai subtitles do have spaces)
-    const spaceSeparatedParts = text.split(/\s+/).filter(part => part.length > 0);
-    
-    for (const part of spaceSeparatedParts) {
-      // Apply Thai-specific segmentation rules
-      const thaiWords = this.segmentThaiPart(part);
-      words.push(...thaiWords);
-    }
-    
+    const segmenter = new Intl.Segmenter('th', { granularity: 'sentence' });
+    const words = Array.from(segmenter.segment(text))
+      .map((word) => word.segment.split(/\s+/g))
+      .flat();
+
     const segments = words.map((word, index) => ({
       text: word,
       index,
-      isClickable: word.length > 0,
+      isClickable: word.length > 1,
       translation: undefined,
-      partOfSpeech: undefined
+      partOfSpeech: undefined,
     }));
-    
-    console.log(`[DualSubtitleComponent] Thai segmented into ${segments.length} words:`, segments.map(s => s.text));
-    return segments;
-  }
 
-  /**
-   * Segment a Thai text part using syllable boundary rules
-   */
-  private segmentThaiPart(text: string): string[] {
-    if (!text) return [];
-    
-    const words: string[] = [];
-    let currentWord = '';
-    let i = 0;
-    
-    while (i < text.length) {
-      const char = text[i];
-      const nextChar = text[i + 1];
-      const prevChar = text[i - 1];
-      
-      // Thai consonants
-      const isThaiConsonant = /[\u0E01-\u0E2E]/.test(char);
-      // Thai vowels (including preposed ones)
-      const isThaiVowel = /[\u0E30-\u0E3A\u0E40-\u0E44\u0E47-\u0E4E]/.test(char);
-      // Preposed vowels that start syllables
-      const isPreposedVowel = /[เแโใไ]/.test(char);
-      // Tone marks
-      const isToneMark = /[\u0E48-\u0E4B]/.test(char);
-      
-      currentWord += char;
-      
-      // Check for syllable boundaries
-      let shouldBreak = false;
-      
-      // Rule 1: Preposed vowels start a new syllable (except for the first character)
-      if (isPreposedVowel && currentWord.length > 1) {
-        // Don't break if we're at the start of processing
-        if (words.length > 0 || i > 0) {
-          shouldBreak = true;
-          currentWord = char; // Start new word with the preposed vowel
-        }
-      }
-      
-      // Rule 2: Look for natural breaking points
-      // If we have a complete syllable pattern (consonant + vowel + optional tone + optional final consonant)
-      if (currentWord.length >= 2 && isThaiConsonant && nextChar) {
-        const nextIsPreposedVowel = /[เแโใไ]/.test(nextChar);
-        if (nextIsPreposedVowel) {
-          shouldBreak = true;
-        }
-      }
-      
-      // Rule 3: Look for punctuation or numbers as natural breaks
-      if (/[\u0E50-\u0E59\s\.,!?;:]/.test(char)) {
-        shouldBreak = true;
-      }
-      
-      // Rule 4: Heuristic - if we have a reasonably long sequence, break it
-      if (currentWord.length >= 6 && isThaiConsonant && nextChar && /[\u0E01-\u0E2E]/.test(nextChar)) {
-        shouldBreak = true;
-      }
-      
-      if (shouldBreak || i === text.length - 1) {
-        if (currentWord.trim().length > 0) {
-          words.push(currentWord.trim());
-        }
-        currentWord = '';
-      }
-      
-      i++;
-    }
-    
-    // Add any remaining word
-    if (currentWord.trim().length > 0) {
-      words.push(currentWord.trim());
-    }
-    
-    // Filter out empty strings and very short fragments
-    return words.filter(word => word.length > 0 && /[\u0E00-\u0E7F]/.test(word));
+    this.logger?.debug('Thai text segmented', {
+      component: ComponentType.SUBTITLE_MANAGER,
+      metadata: {
+        segmentCount: segments.length,
+        words: segments.map((s) => s.text),
+      },
+    });
+    return segments;
   }
 
   /**
@@ -862,25 +855,31 @@ export class DualSubtitleComponent {
    */
   private segmentNonThaiText(text: string): WordSegment[] {
     const words: string[] = [];
-    
+
     // Split on spaces first
-    const spaceSeparatedParts = text.split(/\s+/).filter(part => part.length > 0);
-    
+    const spaceSeparatedParts = text.split(/\s+/).filter((part) => part.length > 0);
+
     for (const part of spaceSeparatedParts) {
       // Further split by punctuation while preserving letters/numbers
       const subWords = part.match(/[\p{L}\p{N}]+/gu) || [];
       words.push(...subWords);
     }
-    
+
     const segments = words.map((word, index) => ({
       text: word,
       index,
       isClickable: word.length > 0,
       translation: undefined,
-      partOfSpeech: undefined
+      partOfSpeech: undefined,
     }));
-    
-    console.log(`[DualSubtitleComponent] Non-Thai segmented into ${segments.length} words:`, segments.map(s => s.text));
+
+    this.logger?.debug('Non-Thai text segmented', {
+      component: ComponentType.SUBTITLE_MANAGER,
+      metadata: {
+        segmentCount: segments.length,
+        words: segments.map((s) => s.text),
+      },
+    });
     return segments;
   }
 
@@ -888,8 +887,8 @@ export class DualSubtitleComponent {
     if (!this.targetLine || !this.nativeLine) return;
 
     // Combine all active cues
-    const combinedTarget = this.currentCues.map(cue => cue.targetText).join(' ');
-    const combinedNative = this.currentCues.map(cue => cue.nativeText).join(' ');
+    const combinedTarget = this.currentCues.map((cue) => cue.targetText).join(' ');
+    const combinedNative = this.currentCues.map((cue) => cue.nativeText).join(' ');
 
     // Update target language line with clickable words
     if (this.config.showTargetLanguage) {
@@ -897,17 +896,22 @@ export class DualSubtitleComponent {
     }
 
     // Update native language line
-    if (this.config.showNativeLanguage && combinedNative) {
-      this.nativeLine.textContent = combinedNative;
+    if (this.config.showNativeLanguage) {
+      this.nativeLine.textContent = combinedNative || '';
     }
 
-    this.showSubtitles();
+    if (combinedNative || combinedTarget) {
+      this.showSubtitles();
+    }
   }
 
   private renderTargetLine(text: string): void {
     if (!this.targetLine) return;
 
-    console.log(`[DualSubtitleComponent] Rendering target line: "${text}"`);
+    this.logger?.debug('Rendering target line', {
+      component: ComponentType.SUBTITLE_MANAGER,
+      metadata: { text, textLength: text.length },
+    });
 
     if (!this.config.clickableWords) {
       this.targetLine.textContent = text;
@@ -919,7 +923,7 @@ export class DualSubtitleComponent {
 
     // Get segmented words
     const words = this.segmentWords(text);
-    
+
     if (words.length === 0) {
       this.targetLine.textContent = text;
       return;
@@ -928,58 +932,72 @@ export class DualSubtitleComponent {
     // Create a more robust rendering approach
     let currentText = text;
     let wordIndex = 0;
-    
+
     // Process each word and render it with surrounding text
     while (wordIndex < words.length && currentText.length > 0) {
       const word = words[wordIndex];
       const wordStartIndex = currentText.indexOf(word.text);
-      
+
       if (wordStartIndex === -1) {
         // Word not found, skip it
         wordIndex++;
         continue;
       }
-      
+
       // Add any text before the word (spaces, punctuation, etc.)
       const beforeWord = currentText.substring(0, wordStartIndex);
       if (beforeWord.length > 0) {
         const textNode = document.createTextNode(beforeWord);
         this.targetLine.appendChild(textNode);
       }
-      
+
       // Create clickable word span
       const wordSpan = document.createElement('span');
       wordSpan.className = 'clickable-word';
       wordSpan.textContent = word.text;
-      
+
       // Check if word is in vocabulary and add appropriate class
-      this.checkVocabularyWord(word.text).then((isVocabularyWord: boolean) => {
-        if (isVocabularyWord) {
-          wordSpan.classList.add('vocabulary-word');
-        }
-      }).catch(error => {
-        console.warn('[DualSubtitleComponent] Error checking vocabulary word:', error);
-      });
-      
+      this.checkVocabularyWord(word.text)
+        .then((isVocabularyWord: boolean) => {
+          if (isVocabularyWord) {
+            wordSpan.classList.add('vocabulary-word');
+          }
+        })
+        .catch((error) => {
+          this.logger?.warn('Error checking vocabulary word', {
+            component: ComponentType.SUBTITLE_MANAGER,
+            metadata: {
+              word: word.text,
+              error: error instanceof Error ? error.message : String(error),
+            },
+          });
+        });
+
       wordSpan.addEventListener('click', (event) => {
-        console.log(`[DualSubtitleComponent] Word clicked: "${word.text}"`);
+        this.logger?.debug('Word clicked', {
+          component: ComponentType.SUBTITLE_MANAGER,
+          metadata: { word: word.text },
+        });
         this.handleWordClick(word.text, event);
       });
-      
+
       this.targetLine.appendChild(wordSpan);
-      
+
       // Move to the next part of the text
       currentText = currentText.substring(wordStartIndex + word.text.length);
       wordIndex++;
     }
-    
+
     // Add any remaining text
     if (currentText.length > 0) {
       const textNode = document.createTextNode(currentText);
       this.targetLine.appendChild(textNode);
     }
-    
-    console.log(`[DualSubtitleComponent] Rendered ${words.length} clickable words`);
+
+    this.logger?.debug('Rendered clickable words', {
+      component: ComponentType.SUBTITLE_MANAGER,
+      metadata: { wordCount: words.length },
+    });
   }
 
   private handleWordClick(word: string, event: MouseEvent): void {
@@ -990,31 +1008,47 @@ export class DualSubtitleComponent {
 
     const rect = (event.target as HTMLElement).getBoundingClientRect();
     const cleanedWord = word.trim(); // Simple cleaning - just remove whitespace
-    
-    console.log(`[DualSubtitleComponent] Handling word click for: "${cleanedWord}"`);
-    
+
+    this.logger?.debug('Handling word click', {
+      component: ComponentType.SUBTITLE_MANAGER,
+      metadata: { cleanedWord },
+    });
+
     const wordClickEvent: WordClickEvent = {
       word: cleanedWord,
       translation: undefined, // Will be populated by translation service
-      context: this.currentCues.map(cue => cue.targetText).join(' '),
+      context: this.currentCues.map((cue) => cue.targetText).join(' '),
       timestamp: this.playerService.getCurrentTime(),
       cueId: this.currentCues[0]?.id || '',
       position: {
         x: rect.left + rect.width / 2,
-        y: rect.top
-      }
+        y: rect.bottom, // Use bottom edge so popup appears below the word
+      },
     };
 
-    console.log(`[DualSubtitleComponent] Word click event:`, wordClickEvent);
-    console.log(`[DualSubtitleComponent] Number of listeners: ${this.wordClickListeners.size}`);
+    this.logger?.debug('Word click event created', {
+      component: ComponentType.SUBTITLE_MANAGER,
+      metadata: {
+        word: wordClickEvent.word,
+        context: wordClickEvent.context,
+        timestamp: wordClickEvent.timestamp,
+        listenerCount: this.wordClickListeners.size,
+      },
+    });
 
     // Notify all word click listeners
-    this.wordClickListeners.forEach(listener => {
+    this.wordClickListeners.forEach((listener) => {
       try {
-        console.log(`[DualSubtitleComponent] Calling word click listener...`);
+        this.logger?.debug('Calling word click listener', {
+          component: ComponentType.SUBTITLE_MANAGER,
+          metadata: {},
+        });
         listener(wordClickEvent);
       } catch (error) {
-        console.error('[DualSubtitleComponent] Error in word click listener:', error);
+        this.logger?.error('Error in word click listener', {
+          component: ComponentType.SUBTITLE_MANAGER,
+          metadata: { error: error instanceof Error ? error.message : String(error) },
+        });
       }
     });
   }
@@ -1024,7 +1058,7 @@ export class DualSubtitleComponent {
 
     this.isVisible = true;
     this.subtitleContainer.classList.remove('hidden');
-    
+
     if (this.config.animationEnabled) {
       this.subtitleContainer.classList.add('fade-in');
       setTimeout(() => {
@@ -1051,7 +1085,7 @@ export class DualSubtitleComponent {
         }
       }, this.config.transitionDuration);
     } else {
-      this.subtitleContainer.classList.add('hidden');
+      this.subtitleContainer.classList.remove('hidden');
     }
 
     this.notifyVisibilityChange(false, 0);
@@ -1073,11 +1107,11 @@ export class DualSubtitleComponent {
     if (!playerSize) return;
 
     const { width, height } = playerSize;
-    
+
     // Calculate vertical position based on offset percentage
     const verticalPixels = (this.config.verticalOffset / 100) * height;
-    const bottomPosition = Math.max(50, height * 0.1 + Math.abs(verticalPixels));
-    
+    const bottomPosition = Math.max(50, Math.abs(verticalPixels) - height * 0.1);
+
     // Calculate horizontal position based on alignment
     let leftPosition = '50%'; // Center by default
     if (this.config.horizontalAlignment === 'left') {
@@ -1099,7 +1133,7 @@ export class DualSubtitleComponent {
 
     return {
       width: playerContainer.offsetWidth,
-      height: playerContainer.offsetHeight
+      height: playerContainer.offsetHeight,
     };
   }
 
@@ -1125,15 +1159,17 @@ export class DualSubtitleComponent {
   private setupMutationObserver(): void {
     this.mutationObserver = new MutationObserver((mutations) => {
       let needsRepositioning = false;
-      
+
       for (const mutation of mutations) {
-        if (mutation.type === 'attributes' && 
-            (mutation.attributeName === 'class' || mutation.attributeName === 'style')) {
+        if (
+          mutation.type === 'attributes' &&
+          (mutation.attributeName === 'class' || mutation.attributeName === 'style')
+        ) {
           needsRepositioning = true;
           break;
         }
       }
-      
+
       if (needsRepositioning) {
         setTimeout(() => this.updateSubtitlePosition(), 100);
       }
@@ -1144,23 +1180,35 @@ export class DualSubtitleComponent {
       this.mutationObserver.observe(playerContainer, {
         attributes: true,
         attributeFilter: ['class', 'style'],
-        subtree: true
+        subtree: true,
       });
     }
   }
 
   private setupVocabularyEventListeners(): void {
     // Listen for vocabulary changes that affect highlighting
-    this.vocabularyObserver.on(VocabularyEventType.WORD_ADDED, this.handleVocabularyChange.bind(this));
-    this.vocabularyObserver.on(VocabularyEventType.WORD_REMOVED, this.handleVocabularyChange.bind(this));
-    this.vocabularyObserver.on(VocabularyEventType.VOCABULARY_CLEARED, this.handleVocabularyChange.bind(this));
-    this.vocabularyObserver.on(VocabularyEventType.VOCABULARY_IMPORTED, this.handleVocabularyChange.bind(this));
+    this.vocabularyObserver.on(
+      VocabularyEventType.WORD_ADDED,
+      this.handleVocabularyChange.bind(this),
+    );
+    this.vocabularyObserver.on(
+      VocabularyEventType.WORD_REMOVED,
+      this.handleVocabularyChange.bind(this),
+    );
+    this.vocabularyObserver.on(
+      VocabularyEventType.VOCABULARY_CLEARED,
+      this.handleVocabularyChange.bind(this),
+    );
+    this.vocabularyObserver.on(
+      VocabularyEventType.VOCABULARY_IMPORTED,
+      this.handleVocabularyChange.bind(this),
+    );
   }
 
   private handleVocabularyChange(): void {
     // Clear vocabulary cache to force refresh
     this.vocabularyCache.clear();
-    
+
     // Re-render current subtitles with updated highlighting
     if (this.isVisible && this.currentCues.length > 0) {
       this.updateSubtitleDisplay();
@@ -1188,11 +1236,18 @@ export class DualSubtitleComponent {
   }
 
   private notifyVisibilityChange(visible: boolean, cueCount: number): void {
-    this.visibilityListeners.forEach(listener => {
+    this.visibilityListeners.forEach((listener) => {
       try {
         listener(visible, cueCount);
       } catch (error) {
-        console.error('[DualSubtitleComponent] Visibility listener error:', error);
+        this.logger?.error('Visibility listener error', {
+          component: ComponentType.SUBTITLE_MANAGER,
+          metadata: {
+            visible,
+            cueCount,
+            error: error instanceof Error ? error.message : String(error),
+          },
+        });
       }
     });
   }
@@ -1209,7 +1264,7 @@ export class DualSubtitleComponent {
     this.config = {
       ...this.config,
       showTargetLanguage: targetVisible,
-      showNativeLanguage: nativeVisible
+      showNativeLanguage: nativeVisible,
     };
     this.applyConfiguration();
     this.updateSubtitleDisplay();
@@ -1220,7 +1275,7 @@ export class DualSubtitleComponent {
   }
 
   public setNativeTranslation(cueId: string, translation: string): void {
-    const cue = this.currentCues.find(c => c.id === cueId);
+    const cue = this.currentCues.find((c) => c.id === cueId);
     if (cue) {
       (cue as any).nativeText = translation; // Type assertion for readonly property
       this.updateSubtitleDisplay();
@@ -1232,8 +1287,8 @@ export class DualSubtitleComponent {
 
     const cleanWord = word.replace(/[^\w]/g, '').toLowerCase();
     const wordSpans = this.targetLine.querySelectorAll('.clickable-word');
-    
-    wordSpans.forEach(span => {
+
+    wordSpans.forEach((span) => {
       const spanText = span.textContent?.replace(/[^\w]/g, '').toLowerCase();
       if (spanText === cleanWord) {
         if (highlight) {
@@ -1252,7 +1307,7 @@ export class DualSubtitleComponent {
     if (!this.targetLine) return;
 
     const wordSpans = this.targetLine.querySelectorAll('.clickable-word');
-    
+
     for (const span of wordSpans) {
       const word = span.textContent?.replace(/[^\w]/g, '') || '';
       if (word) {
@@ -1273,7 +1328,7 @@ export class DualSubtitleComponent {
     if (!this.targetLine) return;
 
     const wordSpans = this.targetLine.querySelectorAll('.vocabulary-word');
-    wordSpans.forEach(span => {
+    wordSpans.forEach((span) => {
       span.classList.remove('vocabulary-word');
     });
   }
@@ -1286,17 +1341,25 @@ export class DualSubtitleComponent {
     try {
       // Try to check with common source languages
       const cleanWord = word.replace(/[^\w]/g, '').toLowerCase();
-      const isVocabularyWord = await this.vocabularyManager.isWordSaved(cleanWord, 'auto') ||
-                              await this.vocabularyManager.isWordSaved(cleanWord, 'en') ||
-                              await this.vocabularyManager.isWordSaved(cleanWord, 'es') ||
-                              await this.vocabularyManager.isWordSaved(cleanWord, 'fr') ||
-                              await this.vocabularyManager.isWordSaved(cleanWord, 'de');
-      
+      const isVocabularyWord =
+        (await this.vocabularyManager.isWordSaved(cleanWord, 'auto')) ||
+        (await this.vocabularyManager.isWordSaved(cleanWord, 'en')) ||
+        (await this.vocabularyManager.isWordSaved(cleanWord, 'es')) ||
+        (await this.vocabularyManager.isWordSaved(cleanWord, 'fr')) ||
+        (await this.vocabularyManager.isWordSaved(cleanWord, 'th')) ||
+        (await this.vocabularyManager.isWordSaved(cleanWord, 'de'));
+
       this.vocabularyCache.set(word, isVocabularyWord.toString());
       return isVocabularyWord;
     } catch (error) {
-      console.warn('[DualSubtitleComponent] Error checking vocabulary word:', error);
+      this.logger?.warn('Error checking vocabulary word', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: {
+          word,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
       return false;
     }
   }
-} 
+}

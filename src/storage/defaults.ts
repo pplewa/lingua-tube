@@ -3,17 +3,18 @@
  * Defines default configurations and initial data structures
  */
 
-import { 
-  UserSettings, 
-  LanguageSettings, 
-  SubtitleSettings, 
+import {
+  UserSettings,
+  LanguageSettings,
+  SubtitleSettings,
   PlaybackSettings,
   VocabularySettings,
   UISettings,
   PrivacySettings,
+  DeveloperSettings,
   KeyboardShortcuts,
   StorageSchema,
-  STORAGE_CONFIG
+  STORAGE_CONFIG,
 } from './types';
 
 // ========================================
@@ -34,8 +35,8 @@ export const DEFAULT_LANGUAGE_SETTINGS: LanguageSettings = {
 export const DEFAULT_SUBTITLE_SETTINGS: SubtitleSettings = {
   showSource: true,
   showNative: true,
-  fontSize: 16,
-  fontFamily: 'Arial, sans-serif',
+  fontSize: 24,
+  fontFamily: '"YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif',
   position: 'bottom',
   backgroundColor: 'rgba(0, 0, 0, 0.8)',
   textColor: '#ffffff',
@@ -108,6 +109,21 @@ export const DEFAULT_PRIVACY_SETTINGS: PrivacySettings = {
 };
 
 // ========================================
+// Default Developer Settings
+// ========================================
+
+export const DEFAULT_DEVELOPER_SETTINGS: DeveloperSettings = {
+  debugMode: false, // Disabled by default, auto-enabled in development
+  verboseLogging: false,
+  consoleTimestamps: true,
+  performanceProfiling: false,
+  memoryMonitoring: false,
+  consoleLogLevel: 'info',
+  enabledComponents: [], // All components enabled when empty
+  autoExportDebugData: false,
+};
+
+// ========================================
 // Complete Default User Settings
 // ========================================
 
@@ -119,6 +135,7 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   vocabulary: DEFAULT_VOCABULARY_SETTINGS,
   ui: DEFAULT_UI_SETTINGS,
   privacy: DEFAULT_PRIVACY_SETTINGS,
+  developer: DEFAULT_DEVELOPER_SETTINGS,
 };
 
 // ========================================
@@ -177,6 +194,10 @@ export const createDefaultSettings = (overrides: Partial<UserSettings> = {}): Us
       ...DEFAULT_USER_SETTINGS.privacy,
       ...overrides.privacy,
     },
+    developer: {
+      ...DEFAULT_USER_SETTINGS.developer,
+      ...overrides.developer,
+    },
   };
 };
 
@@ -185,9 +206,9 @@ export const createDefaultSettings = (overrides: Partial<UserSettings> = {}): Us
  */
 export const validateUserSettings = (settings: unknown): settings is UserSettings => {
   if (!settings || typeof settings !== 'object') return false;
-  
+
   const s = settings as Record<string, unknown>;
-  
+
   return (
     typeof s.version === 'number' &&
     typeof s.languages === 'object' &&
@@ -195,7 +216,8 @@ export const validateUserSettings = (settings: unknown): settings is UserSetting
     typeof s.playback === 'object' &&
     typeof s.vocabulary === 'object' &&
     typeof s.ui === 'object' &&
-    typeof s.privacy === 'object'
+    typeof s.privacy === 'object' &&
+    typeof s.developer === 'object'
   );
 };
 
@@ -203,18 +225,18 @@ export const validateUserSettings = (settings: unknown): settings is UserSetting
  * Language code mapping for common languages
  */
 export const LANGUAGE_CODES = {
-  'en': 'English',
-  'es': 'Español',
-  'fr': 'Français',
-  'de': 'Deutsch',
-  'it': 'Italiano',
-  'pt': 'Português',
-  'ru': 'Русский',
-  'ja': '日本語',
-  'ko': '한국어',
-  'zh': '中文',
-  'ar': 'العربية',
-  'hi': 'हिन्दी',
+  en: 'English',
+  es: 'Español',
+  fr: 'Français',
+  de: 'Deutsch',
+  it: 'Italiano',
+  pt: 'Português',
+  ru: 'Русский',
+  ja: '日本語',
+  ko: '한국어',
+  zh: '中文',
+  ar: 'العربية',
+  hi: 'हिन्दी',
 } as const;
 
-export type SupportedLanguageCode = keyof typeof LANGUAGE_CODES; 
+export type SupportedLanguageCode = keyof typeof LANGUAGE_CODES;

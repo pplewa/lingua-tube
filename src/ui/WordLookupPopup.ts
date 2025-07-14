@@ -6,8 +6,11 @@
 
 import { DictionaryApiService } from '../translation/DictionaryApiService';
 import { TranslationApiService } from '../translation/TranslationApiService';
+import { translationCacheService } from '../translation/TranslationCacheService';
 import { TTSService } from '../translation/TTSService';
 import { StorageService } from '../storage';
+import { Logger } from '../logging';
+import { ComponentType } from '../logging/types';
 
 // ========================================
 // Types and Interfaces
@@ -86,14 +89,14 @@ export enum ErrorType {
   PARTIAL_FAILURE = 'PARTIAL_FAILURE',
   TTS_FAILED = 'TTS_FAILED',
   STORAGE_FAILED = 'STORAGE_FAILED',
-  UNKNOWN = 'UNKNOWN'
+  UNKNOWN = 'UNKNOWN',
 }
 
 export enum ErrorSeverity {
-  LOW = 'LOW',       // Minor issues, user can continue
+  LOW = 'LOW', // Minor issues, user can continue
   MEDIUM = 'MEDIUM', // Some functionality affected
-  HIGH = 'HIGH',     // Major functionality broken
-  CRITICAL = 'CRITICAL' // Complete failure
+  HIGH = 'HIGH', // Major functionality broken
+  CRITICAL = 'CRITICAL', // Complete failure
 }
 
 export interface ErrorContext {
@@ -684,6 +687,7 @@ const POPUP_STYLES = `
     position: relative;
     overflow: hidden;
     will-change: transform, background-color;
+    min-width: 120px;
   }
 
   .action-button::before {
@@ -1227,6 +1231,8 @@ export class WordLookupPopup {
   private isVisible: boolean = false;
   private isLoading: boolean = false;
   private currentWord: string = '';
+  private currentContext: string = '';
+  private translation: string = '';
   private currentSourceLanguage: string = 'en'; // Default fallback
   private currentTargetLanguage: string = 'es'; // Default fallback
   private autoHideTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -1247,6 +1253,7 @@ export class WordLookupPopup {
   private translationService: TranslationApiService;
   private ttsService: TTSService;
   private storageService: StorageService;
+  private readonly logger = Logger.getInstance();
 
   private events: { [K in keyof PopupEvents]?: PopupEvents[K] } = {};
 
@@ -1257,21 +1264,21 @@ export class WordLookupPopup {
     retryCount: 0,
     lastRetryTime: 0,
     isRetrying: false,
-    errorHistory: []
+    errorHistory: [],
   };
-  
+
   constructor(
     dictionaryService: DictionaryApiService,
     translationService: TranslationApiService,
     ttsService: TTSService,
     storageService: StorageService,
-    config?: Partial<WordLookupConfig>
+    config?: Partial<WordLookupConfig>,
   ) {
     this.dictionaryService = dictionaryService;
     this.translationService = translationService;
     this.ttsService = ttsService;
     this.storageService = storageService;
-    
+
     this.config = {
       maxWidth: 400,
       maxHeight: 600,
@@ -1290,9 +1297,9 @@ export class WordLookupPopup {
       showExamples: true,
       enableTTS: true,
       enableVocabulary: true,
-      ...config
+      ...config,
     };
-    
+
     this.initialize();
   }
 
@@ -1313,14 +1320,16 @@ export class WordLookupPopup {
       position: fixed;
       top: 0;
       left: 0;
+      width: 100%;
+      height: 100%;
       z-index: ${this.config.zIndex};
       pointer-events: none;
     `;
-    
+
     // Add ARIA attributes for accessibility
     this.container.setAttribute('aria-live', 'polite');
     this.container.setAttribute('aria-atomic', 'true');
-    
+
     // Append to body
     document.body.appendChild(this.container);
   }
@@ -1329,12 +1338,12 @@ export class WordLookupPopup {
     if (!this.container) return;
 
     this.shadowRoot = this.container.attachShadow({ mode: 'closed' });
-    
+
     // Create and inject styles
     const styleSheet = document.createElement('style');
     styleSheet.textContent = POPUP_STYLES;
     this.shadowRoot.appendChild(styleSheet);
-    
+
     // Create popup container
     this.popupContainer = document.createElement('div');
     this.popupContainer.className = 'popup-container';
@@ -1343,7 +1352,7 @@ export class WordLookupPopup {
     this.popupContainer.setAttribute('aria-labelledby', 'popup-title');
     this.popupContainer.setAttribute('tabindex', '-1');
     this.shadowRoot.appendChild(this.popupContainer);
-    
+
     // Apply configuration
     this.applyConfiguration();
   }
@@ -1369,7 +1378,7 @@ export class WordLookupPopup {
     // Create and track keyboard handler
     this.keyboardHandler = (event: KeyboardEvent) => {
       if (!this.isVisible || this.isDestroyed) return;
-      
+
       switch (event.key) {
         case 'Escape':
           event.preventDefault();
@@ -1392,11 +1401,11 @@ export class WordLookupPopup {
     this.beforeUnloadHandler = () => {
       this.destroySync();
     };
-    
+
     this.pagehideHandler = () => {
       this.destroySync();
     };
-    
+
     window.addEventListener('beforeunload', this.beforeUnloadHandler);
     window.addEventListener('pagehide', this.pagehideHandler);
 
@@ -1409,10 +1418,21 @@ export class WordLookupPopup {
   // Public API
   // ========================================
 
-  public async show(wordOrData: string | { word: string; position: { x: number; y: number }; sourceLanguage?: string; targetLanguage?: string; context?: string }, position?: { x: number; y: number }): Promise<void> {
+  public async show(
+    wordOrData:
+      | string
+      | {
+          word: string;
+          position: { x: number; y: number };
+          sourceLanguage?: string;
+          targetLanguage?: string;
+          context?: string;
+        },
+    position?: { x: number; y: number },
+  ): Promise<void> {
     try {
       this.clearErrorState();
-      
+
       // Parse input parameters
       let word: string;
       let pos: { x: number; y: number };
@@ -1425,12 +1445,13 @@ export class WordLookupPopup {
         pos = position || { x: 0, y: 0 };
         sourceLanguage = this.currentSourceLanguage;
         targetLanguage = this.currentTargetLanguage;
+        context = '';
       } else {
         word = wordOrData.word;
         pos = wordOrData.position;
         sourceLanguage = wordOrData.sourceLanguage || this.currentSourceLanguage;
         targetLanguage = wordOrData.targetLanguage || this.currentTargetLanguage;
-        context = wordOrData.context;
+        context = wordOrData.context || '';
       }
 
       // Enhanced word validation with language-specific handling
@@ -1440,11 +1461,17 @@ export class WordLookupPopup {
 
       // Simple word preprocessing - just trim whitespace
       const processedWord = word.trim();
-      
-      console.log(`[WordLookupPopup] 🔍 Showing lookup for word: "${processedWord}" (original: "${word}")`);
-      console.log(`[WordLookupPopup] - Source language: ${sourceLanguage}`);
-      console.log(`[WordLookupPopup] - Target language: ${targetLanguage}`);
-      console.log(`[WordLookupPopup] - Position:`, pos);
+
+      this.logger?.debug('Showing word lookup', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: {
+          word: processedWord,
+          originalWord: word,
+          sourceLanguage,
+          targetLanguage,
+          position: pos,
+        },
+      });
 
       // Set languages if provided
       if (sourceLanguage && targetLanguage) {
@@ -1454,6 +1481,7 @@ export class WordLookupPopup {
 
       // Store current word
       this.currentWord = processedWord;
+      this.currentContext = context;
 
       // Show popup immediately with loading state
       this.showLoadingState();
@@ -1472,17 +1500,22 @@ export class WordLookupPopup {
 
       // Emit show event
       this.emit('show', { word: processedWord, position: pos, sourceLanguage, targetLanguage });
-
     } catch (error) {
-      console.error('[WordLookupPopup] Failed to show popup:', error);
-      
+      this.logger?.error('Failed to show popup', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: {
+          word: typeof wordOrData === 'string' ? wordOrData : wordOrData.word,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+
       // Show language-specific error message
       const errorContext = this.classifyError(error as Error, {
         service: 'popup',
         operation: 'show',
-        word: typeof wordOrData === 'string' ? wordOrData : wordOrData.word
+        word: typeof wordOrData === 'string' ? wordOrData : wordOrData.word,
       });
-      
+
       this.showEnhancedErrorState(errorContext);
       this.emit('error', error);
     }
@@ -1492,21 +1525,20 @@ export class WordLookupPopup {
    * Preprocess word based on source language characteristics
    */
 
-
   /**
    * Make the popup visible with animation
    */
   private makeVisible(): void {
     if (!this.popupContainer) return;
-    
+
     this.isVisible = true;
     this.popupContainer.classList.add('visible');
-    
+
     // Attach click-outside listeners with small delay to prevent immediate closure
     this.createTimeout(() => {
       this.attachClickOutsideListeners();
     }, 50);
-    
+
     // Trigger event
     this.events.onShow?.();
   }
@@ -1518,17 +1550,17 @@ export class WordLookupPopup {
     if (this.isVisible) {
       this.hide();
     }
-    
+
     this.isLoading = true;
-    
+
     // Clear any existing loading timeout
     if (this.loadingTimeout) {
       clearTimeout(this.loadingTimeout);
     }
-    
+
     // Show skeleton loading for better UX
     this.showSkeletonLoading();
-    
+
     // Set loading timeout (15 seconds)
     this.loadingTimeout = setTimeout(() => {
       this.showLoadingTimeout();
@@ -1539,43 +1571,40 @@ export class WordLookupPopup {
     if (!this.isVisible) return;
 
     this.isVisible = false;
-    
+
     if (this.popupContainer) {
       this.popupContainer.classList.remove('visible');
       this.popupContainer.classList.add('hiding');
     }
-    
+
     // Clear auto-hide timeout
     if (this.autoHideTimeout) {
       clearTimeout(this.autoHideTimeout);
       this.autoHideTimeout = null;
     }
-    
+
     // Clear loading timeout
     if (this.loadingTimeout) {
       clearTimeout(this.loadingTimeout);
       this.loadingTimeout = null;
     }
-    
+
     // Clear action loading states
     this.actionLoadingStates.clear();
-    
+
     // Clear error state when hiding
     this.clearErrorState();
-    
+
     // Detach click-outside listeners
     this.detachClickOutsideListeners();
-    
-    // Remove container after animation (using tracked timeout)
+
     this.createTimeout(() => {
-      if (this.container && this.container.parentNode && !this.isDestroyed) {
-        this.container.parentNode.removeChild(this.container);
-      }
+      this.popupContainer?.classList.remove('hiding');
     }, this.config.animationDuration * 0.8);
-    
+
     // Restore focus
     this.restoreFocus();
-    
+
     // Trigger event
     this.events.onHide?.();
   }
@@ -1585,7 +1614,7 @@ export class WordLookupPopup {
 
     // Clear error state on successful content update
     this.clearErrorState();
-    
+
     this.popupContainer.classList.remove('loading', 'error');
     this.popupContainer.innerHTML = this.renderContent(content);
     this.attachEventHandlers();
@@ -1608,13 +1637,20 @@ export class WordLookupPopup {
     try {
       await this.waitForPendingOperations(2000); // 2 second timeout
     } catch (error) {
-      console.warn('[WordLookupPopup] Some operations did not complete during cleanup:', error);
+      this.logger?.warn('Some operations did not complete during cleanup', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
     }
 
     // Perform complete cleanup
     this.performCompleteCleanup();
 
-    console.log('[WordLookupPopup] Component destroyed and cleaned up');
+    this.logger?.info('Component destroyed and cleaned up', {
+      component: ComponentType.WORD_LOOKUP,
+    });
   }
 
   /**
@@ -1623,8 +1659,13 @@ export class WordLookupPopup {
    */
   public destroySync(): void {
     if (this.isDestroyed) return;
-    
-    console.warn('[WordLookupPopup] Using synchronous destroy - some operations may not complete properly');
+
+    this.logger?.warn('Using synchronous destroy - some operations may not complete properly', {
+      component: ComponentType.WORD_LOOKUP,
+      metadata: {
+        reason: 'Sync destroy used instead of async destroy',
+      },
+    });
     this.performCompleteCleanup();
   }
 
@@ -1633,7 +1674,9 @@ export class WordLookupPopup {
    * Provides automatic cleanup for browser navigation/page unload scenarios
    */
   public disconnectedCallback(): void {
-    console.log('[WordLookupPopup] Component disconnected from DOM, performing cleanup');
+    this.logger?.info('Component disconnected from DOM, performing cleanup', {
+      component: ComponentType.WORD_LOOKUP,
+    });
     this.destroySync();
   }
 
@@ -1652,62 +1695,146 @@ export class WordLookupPopup {
   // ========================================
   // Content Loading and Rendering
   // ========================================
-
   private async loadWordContent(word: string): Promise<PopupContent> {
-    console.log(`[WordLookupPopup] Loading content for word: "${word}"`);
-    console.log(`[WordLookupPopup] Source language: ${this.currentSourceLanguage}, Target language: ${this.currentTargetLanguage}`);
-    
+    // Show partial content with translation (only if not destroyed)
+    if (!this.isDestroyed) {
+      this.showPartialContent(word);
+    }
+
+    this.logger?.debug('Loading content for word', {
+      component: ComponentType.WORD_LOOKUP,
+      metadata: {
+        word,
+        sourceLanguage: this.currentSourceLanguage,
+        targetLanguage: this.currentTargetLanguage,
+      },
+    });
+
     // Progressive loading: show translation first, then definition (if applicable)
-    let translation = '';
     let definition: any = { meanings: [], phonetics: [] };
-    
+
     try {
-      // Load translation first (usually faster) - tracked operation
-      console.log(`[WordLookupPopup] Getting translation...`);
-      const translationPromise = this.translationService.translateText({
-        text: word,
-        fromLanguage: this.currentSourceLanguage,
-        toLanguage: this.currentTargetLanguage
-      });
-      translation = await this.trackOperation(translationPromise);
-      console.log(`[WordLookupPopup] Translation received: "${translation}"`);
-      
-      // Show partial content with translation (only if not destroyed)
-      if (!this.isDestroyed) {
-        this.showPartialContent(word, translation);
+      const cached = await translationCacheService.get(
+        word,
+        this.currentSourceLanguage,
+        this.currentTargetLanguage,
+      );
+      if (cached) {
+        this.logger?.debug('Found cached translation', {
+          component: ComponentType.WORD_LOOKUP,
+          metadata: {
+            word,
+            cachedTranslation: cached,
+            sourceLanguage: this.currentSourceLanguage,
+            targetLanguage: this.currentTargetLanguage,
+          },
+        });
+        this.translation = cached;
+      } else {
+        // Load translation first (usually faster) - tracked operation
+        this.logger?.debug('Getting translation', {
+          component: ComponentType.WORD_LOOKUP,
+          metadata: {
+            word,
+            sourceLanguage: this.currentSourceLanguage,
+            targetLanguage: this.currentTargetLanguage,
+          },
+        });
+        const translationPromise = this.translationService.translateText({
+          text: word,
+          fromLanguage: this.currentSourceLanguage,
+          toLanguage: this.currentTargetLanguage,
+        });
+        this.translation = await this.trackOperation(translationPromise);
       }
-      
+
+      await translationCacheService.set(
+        word,
+        this.translation,
+        this.currentSourceLanguage,
+        this.currentTargetLanguage,
+      );
+
+      this.logger?.debug('Translation received', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: { word, translation: this.translation.substring(0, 50) },
+      });
+
       // Only try to get definition if the source language is English
       // (since DictionaryApiService only supports English)
-      if (this.currentSourceLanguage === 'en' || this.currentSourceLanguage === 'auto') {
+      if (this.currentSourceLanguage === 'en') {
         try {
-          console.log(`[WordLookupPopup] Getting definition for English word...`);
+          this.logger?.debug('Getting definition for English word', {
+            component: ComponentType.WORD_LOOKUP,
+            metadata: { word, sourceLanguage: this.currentSourceLanguage },
+          });
           const definitionPromise = this.dictionaryService.getDefinition(word);
           definition = await this.trackOperation(definitionPromise);
-          console.log(`[WordLookupPopup] Definition received:`, definition);
+          this.logger?.debug('Definition received', {
+            component: ComponentType.WORD_LOOKUP,
+            metadata: { word, definitionCount: definition?.meanings?.length || 0 },
+          });
         } catch (definitionError) {
-          console.log(`[WordLookupPopup] Definition lookup failed (expected for non-English words):`, definitionError);
+          this.logger?.debug('Definition lookup failed (expected for non-English words)', {
+            component: ComponentType.WORD_LOOKUP,
+            metadata: {
+              word,
+              sourceLanguage: this.currentSourceLanguage,
+              error:
+                definitionError instanceof Error
+                  ? definitionError.message
+                  : String(definitionError),
+            },
+          });
           // For non-English words, this is expected - don't treat as an error
           // Just continue with translation-only content
         }
       } else {
-        console.log(`[WordLookupPopup] Skipping definition lookup for non-English word (${this.currentSourceLanguage})`);
+        this.logger?.debug('Skipping definition lookup for non-English word', {
+          component: ComponentType.WORD_LOOKUP,
+          metadata: { word, sourceLanguage: this.currentSourceLanguage },
+        });
       }
-      
     } catch (error) {
-      console.error(`[WordLookupPopup] Translation failed:`, error);
-      
+      this.logger?.error('Translation failed', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: {
+          word,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+
       // If translation fails, try definition only (for English words)
-      if (!translation && !this.isDestroyed && (this.currentSourceLanguage === 'en' || this.currentSourceLanguage === 'auto')) {
+      if (
+        !this.translation &&
+        !this.isDestroyed &&
+        (this.currentSourceLanguage === 'en' || this.currentSourceLanguage === 'auto')
+      ) {
         try {
-          console.log(`[WordLookupPopup] Trying definition-only fallback...`);
+          this.logger?.debug('Trying definition-only fallback', {
+            component: ComponentType.WORD_LOOKUP,
+            metadata: { word, sourceLanguage: this.currentSourceLanguage },
+          });
           const definitionPromise = this.dictionaryService.getDefinition(word);
           definition = await this.trackOperation(definitionPromise);
-          console.log(`[WordLookupPopup] Definition fallback successful`);
+          this.logger?.debug('Definition fallback successful', {
+            component: ComponentType.WORD_LOOKUP,
+            metadata: { word, definitionCount: definition?.meanings?.length || 0 },
+          });
         } catch (fallbackError) {
-          console.error(`[WordLookupPopup] Both translation and dictionary services failed:`, error, fallbackError);
+          this.logger?.error('Both translation and dictionary services failed', {
+            component: ComponentType.WORD_LOOKUP,
+            metadata: {
+              word,
+              translationError: error instanceof Error ? error.message : String(error),
+              dictionaryError:
+                fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
+            },
+          });
           // Both services failed - throw with better context
-          throw new Error(`Both translation and dictionary services failed. Translation: ${(error as Error).message}, Dictionary: ${(fallbackError as Error).message}`);
+          throw new Error(
+            `Both translation and dictionary services failed. Translation: ${(error as Error).message}, Dictionary: ${(fallbackError as Error).message}`,
+          );
         }
       } else {
         // Translation failed and we can't get definitions for non-English words
@@ -1717,32 +1844,47 @@ export class WordLookupPopup {
 
     const content = {
       word,
-      translation,
+      translation: this.translation,
       phonetic: definition.phonetics?.[0]?.text || '',
-      definitions: definition.meanings ? definition.meanings.map((meaning: any) => ({
-        text: meaning.definitions[0]?.definition || '',
-        partOfSpeech: meaning.partOfSpeech,
-        level: 'intermediate' as const
-      })) : [],
-      examples: definition.meanings ? definition.meanings.flatMap((meaning: any) => 
-        meaning.definitions.slice(0, 2).map((def: any) => ({
-          text: def.example || '',
-          translation: '',
-          source: 'dictionary'
-        }))
-      ).filter((ex: any) => ex.text) : [],
+      definitions: definition.meanings
+        ? definition.meanings.map((meaning: any) => ({
+            text: meaning.definitions[0]?.definition || '',
+            partOfSpeech: meaning.partOfSpeech,
+            level: 'intermediate' as const,
+          }))
+        : [],
+      examples: definition.meanings
+        ? definition.meanings
+            .flatMap((meaning: any) =>
+              meaning.definitions.slice(0, 2).map((def: any) => ({
+                text: def.example || '',
+                translation: '',
+                source: 'dictionary',
+              })),
+            )
+            .filter((ex: any) => ex.text)
+        : [],
       partOfSpeech: definition.meanings?.[0]?.partOfSpeech || '',
       sourceLanguage: this.currentSourceLanguage,
-      targetLanguage: this.currentTargetLanguage
+      targetLanguage: this.currentTargetLanguage,
     };
 
-    console.log(`[WordLookupPopup] Final content:`, content);
+    this.logger?.debug('Final content prepared', {
+      component: ComponentType.WORD_LOOKUP,
+      metadata: {
+        word: content.word,
+        hasTranslation: !!content.translation,
+        definitionCount: content.definitions.length,
+        exampleCount: content.examples.length,
+        hasPhonetic: !!content.phonetic,
+      },
+    });
     return content;
   }
 
-  private showPartialContent(word: string, translation: string): void {
+  private showPartialContent(word: string): void {
     if (!this.popupContainer || !this.isLoading) return;
-    
+
     this.popupContainer.classList.remove('loading');
     this.popupContainer.innerHTML = `
       <div class="popup-content">
@@ -1754,7 +1896,7 @@ export class WordLookupPopup {
         </div>
         
         <div class="translation-section">
-          <p class="translation-text">${this.escapeHtml(translation)}</p>
+          <p class="translation-text"></p>
         </div>
         
         <div class="definitions-section">
@@ -1763,12 +1905,28 @@ export class WordLookupPopup {
         </div>
         
         <div class="actions-section" style="display: flex; gap: 8px;">
-          <div class="skeleton skeleton-button"></div>
-          <div class="skeleton skeleton-button"></div>
+        ${
+          this.config.enableTTS
+            ? `
+          <button class="action-button" type="button" data-action="tts" aria-label="Listen to pronunciation of ${this.escapeHtml(word)}">
+            <span class="button-text">🔊 Listen</span>
+          </button>
+        `
+            : ''
+        }
+          ${
+            this.config.enableVocabulary
+              ? `
+            <button class="action-button primary" type="button" data-action="save" aria-label="Save ${this.escapeHtml(word)} to vocabulary" disabled>
+              <span class="button-text">💾 Save Word</span>
+            </button>
+          `
+              : ''
+          }
         </div>
       </div>
     `;
-    
+
     this.attachEventHandlers();
   }
 
@@ -1778,58 +1936,92 @@ export class WordLookupPopup {
         <div class="popup-header">
           <div>
             <h3 class="word-title" id="popup-title">${this.escapeHtml(content.word)}</h3>
-            ${content.phonetic && this.config.showPhonetics ? 
-              `<span class="phonetic" aria-label="Pronunciation: ${this.escapeHtml(content.phonetic)}">/${this.escapeHtml(content.phonetic)}/</span>` : ''}
+            ${
+              content.phonetic && this.config.showPhonetics
+                ? `<span class="phonetic" aria-label="Pronunciation: ${this.escapeHtml(content.phonetic)}">/${this.escapeHtml(content.phonetic)}/</span>`
+                : ''
+            }
           </div>
           <button class="close-button" type="button" aria-label="Close word lookup popup">×</button>
         </div>
         
         <div class="translation-section">
           <p class="translation-text">${this.escapeHtml(content.translation)}</p>
-          ${content.partOfSpeech ? 
-            `<span class="part-of-speech">${this.escapeHtml(content.partOfSpeech)}</span>` : ''}
+          ${
+            content.partOfSpeech
+              ? `<span class="part-of-speech">${this.escapeHtml(content.partOfSpeech)}</span>`
+              : ''
+          }
         </div>
         
-        ${content.definitions.length > 0 ? `
+        ${
+          content.definitions.length > 0
+            ? `
           <div class="definitions-section" role="region" aria-labelledby="definitions-title">
             <h4 class="section-title" id="definitions-title">Definitions</h4>
             <ul role="list" aria-label="Word definitions">
-              ${content.definitions.map((def, index) => `
+              ${content.definitions
+                .map(
+                  (def, index) => `
                 <li class="definition-item" role="listitem">
                   <p class="definition-text">${this.escapeHtml(def.text)}</p>
                   ${def.partOfSpeech ? `<span class="part-of-speech" aria-label="Part of speech">${this.escapeHtml(def.partOfSpeech)}</span>` : ''}
                 </li>
-              `).join('')}
+              `,
+                )
+                .join('')}
             </ul>
           </div>
-        ` : ''}
+        `
+            : ''
+        }
         
-        ${content.examples.length > 0 && this.config.showExamples ? `
+        ${
+          content.examples.length > 0 && this.config.showExamples
+            ? `
           <div class="examples-section" role="region" aria-labelledby="examples-title">
             <h4 class="section-title" id="examples-title">Examples</h4>
             <ul role="list" aria-label="Usage examples">
-              ${content.examples.slice(0, 3).map((ex, index) => `
+              ${content.examples
+                .slice(0, 3)
+                .map(
+                  (ex, index) => `
                 <li class="example-item" role="listitem">
                   <p class="example-text">${this.escapeHtml(ex.text)}</p>
-                  ${ex.translation ? 
-                    `<p class="example-translation" aria-label="Translation">${this.escapeHtml(ex.translation)}</p>` : ''}
+                  ${
+                    ex.translation
+                      ? `<p class="example-translation" aria-label="Translation">${this.escapeHtml(ex.translation)}</p>`
+                      : ''
+                  }
                 </li>
-              `).join('')}
+              `,
+                )
+                .join('')}
             </ul>
           </div>
-        ` : ''}
+        `
+            : ''
+        }
         
         <div class="actions-section" role="group" aria-label="Word actions">
-          ${this.config.enableTTS ? `
+          ${
+            this.config.enableTTS
+              ? `
             <button class="action-button" type="button" data-action="tts" aria-label="Listen to pronunciation of ${this.escapeHtml(content.word)}">
               <span class="button-text">🔊 Listen</span>
             </button>
-          ` : ''}
-          ${this.config.enableVocabulary ? `
+          `
+              : ''
+          }
+          ${
+            this.config.enableVocabulary
+              ? `
             <button class="action-button primary" type="button" data-action="save" aria-label="Save ${this.escapeHtml(content.word)} to vocabulary">
               <span class="button-text">💾 Save Word</span>
             </button>
-          ` : ''}
+          `
+              : ''
+          }
         </div>
       </div>
     `;
@@ -1876,12 +2068,14 @@ export class WordLookupPopup {
 
   private setActionLoading(action: string, isLoading: boolean): void {
     this.actionLoadingStates.set(action, isLoading);
-    
+
     if (!this.popupContainer) return;
-    
-    const button = this.popupContainer.querySelector(`[data-action="${action}"]`) as HTMLButtonElement;
+
+    const button = this.popupContainer.querySelector(
+      `[data-action="${action}"]`,
+    ) as HTMLButtonElement;
     if (!button) return;
-    
+
     if (isLoading) {
       button.classList.add('loading');
       button.disabled = true;
@@ -1893,16 +2087,18 @@ export class WordLookupPopup {
 
   private showActionSuccess(action: string, message: string): void {
     if (!this.popupContainer) return;
-    
-    const button = this.popupContainer.querySelector(`[data-action="${action}"]`) as HTMLButtonElement;
+
+    const button = this.popupContainer.querySelector(
+      `[data-action="${action}"]`,
+    ) as HTMLButtonElement;
     if (!button) return;
-    
+
     const originalText = button.innerHTML;
     button.innerHTML = `<span class="button-text">✓ ${message}</span>`;
     button.style.background = '#48bb78';
     button.style.borderColor = '#48bb78';
     button.style.color = 'white';
-    
+
     // Revert after 2 seconds
     setTimeout(() => {
       button.innerHTML = originalText;
@@ -1915,15 +2111,21 @@ export class WordLookupPopup {
   private showErrorState(error: Error): void {
     if (!this.popupContainer || this.isDestroyed) return;
 
-    console.error('[WordLookupPopup] Error occurred:', error);
-    
+    this.logger?.error('Error occurred in showErrorState', {
+      component: ComponentType.WORD_LOOKUP,
+      metadata: {
+        word: this.currentWord,
+        error: error instanceof Error ? error.message : String(error),
+      },
+    });
+
     // Use enhanced error handling
     const errorContext = this.classifyError(error, {
       service: 'unknown',
       operation: 'load',
-      word: this.currentWord
+      word: this.currentWord,
     });
-    
+
     this.updateErrorState(errorContext);
     this.showEnhancedErrorState(errorContext);
   }
@@ -1937,7 +2139,7 @@ export class WordLookupPopup {
 
     // Action buttons
     const actionButtons = this.popupContainer.querySelectorAll('[data-action]');
-    actionButtons.forEach(button => {
+    actionButtons.forEach((button) => {
       button.addEventListener('click', (event) => {
         const action = (event.target as HTMLElement).getAttribute('data-action');
         this.handleAction(action);
@@ -1970,20 +2172,27 @@ export class WordLookupPopup {
     try {
       const ttsPromise = this.ttsService.speak(this.currentWord);
       await this.trackOperation(ttsPromise);
-      
+
       if (!this.isDestroyed) {
         this.events.onTTSPlayed?.(this.currentWord);
       }
     } catch (error) {
-      console.error('[WordLookupPopup] TTS failed:', error);
+      this.logger?.error('TTS failed', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: {
+          word: this.currentWord,
+          sourceLanguage: this.currentSourceLanguage,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
       if (!this.isDestroyed) {
         // Use enhanced error handling for TTS errors
         const errorContext = this.classifyError(error as Error, {
           service: 'tts',
           operation: 'tts',
-          word: this.currentWord
+          word: this.currentWord,
         });
-        
+
         this.updateErrorState(errorContext);
         this.showEnhancedErrorState(errorContext);
         this.events.onError?.(error as Error);
@@ -2004,34 +2213,40 @@ export class WordLookupPopup {
     try {
       const savePromise = this.storageService.saveWord({
         word: this.currentWord,
-        translation: '', // This would be populated from current content
-        context: '',
+        translation: this.translation,
+        context: this.currentContext,
         sourceLanguage: this.currentSourceLanguage,
         targetLanguage: this.currentTargetLanguage,
-        videoId: '',
-        videoTitle: '',
+        videoId: this.extractVideoId(window.location.href) || '',
+        videoTitle: await this.getVideoTitle(),
         timestamp: Date.now(),
-        reviewCount: 0
+        reviewCount: 0,
       });
-      
+
       await this.trackOperation(savePromise);
-      
+
       if (!this.isDestroyed) {
         this.events.onWordSaved?.(this.currentWord);
-        
+
         // Show success feedback
         this.showActionSuccess(actionKey, 'Word saved!');
       }
     } catch (error) {
-      console.error('[WordLookupPopup] Save word failed:', error);
+      this.logger?.error('Save word failed', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: {
+          word: this.currentWord,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
       if (!this.isDestroyed) {
         // Use enhanced error handling for storage errors
         const errorContext = this.classifyError(error as Error, {
           service: 'storage',
           operation: 'save',
-          word: this.currentWord
+          word: this.currentWord,
         });
-        
+
         this.updateErrorState(errorContext);
         this.showEnhancedErrorState(errorContext);
         this.events.onError?.(error as Error);
@@ -2043,16 +2258,30 @@ export class WordLookupPopup {
     }
   }
 
+  private async getVideoTitle(): Promise<string> {
+    try {
+      const titleElement = document.querySelector('h1.ytd-watch-metadata');
+      return titleElement?.textContent?.trim() || 'Unknown Video';
+    } catch (error) {
+      return 'Unknown Video';
+    }
+  }
+
+  private extractVideoId(url: string): string | null {
+    const match = url.match(/[?&]v=([^&]+)/);
+    return match ? match[1] : null;
+  }
+
   private async retryLoad(): Promise<void> {
     if (!this.currentWord || this.isDestroyed) return;
 
     this.isLoading = true;
     this.showLoadingState();
-    
+
     try {
       const contentPromise = this.loadWordContent(this.currentWord);
       const content = await this.trackOperation(contentPromise);
-      
+
       if (!this.isDestroyed) {
         this.updateContent(content);
       }
@@ -2069,262 +2298,63 @@ export class WordLookupPopup {
   }
 
   // ========================================
-  // Advanced Positioning Logic
+  // Simplified Positioning Logic
   // ========================================
 
   private positionPopup(position: { x: number; y: number }): void {
     if (!this.popupContainer) return;
 
-    const viewport = {
-      width: window.innerWidth,
-      height: window.innerHeight
-    };
+    // Get actual rendered dimensions instead of config values
+    const rect = this.popupContainer.getBoundingClientRect();
+    const actualWidth = rect.width || this.config.maxWidth;
+    const actualHeight = rect.height || this.config.maxHeight;
 
-    const popupRect = {
-      width: this.config.maxWidth,
-      height: this.config.maxHeight
-    };
+    // Simple positioning: center horizontally, position above clicked word
+    const x = Math.max(10, position.x - actualWidth / 2);
 
-    // Get YouTube-specific UI elements to avoid
-    const youtubeElements = this.getYouTubeUIElements();
-    
-    // Calculate best position with smart placement
-    const placement = this.calculateSmartPlacement(position, viewport, popupRect, youtubeElements);
-    
-    // Apply positioning with smooth transition
-    this.popupContainer.style.left = `${placement.x}px`;
-    this.popupContainer.style.top = `${placement.y}px`;
-    
-    // Add positioning classes for CSS styling
-    this.updatePositionClasses(placement, position);
-  }
+    // For bottom CSS positioning: distance from bottom of viewport to bottom of popup
+    const gapAboveWord = 50;
+    const bottomDistance = window.innerHeight - position.y + gapAboveWord;
 
-  private getYouTubeUIElements(): Array<{ rect: DOMRect; priority: number; name: string }> {
-    const elements: Array<{ rect: DOMRect; priority: number; name: string }> = [];
-    
-    // High priority elements (critical to avoid)
-    const playerControls = document.querySelector('.ytp-chrome-bottom');
-    if (playerControls) {
-      elements.push({
-        rect: playerControls.getBoundingClientRect(),
-        priority: 10,
-        name: 'player-controls'
-      });
-    }
-    
-    const topBar = document.querySelector('#masthead');
-    if (topBar) {
-      elements.push({
-        rect: topBar.getBoundingClientRect(),
-        priority: 9,
-        name: 'top-bar'
-      });
-    }
-    
-    // Medium priority elements
-    const sidebar = document.querySelector('#secondary');
-    if (sidebar) {
-      elements.push({
-        rect: sidebar.getBoundingClientRect(),
-        priority: 7,
-        name: 'sidebar'
-      });
-    }
-    
-    const chat = document.querySelector('#chat');
-    if (chat) {
-      elements.push({
-        rect: chat.getBoundingClientRect(),
-        priority: 6,
-        name: 'chat'
-      });
-    }
-    
-    // Lower priority elements
-    const description = document.querySelector('#description');
-    if (description) {
-      elements.push({
-        rect: description.getBoundingClientRect(),
-        priority: 4,
-        name: 'description'
-      });
-    }
-    
-    const comments = document.querySelector('#comments');
-    if (comments) {
-      elements.push({
-        rect: comments.getBoundingClientRect(),
-        priority: 3,
-        name: 'comments'
-      });
-    }
-    
-    return elements;
-  }
+    console.warn('[POPUP DEBUG] Simple bottom positioning', {
+      actualWidth,
+      actualHeight,
+      clickY: position.y,
+      viewportHeight: window.innerHeight,
+      bottomDistance,
+      gapAboveWord,
+      calculatedX: x,
+    });
 
-  private calculateSmartPlacement(
-    position: { x: number; y: number },
-    viewport: { width: number; height: number },
-    popupRect: { width: number; height: number },
-    youtubeElements: Array<{ rect: DOMRect; priority: number; name: string }>
-  ): { x: number; y: number; placement: string } {
-    const offset = 12;
-    const arrowOffset = 8;
-    
-    // Define possible positions in priority order
-    const placements = [
-      { name: 'bottom-center', x: position.x - (popupRect.width / 2), y: position.y + arrowOffset },
-      { name: 'top-center', x: position.x - (popupRect.width / 2), y: position.y - popupRect.height - arrowOffset },
-      { name: 'right-center', x: position.x + arrowOffset, y: position.y - (popupRect.height / 2) },
-      { name: 'left-center', x: position.x - popupRect.width - arrowOffset, y: position.y - (popupRect.height / 2) },
-      { name: 'bottom-left', x: position.x - offset, y: position.y + arrowOffset },
-      { name: 'bottom-right', x: position.x - popupRect.width + offset, y: position.y + arrowOffset },
-      { name: 'top-left', x: position.x - offset, y: position.y - popupRect.height - arrowOffset },
-      { name: 'top-right', x: position.x - popupRect.width + offset, y: position.y - popupRect.height - arrowOffset }
-    ];
-    
-    // Find the best position
-    let bestPlacement = placements[0];
-    let bestScore = -Infinity;
-    
-    for (const placement of placements) {
-      const score = this.scorePlacement(placement, viewport, popupRect, youtubeElements, offset);
-      if (score > bestScore) {
-        bestScore = score;
-        bestPlacement = placement;
-      }
-    }
-    
-    // Apply final viewport adjustments
-    const finalPosition = this.adjustForViewport(bestPlacement, popupRect, viewport, offset);
-    
-    return {
-      x: finalPosition.x,
-      y: finalPosition.y,
-      placement: bestPlacement.name
-    };
-  }
-
-  private scorePlacement(
-    placement: { name: string; x: number; y: number },
-    viewport: { width: number; height: number },
-    popupRect: { width: number; height: number },
-    youtubeElements: Array<{ rect: DOMRect; priority: number; name: string }>,
-    offset: number
-  ): number {
-    let score = 0;
-    
-    const popupBounds = {
-      left: placement.x,
-      right: placement.x + popupRect.width,
-      top: placement.y,
-      bottom: placement.y + popupRect.height
-    };
-    
-    // Penalty for going outside viewport
-    if (popupBounds.left < offset) score -= 100;
-    if (popupBounds.right > viewport.width - offset) score -= 100;
-    if (popupBounds.top < offset) score -= 100;
-    if (popupBounds.bottom > viewport.height - offset) score -= 100;
-    
-    // Bonus for staying well within viewport
-    const marginLeft = popupBounds.left - offset;
-    const marginRight = viewport.width - popupBounds.right - offset;
-    const marginTop = popupBounds.top - offset;
-    const marginBottom = viewport.height - popupBounds.bottom - offset;
-    
-    score += Math.min(marginLeft, marginRight) * 0.1;
-    score += Math.min(marginTop, marginBottom) * 0.1;
-    
-    // Penalty for overlapping with YouTube elements
-    for (const element of youtubeElements) {
-      const overlap = this.calculateOverlap(popupBounds, element.rect);
-      if (overlap > 0) {
-        score -= overlap * element.priority;
-      }
-    }
-    
-    // Bonus for preferred positions (bottom-center is most natural)
-    const positionBonus = {
-      'bottom-center': 20,
-      'top-center': 15,
-      'right-center': 10,
-      'left-center': 10,
-      'bottom-left': 5,
-      'bottom-right': 5,
-      'top-left': 3,
-      'top-right': 3
-    };
-    
-    score += positionBonus[placement.name as keyof typeof positionBonus] || 0;
-    
-    return score;
-  }
-
-  private calculateOverlap(
-    rect1: { left: number; right: number; top: number; bottom: number },
-    rect2: DOMRect
-  ): number {
-    const left = Math.max(rect1.left, rect2.left);
-    const right = Math.min(rect1.right, rect2.right);
-    const top = Math.max(rect1.top, rect2.top);
-    const bottom = Math.min(rect1.bottom, rect2.bottom);
-    
-    if (left < right && top < bottom) {
-      return (right - left) * (bottom - top);
-    }
-    
-    return 0;
-  }
-
-  private adjustForViewport(
-    placement: { name: string; x: number; y: number },
-    popupRect: { width: number; height: number },
-    viewport: { width: number; height: number },
-    offset: number
-  ): { x: number; y: number } {
-    let { x, y } = placement;
-    
-    // Adjust horizontal position
-    if (x < offset) {
-      x = offset;
-    } else if (x + popupRect.width > viewport.width - offset) {
-      x = viewport.width - popupRect.width - offset;
-    }
-    
-    // Adjust vertical position
-    if (y < offset) {
-      y = offset;
-    } else if (y + popupRect.height > viewport.height - offset) {
-      y = viewport.height - popupRect.height - offset;
-    }
-    
-    return { x, y };
+    // ALWAYS use bottom positioning for upward placement
+    this.popupContainer.style.left = `${x}px`;
+    this.popupContainer.style.top = '';
+    this.popupContainer.style.bottom = `${bottomDistance}px`;
   }
 
   private updatePositionClasses(
     placement: { x: number; y: number; placement: string },
-    originalPosition: { x: number; y: number }
+    originalPosition: { x: number; y: number },
   ): void {
     if (!this.popupContainer) return;
-    
+
     // Remove existing position classes
     const positionClasses = ['position-top', 'position-bottom', 'position-left', 'position-right'];
     this.popupContainer.classList.remove(...positionClasses);
-    
+
     // Add new position class based on placement
     if (placement.placement.includes('top')) {
       this.popupContainer.classList.add('position-top');
     } else if (placement.placement.includes('bottom')) {
       this.popupContainer.classList.add('position-bottom');
     }
-    
+
     if (placement.placement.includes('left')) {
       this.popupContainer.classList.add('position-left');
     } else if (placement.placement.includes('right')) {
       this.popupContainer.classList.add('position-right');
     }
-    
+
     // Add responsive positioning class
     if (window.innerWidth <= 768) {
       this.popupContainer.classList.add('position-mobile');
@@ -2351,14 +2381,14 @@ export class WordLookupPopup {
 
   private handleTabNavigation(event: KeyboardEvent): void {
     if (!this.popupContainer) return;
-    
+
     const focusableElements = this.getFocusableElements();
     if (focusableElements.length === 0) return;
-    
+
     const firstElement = focusableElements[0];
     const lastElement = focusableElements[focusableElements.length - 1];
     const currentFocus = this.shadowRoot?.activeElement as HTMLElement;
-    
+
     // Focus trapping
     if (event.shiftKey) {
       // Shift+Tab - move backward
@@ -2377,7 +2407,7 @@ export class WordLookupPopup {
 
   private handleEnterSpace(event: KeyboardEvent): void {
     if (!this.shadowRoot) return;
-    
+
     const target = event.target as HTMLElement;
     if (target.tagName === 'BUTTON' && target.hasAttribute('data-action')) {
       event.preventDefault();
@@ -2387,26 +2417,26 @@ export class WordLookupPopup {
 
   private getFocusableElements(): HTMLElement[] {
     if (!this.popupContainer) return [];
-    
+
     const focusableSelectors = [
       'button:not([disabled])',
       'a[href]',
       'input:not([disabled])',
       'select:not([disabled])',
       'textarea:not([disabled])',
-      '[tabindex]:not([tabindex="-1"])'
+      '[tabindex]:not([tabindex="-1"])',
     ];
-    
+
     const elements = this.popupContainer.querySelectorAll(focusableSelectors.join(','));
     return Array.from(elements) as HTMLElement[];
   }
 
   private setInitialFocus(): void {
     if (!this.popupContainer) return;
-    
+
     // Focus the popup container first
     this.popupContainer.focus();
-    
+
     // Then focus the first focusable element
     const focusableElements = this.getFocusableElements();
     if (focusableElements.length > 0) {
@@ -2431,8 +2461,8 @@ export class WordLookupPopup {
     if (!this.isVisible || !this.container) return;
 
     const target = event.target as Node;
-    const clickedElement = event.composedPath?.()?.[0] as Element || target as Element;
-    
+    const clickedElement = (event.composedPath?.()?.[0] as Element) || (target as Element);
+
     // Check if click is outside the popup container
     if (!this.isClickInsidePopup(clickedElement)) {
       // Add small delay to prevent conflicts with other click handlers
@@ -2452,7 +2482,7 @@ export class WordLookupPopup {
 
     const touch = touchEvent.touches[0];
     const target = document.elementFromPoint(touch.clientX, touch.clientY);
-    
+
     if (target && !this.isClickInsidePopup(target)) {
       // Add small delay to prevent conflicts with other touch handlers
       setTimeout(() => {
@@ -2532,12 +2562,19 @@ export class WordLookupPopup {
   /**
    * Get current popup state
    */
-  public getState(): { isVisible: boolean; isLoading: boolean; currentWord: string; error: Error | null } {
+  public getState(): {
+    isVisible: boolean;
+    isLoading: boolean;
+    currentWord: string;
+    translation: string;
+    error: Error | null;
+  } {
     return {
       isVisible: this.isVisible,
       isLoading: this.isLoading,
       currentWord: this.currentWord,
-      error: null // Could be enhanced to track errors
+      translation: this.translation,
+      error: null, // Could be enhanced to track errors
     };
   }
 
@@ -2621,11 +2658,11 @@ export class WordLookupPopup {
     if (this.currentWord && this.isVisible && !this.isDestroyed) {
       this.isLoading = true;
       this.showSkeletonLoading();
-      
+
       try {
         const contentPromise = this.loadWordContent(this.currentWord);
         const content = await this.trackOperation(contentPromise);
-        
+
         if (!this.isDestroyed) {
           this.updateContent(content);
         }
@@ -2645,12 +2682,14 @@ export class WordLookupPopup {
   /**
    * Copy content to clipboard
    */
-  public async copyToClipboard(content: 'word' | 'translation' | 'definition' | 'all'): Promise<void> {
+  public async copyToClipboard(
+    content: 'word' | 'translation' | 'definition' | 'all',
+  ): Promise<void> {
     if (!this.currentWord) return;
-    
+
     try {
       let textToCopy = '';
-      
+
       switch (content) {
         case 'word':
           textToCopy = this.currentWord;
@@ -2667,11 +2706,21 @@ export class WordLookupPopup {
           textToCopy = this.currentWord; // Would format all content
           break;
       }
-      
+
       await navigator.clipboard.writeText(textToCopy);
-      console.log(`[WordLookupPopup] Copied ${content} to clipboard`);
+      this.logger?.debug('Copied content to clipboard', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: { contentType: content, word: this.currentWord },
+      });
     } catch (error) {
-      console.error('[WordLookupPopup] Failed to copy to clipboard:', error);
+      this.logger?.error('Failed to copy to clipboard', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: {
+          contentType: content,
+          word: this.currentWord,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
     }
   }
 
@@ -2691,7 +2740,10 @@ export class WordLookupPopup {
    */
   public emit(event: string, data: any): void {
     // Could be enhanced to support custom events
-    console.log(`[WordLookupPopup] Custom event: ${event}`, data);
+    this.logger?.debug('Custom event emitted', {
+      component: ComponentType.WORD_LOOKUP,
+      metadata: { event, data },
+    });
   }
 
   private escapeHtml(text: string): string {
@@ -2704,7 +2756,10 @@ export class WordLookupPopup {
   // Enhanced Error Handling System
   // ========================================
 
-  private classifyError(error: Error, context: { service?: string; operation?: string; word?: string }): ErrorContext {
+  private classifyError(
+    error: Error,
+    context: { service?: string; operation?: string; word?: string },
+  ): ErrorContext {
     const message = error.message.toLowerCase();
     let type = ErrorType.UNKNOWN;
     let severity = ErrorSeverity.MEDIUM;
@@ -2719,7 +2774,10 @@ export class WordLookupPopup {
     // Check for partial failure first (but only for English words where definitions are expected)
     if ((error as any).isPartialFailure || message.includes('definition lookup failed')) {
       // Only treat as partial failure if we're expecting definitions (English words)
-      if (context.word && (this.currentSourceLanguage === 'en' || this.currentSourceLanguage === 'auto')) {
+      if (
+        context.word &&
+        (this.currentSourceLanguage === 'en' || this.currentSourceLanguage === 'auto')
+      ) {
         type = ErrorType.PARTIAL_FAILURE;
         severity = ErrorSeverity.LOW;
         userMessage = 'Partial information loaded';
@@ -2741,7 +2799,11 @@ export class WordLookupPopup {
     }
 
     // Network-related errors
-    if (message.includes('network') || message.includes('fetch') || message.includes('connection')) {
+    if (
+      message.includes('network') ||
+      message.includes('fetch') ||
+      message.includes('connection')
+    ) {
       type = ErrorType.NETWORK;
       severity = ErrorSeverity.HIGH;
       userMessage = 'Network connection failed';
@@ -2751,7 +2813,11 @@ export class WordLookupPopup {
       maxRetries = 3;
     }
     // Rate limiting
-    else if (message.includes('rate limit') || message.includes('too many requests') || message.includes('429')) {
+    else if (
+      message.includes('rate limit') ||
+      message.includes('too many requests') ||
+      message.includes('429')
+    ) {
       type = ErrorType.RATE_LIMIT;
       severity = ErrorSeverity.MEDIUM;
       userMessage = 'Too many requests';
@@ -2771,7 +2837,11 @@ export class WordLookupPopup {
       maxRetries = 2;
     }
     // Service unavailable
-    else if (message.includes('service unavailable') || message.includes('502') || message.includes('503')) {
+    else if (
+      message.includes('service unavailable') ||
+      message.includes('502') ||
+      message.includes('503')
+    ) {
       type = ErrorType.SERVICE_UNAVAILABLE;
       severity = ErrorSeverity.HIGH;
       userMessage = 'Service temporarily unavailable';
@@ -2842,8 +2912,8 @@ export class WordLookupPopup {
         word: context.word,
         service: context.service,
         operation: context.operation,
-        attempt: this.errorState.retryCount + 1
-      }
+        attempt: this.errorState.retryCount + 1,
+      },
     };
   }
 
@@ -2854,7 +2924,7 @@ export class WordLookupPopup {
       retryCount: this.errorState.retryCount,
       lastRetryTime: Date.now(),
       isRetrying: false,
-      errorHistory: [...this.errorState.errorHistory, errorContext].slice(-10) // Keep last 10 errors
+      errorHistory: [...this.errorState.errorHistory, errorContext].slice(-10), // Keep last 10 errors
     };
   }
 
@@ -2865,7 +2935,7 @@ export class WordLookupPopup {
       retryCount: 0,
       lastRetryTime: 0,
       isRetrying: false,
-      errorHistory: this.errorState.errorHistory // Keep history for analytics
+      errorHistory: this.errorState.errorHistory, // Keep history for analytics
     };
   }
 
@@ -2925,7 +2995,7 @@ export class WordLookupPopup {
     const isOffline = !navigator.onLine;
 
     let actions = '';
-    
+
     if (canRetry) {
       actions += `
         <button class="error-retry-button" type="button" data-action="retry" ${this.errorState.isRetrying ? 'disabled' : ''}>
@@ -2955,11 +3025,15 @@ export class WordLookupPopup {
           <button class="close-button" type="button" aria-label="Close">×</button>
         </div>
         
-        ${isOffline ? `
+        ${
+          isOffline
+            ? `
           <div class="offline-indicator">
             📡 You appear to be offline. Check your connection.
           </div>
-        ` : ''}
+        `
+            : ''
+        }
         
         <div class="error-container">
           <span class="error-icon ${iconClass}">${icon}</span>
@@ -2970,11 +3044,15 @@ export class WordLookupPopup {
             ${actions}
           </div>
           
-          ${errorContext.autoRetry && canRetry ? `
+          ${
+            errorContext.autoRetry && canRetry
+              ? `
             <div class="retry-countdown">
               Auto-retry in <span id="countdown">${Math.ceil(errorContext.retryDelay / 1000)}</span> seconds
             </div>
-          ` : ''}
+          `
+              : ''
+          }
           
           <div class="error-details">
             <button class="error-details-toggle" type="button" data-action="toggle-details">
@@ -2997,7 +3075,14 @@ export class WordLookupPopup {
 
   private async handleEnhancedRetry(errorContext: ErrorContext): Promise<void> {
     if (!errorContext.retryable || this.errorState.retryCount >= errorContext.maxRetries) {
-      console.warn('[WordLookupPopup] Retry not allowed or max retries exceeded');
+      this.logger?.warn('Retry not allowed or max retries exceeded', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: {
+          retryCount: this.errorState.retryCount,
+          maxRetries: errorContext.maxRetries,
+          retryable: errorContext.retryable,
+        },
+      });
       return;
     }
 
@@ -3005,36 +3090,35 @@ export class WordLookupPopup {
     this.errorState = {
       ...this.errorState,
       isRetrying: true,
-      retryCount: this.errorState.retryCount + 1
+      retryCount: this.errorState.retryCount + 1,
     };
 
     try {
       // Add delay before retry
-      await new Promise(resolve => setTimeout(resolve, errorContext.retryDelay));
-      
+      await new Promise((resolve) => setTimeout(resolve, errorContext.retryDelay));
+
       if (this.isDestroyed) return;
 
       // Attempt to reload content
       await this.retryLoad();
-      
+
       // Clear error state on success
       this.clearErrorState();
-      
     } catch (error) {
       // Handle retry failure
       const newErrorContext = this.classifyError(error as Error, {
         service: errorContext.context.service,
         operation: errorContext.context.operation,
-        word: this.currentWord
+        word: this.currentWord,
       });
-      
+
       this.updateErrorState(newErrorContext);
       this.renderEnhancedErrorState(newErrorContext);
     } finally {
       // Update state to indicate not retrying
       this.errorState = {
         ...this.errorState,
-        isRetrying: false
+        isRetrying: false,
       };
     }
   }
@@ -3045,7 +3129,7 @@ export class WordLookupPopup {
     try {
       // Try dictionary-only fallback
       const definition = await this.trackOperation(
-        this.dictionaryService.getDefinition(this.currentWord)
+        this.dictionaryService.getDefinition(this.currentWord),
       );
 
       if (!this.isDestroyed) {
@@ -3056,23 +3140,25 @@ export class WordLookupPopup {
           definitions: definition.meanings.map((meaning: any) => ({
             text: meaning.definitions[0]?.definition || '',
             partOfSpeech: meaning.partOfSpeech,
-            level: 'intermediate' as const
+            level: 'intermediate' as const,
           })),
-          examples: definition.meanings.flatMap((meaning: any) => 
-            meaning.definitions.slice(0, 2).map((def: any) => ({
-              text: def.example || '',
-              translation: '',
-              source: 'dictionary'
-            }))
-          ).filter((ex: any) => ex.text),
+          examples: definition.meanings
+            .flatMap((meaning: any) =>
+              meaning.definitions.slice(0, 2).map((def: any) => ({
+                text: def.example || '',
+                translation: '',
+                source: 'dictionary',
+              })),
+            )
+            .filter((ex: any) => ex.text),
           partOfSpeech: definition.meanings[0]?.partOfSpeech || '',
           sourceLanguage: 'en',
-          targetLanguage: 'es'
+          targetLanguage: 'es',
         };
 
         // Show partial content with warning
         this.updateContent(fallbackContent);
-        
+
         // Add partial failure banner
         if (this.popupContainer) {
           const banner = document.createElement('div');
@@ -3090,99 +3176,113 @@ export class WordLookupPopup {
       const errorContext = this.classifyError(error as Error, {
         service: 'dictionary',
         operation: 'fallback',
-        word: this.currentWord
+        word: this.currentWord,
       });
-      
-                    this.updateErrorState(errorContext);
-       this.showEnhancedErrorState(errorContext);
-     }
-   }
 
-   private showEnhancedErrorState(errorContext: ErrorContext): void {
-     if (!this.popupContainer || this.isDestroyed) return;
+      this.updateErrorState(errorContext);
+      this.showEnhancedErrorState(errorContext);
+    }
+  }
 
-     // Add error class to container
-     this.popupContainer.classList.add('error');
-     
-     // Render enhanced error UI
-     const errorHTML = this.renderEnhancedErrorState(errorContext);
-     this.popupContainer.innerHTML = errorHTML;
-     
-     // Attach enhanced error event handlers
-     this.attachEnhancedErrorHandlers(errorContext);
-     
-     // Start auto-retry countdown if applicable
-     if (errorContext.autoRetry && errorContext.retryable && this.errorState.retryCount < errorContext.maxRetries) {
-       this.startAutoRetryCountdown(errorContext);
-     }
-   }
+  private showEnhancedErrorState(errorContext: ErrorContext): void {
+    if (!this.popupContainer || this.isDestroyed) return;
 
-   private attachEnhancedErrorHandlers(errorContext: ErrorContext): void {
-     if (!this.popupContainer) return;
+    // Add error class to container
+    this.popupContainer.classList.add('error');
 
-     // Retry button
-     const retryButton = this.popupContainer.querySelector('[data-action="retry"]') as HTMLButtonElement;
-     if (retryButton) {
-       retryButton.addEventListener('click', () => {
-         this.handleEnhancedRetry(errorContext);
-       });
-     }
+    // Render enhanced error UI
+    const errorHTML = this.renderEnhancedErrorState(errorContext);
+    this.popupContainer.innerHTML = errorHTML;
 
-     // Fallback button
-     const fallbackButton = this.popupContainer.querySelector('[data-action="fallback"]') as HTMLButtonElement;
-     if (fallbackButton) {
-       fallbackButton.addEventListener('click', () => {
-         this.handleFallbackAction();
-       });
-     }
+    // Attach enhanced error event handlers
+    this.attachEnhancedErrorHandlers(errorContext);
 
-     // Dismiss button
-     const dismissButton = this.popupContainer.querySelector('[data-action="dismiss"]') as HTMLButtonElement;
-     if (dismissButton) {
-       dismissButton.addEventListener('click', () => {
-         this.hide();
-       });
-     }
+    // Start auto-retry countdown if applicable
+    if (
+      errorContext.autoRetry &&
+      errorContext.retryable &&
+      this.errorState.retryCount < errorContext.maxRetries
+    ) {
+      this.startAutoRetryCountdown(errorContext);
+    }
+  }
 
-     // Close button
-     const closeButton = this.popupContainer.querySelector('.close-button') as HTMLButtonElement;
-     if (closeButton) {
-       closeButton.addEventListener('click', () => {
-         this.hide();
-       });
-     }
+  private attachEnhancedErrorHandlers(errorContext: ErrorContext): void {
+    if (!this.popupContainer) return;
 
-     // Details toggle
-     const detailsToggle = this.popupContainer.querySelector('[data-action="toggle-details"]') as HTMLButtonElement;
-     const detailsContent = this.popupContainer.querySelector('.error-details-content') as HTMLElement;
-     if (detailsToggle && detailsContent) {
-       detailsToggle.addEventListener('click', () => {
-         const isVisible = detailsContent.style.display !== 'none';
-         detailsContent.style.display = isVisible ? 'none' : 'block';
-         detailsToggle.textContent = isVisible ? 'Show Details' : 'Hide Details';
-       });
-     }
-   }
+    // Retry button
+    const retryButton = this.popupContainer.querySelector(
+      '[data-action="retry"]',
+    ) as HTMLButtonElement;
+    if (retryButton) {
+      retryButton.addEventListener('click', () => {
+        this.handleEnhancedRetry(errorContext);
+      });
+    }
 
-   private startAutoRetryCountdown(errorContext: ErrorContext): void {
-     const countdownElement = this.popupContainer?.querySelector('#countdown');
-     if (!countdownElement) return;
+    // Fallback button
+    const fallbackButton = this.popupContainer.querySelector(
+      '[data-action="fallback"]',
+    ) as HTMLButtonElement;
+    if (fallbackButton) {
+      fallbackButton.addEventListener('click', () => {
+        this.handleFallbackAction();
+      });
+    }
 
-     let remaining = Math.ceil(errorContext.retryDelay / 1000);
-     
-     const updateCountdown = () => {
-       if (countdownElement && remaining > 0) {
-         countdownElement.textContent = remaining.toString();
-         remaining--;
-         this.createTimeout(updateCountdown, 1000);
-       } else if (remaining <= 0) {
-         // Auto-retry
-         this.handleEnhancedRetry(errorContext);
-       }
-     };
+    // Dismiss button
+    const dismissButton = this.popupContainer.querySelector(
+      '[data-action="dismiss"]',
+    ) as HTMLButtonElement;
+    if (dismissButton) {
+      dismissButton.addEventListener('click', () => {
+        this.hide();
+      });
+    }
 
-     updateCountdown();
-   }
+    // Close button
+    const closeButton = this.popupContainer.querySelector('.close-button') as HTMLButtonElement;
+    if (closeButton) {
+      closeButton.addEventListener('click', () => {
+        this.hide();
+      });
+    }
+
+    // Details toggle
+    const detailsToggle = this.popupContainer.querySelector(
+      '[data-action="toggle-details"]',
+    ) as HTMLButtonElement;
+    const detailsContent = this.popupContainer.querySelector(
+      '.error-details-content',
+    ) as HTMLElement;
+    if (detailsToggle && detailsContent) {
+      detailsToggle.addEventListener('click', () => {
+        const isVisible = detailsContent.style.display !== 'none';
+        detailsContent.style.display = isVisible ? 'none' : 'block';
+        detailsToggle.textContent = isVisible ? 'Show Details' : 'Hide Details';
+      });
+    }
+  }
+
+  private startAutoRetryCountdown(errorContext: ErrorContext): void {
+    const countdownElement = this.popupContainer?.querySelector('#countdown');
+    if (!countdownElement) return;
+
+    let remaining = Math.ceil(errorContext.retryDelay / 1000);
+
+    const updateCountdown = () => {
+      if (countdownElement && remaining > 0) {
+        countdownElement.textContent = remaining.toString();
+        remaining--;
+        this.createTimeout(updateCountdown, 1000);
+      } else if (remaining <= 0) {
+        // Auto-retry
+        this.handleEnhancedRetry(errorContext);
+      }
+    };
+
+    updateCountdown();
+  }
 
   // ========================================
   // Cleanup Utilities
@@ -3198,7 +3298,7 @@ export class WordLookupPopup {
         callback();
       }
     }, delay);
-    
+
     this.animationTimeouts.add(timeoutId);
     return timeoutId;
   }
@@ -3208,11 +3308,11 @@ export class WordLookupPopup {
    */
   private trackOperation<T>(promise: Promise<T>): Promise<T> {
     this.pendingOperations.add(promise);
-    
+
     const cleanup = () => {
       this.pendingOperations.delete(promise);
     };
-    
+
     promise.then(cleanup, cleanup);
     return promise;
   }
@@ -3235,12 +3335,12 @@ export class WordLookupPopup {
       document.removeEventListener('keydown', this.keyboardHandler);
       this.keyboardHandler = null;
     }
-    
+
     if (this.beforeUnloadHandler) {
       window.removeEventListener('beforeunload', this.beforeUnloadHandler);
       this.beforeUnloadHandler = null;
     }
-    
+
     if (this.pagehideHandler) {
       window.removeEventListener('pagehide', this.pagehideHandler);
       this.pagehideHandler = null;
@@ -3252,7 +3352,7 @@ export class WordLookupPopup {
    */
   private clearAllTimeouts(): void {
     // Clear tracked animation timeouts
-    this.animationTimeouts.forEach(timeoutId => {
+    this.animationTimeouts.forEach((timeoutId) => {
       clearTimeout(timeoutId);
     });
     this.animationTimeouts.clear();
@@ -3280,7 +3380,7 @@ export class WordLookupPopup {
     });
 
     const allOperations = Promise.allSettled(Array.from(this.pendingOperations));
-    
+
     await Promise.race([allOperations, timeoutPromise]);
   }
 
@@ -3326,5 +3426,7 @@ export class WordLookupPopup {
     this.isVisible = false;
     this.isLoading = false;
     this.currentWord = '';
+    this.translation = '';
+    this.currentContext = '';
   }
-} 
+}

@@ -6,6 +6,8 @@
 import { VocabularyManager } from '../vocabulary/VocabularyManager';
 import { VocabularyObserver, VocabularyEventType } from '../vocabulary/VocabularyObserver';
 import { VocabularyItem } from '../storage/types';
+import { Logger } from '../logging/Logger';
+import { ComponentType } from '../logging/types';
 
 // ========================================
 // Types and Interfaces
@@ -104,18 +106,19 @@ export const WEBPAGE_HIGHLIGHT_CONFIG: HighlightConfig = {
 
 export class WordHighlightingService {
   private static instance: WordHighlightingService | null = null;
-  
+
   private vocabularyManager: VocabularyManager;
   private vocabularyObserver: VocabularyObserver;
-  
+
   private vocabularyCache = new Map<string, VocabularyItem>();
   private wordCache = new Map<string, boolean>();
   private lastCacheUpdate = 0;
   private readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-  
+
   private highlightContexts = new Map<string, HighlightContext>();
   private styleSheet: CSSStyleSheet | null = null;
-  
+  private readonly logger = Logger.getInstance();
+
   private stats: HighlightStats = {
     totalWords: 0,
     highlightedWords: 0,
@@ -151,7 +154,7 @@ export class WordHighlightingService {
    */
   public async highlightElement(
     element: HTMLElement,
-    config: Partial<HighlightConfig> = {}
+    config: Partial<HighlightConfig> = {},
   ): Promise<HighlightStats> {
     const startTime = performance.now();
     const finalConfig = { ...DEFAULT_HIGHLIGHT_CONFIG, ...config };
@@ -175,7 +178,7 @@ export class WordHighlightingService {
 
       // Process text content
       const result = await this.processElementContent(element, vocabulary, finalConfig);
-      
+
       // Update context
       context.highlightedWords = new Set(result.highlightedWords);
 
@@ -185,9 +188,14 @@ export class WordHighlightingService {
       }
 
       return this.updateStats(startTime, result.totalWords, result.highlightedWords.length, 1);
-
     } catch (error) {
-      console.error('[WordHighlightingService] Error highlighting element:', error);
+      this.logger?.error('Error highlighting element', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+          elementTag: element.tagName,
+        },
+      });
       return this.updateStats(startTime, 0, 0, 1);
     }
   }
@@ -198,22 +206,22 @@ export class WordHighlightingService {
   public removeHighlighting(element: HTMLElement): void {
     const contextId = this.generateContextId(element);
     const context = this.highlightContexts.get(contextId);
-    
+
     if (context) {
       // Restore original content
       element.innerHTML = context.originalText;
-      
+
       // Clean up observer
       if (context.observer) {
         context.observer.disconnect();
       }
-      
+
       // Remove context
       this.highlightContexts.delete(contextId);
     } else {
       // Fallback: remove highlight elements
       const highlights = element.querySelectorAll('[class*="lingua-"][class*="highlight"]');
-      highlights.forEach(highlight => {
+      highlights.forEach((highlight) => {
         const parent = highlight.parentNode;
         if (parent) {
           parent.replaceChild(document.createTextNode(highlight.textContent || ''), highlight);
@@ -228,16 +236,22 @@ export class WordHighlightingService {
    */
   public async refreshAllHighlighting(): Promise<void> {
     const contexts = Array.from(this.highlightContexts.entries());
-    
+
     for (const [contextId, context] of contexts) {
       try {
         // Restore original content
         context.element.innerHTML = context.originalText;
-        
+
         // Re-highlight with current vocabulary
         await this.highlightElement(context.element, context.config);
       } catch (error) {
-        console.error('[WordHighlightingService] Error refreshing highlighting:', error);
+        this.logger?.error('Error refreshing highlighting', {
+          component: ComponentType.WORD_LOOKUP,
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+            contextId: contextId,
+          },
+        });
         this.highlightContexts.delete(contextId);
       }
     }
@@ -246,13 +260,10 @@ export class WordHighlightingService {
   /**
    * Highlight vocabulary words in text string
    */
-  public async highlightText(
-    text: string,
-    config: Partial<HighlightConfig> = {}
-  ): Promise<string> {
+  public async highlightText(text: string, config: Partial<HighlightConfig> = {}): Promise<string> {
     const finalConfig = { ...DEFAULT_HIGHLIGHT_CONFIG, ...config };
     const vocabulary = await this.getVocabularyCached();
-    
+
     if (vocabulary.length === 0) return text;
 
     return this.processTextContent(text, vocabulary, finalConfig);
@@ -263,7 +274,7 @@ export class WordHighlightingService {
    */
   public async isVocabularyWord(word: string): Promise<boolean> {
     const cleanWord = this.cleanWord(word);
-    
+
     if (this.wordCache.has(cleanWord)) {
       this.stats.cacheHits++;
       return this.wordCache.get(cleanWord)!;
@@ -271,10 +282,8 @@ export class WordHighlightingService {
 
     this.stats.cacheMisses++;
     const vocabulary = await this.getVocabularyCached();
-    const isVocabulary = vocabulary.some(item => 
-      this.cleanWord(item.word) === cleanWord
-    );
-    
+    const isVocabulary = vocabulary.some((item) => this.cleanWord(item.word) === cleanWord);
+
     this.wordCache.set(cleanWord, isVocabulary);
     return isVocabulary;
   }
@@ -311,23 +320,23 @@ export class WordHighlightingService {
     for (const [contextId, context] of this.highlightContexts.entries()) {
       this.removeHighlighting(context.element);
     }
-    
+
     // Clear caches
     this.clearCaches();
-    
+
     // Remove event listeners
     this.vocabularyObserver.off(VocabularyEventType.WORD_ADDED);
     this.vocabularyObserver.off(VocabularyEventType.WORD_REMOVED);
     this.vocabularyObserver.off(VocabularyEventType.VOCABULARY_CLEARED);
     this.vocabularyObserver.off(VocabularyEventType.VOCABULARY_IMPORTED);
-    
+
     // Remove stylesheet
     if (this.styleSheet && document.adoptedStyleSheets.includes(this.styleSheet)) {
       document.adoptedStyleSheets = document.adoptedStyleSheets.filter(
-        sheet => sheet !== this.styleSheet
+        (sheet) => sheet !== this.styleSheet,
       );
     }
-    
+
     WordHighlightingService.instance = null;
   }
 
@@ -398,27 +407,28 @@ export class WordHighlightingService {
           }
         }
       `);
-      
+
       document.adoptedStyleSheets = [...document.adoptedStyleSheets, this.styleSheet];
     } catch (error) {
-      console.warn('[WordHighlightingService] Could not create stylesheet:', error);
+      this.logger?.warn('Could not create stylesheet', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
     }
   }
 
   private async processElementContent(
     element: HTMLElement,
     vocabulary: VocabularyItem[],
-    config: HighlightConfig
+    config: HighlightConfig,
   ): Promise<{ totalWords: number; highlightedWords: string[] }> {
-    const walker = document.createTreeWalker(
-      element,
-      NodeFilter.SHOW_TEXT,
-      null
-    );
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, null);
 
     const textNodes: Text[] = [];
     let node;
-    while (node = walker.nextNode()) {
+    while ((node = walker.nextNode())) {
       textNodes.push(node as Text);
     }
 
@@ -437,10 +447,10 @@ export class WordHighlightingService {
   private processTextNode(
     textNode: Text,
     vocabulary: VocabularyItem[],
-    config: HighlightConfig
+    config: HighlightConfig,
   ): { totalWords: number; highlightedWords: string[] } {
     const text = textNode.textContent || '';
-    const words = text.split(/\s+/).filter(word => word.length > 0);
+    const words = text.split(/\s+/).filter((word) => word.length > 0);
     const highlightedWords: string[] = [];
 
     if (words.length === 0) {
@@ -448,21 +458,21 @@ export class WordHighlightingService {
     }
 
     const highlightedText = this.processTextContent(text, vocabulary, config);
-    
+
     if (highlightedText !== text) {
       const tempDiv = document.createElement('div');
       tempDiv.innerHTML = highlightedText;
-      
+
       const parent = textNode.parentNode;
       if (parent) {
         while (tempDiv.firstChild) {
           parent.insertBefore(tempDiv.firstChild, textNode);
         }
         parent.removeChild(textNode);
-        
+
         // Count highlighted words
         const highlights = tempDiv.querySelectorAll(`.${config.className}`);
-        highlights.forEach(highlight => {
+        highlights.forEach((highlight) => {
           const word = this.cleanWord(highlight.textContent || '');
           if (word) highlightedWords.push(word);
         });
@@ -475,36 +485,36 @@ export class WordHighlightingService {
   private processTextContent(
     text: string,
     vocabulary: VocabularyItem[],
-    config: HighlightConfig
+    config: HighlightConfig,
   ): string {
     if (!text || vocabulary.length === 0) return text;
 
     // Create word map for efficient lookup
     const wordMap = new Map<string, VocabularyItem>();
-    vocabulary.forEach(item => {
+    vocabulary.forEach((item) => {
       const key = config.caseSensitive ? item.word : item.word.toLowerCase();
       wordMap.set(key, item);
     });
 
     // Sort words by length (longest first) to avoid partial matches
     const sortedWords = Array.from(wordMap.keys()).sort((a, b) => b.length - a.length);
-    
+
     if (sortedWords.length === 0) return text;
 
     // Create regex pattern
-    const pattern = sortedWords.map(word => this.escapeRegExp(word)).join('|');
+    const pattern = sortedWords.map((word) => this.escapeRegExp(word)).join('|');
     const flags = config.caseSensitive ? 'g' : 'gi';
     const regex = new RegExp(`\\b(${pattern})\\b`, flags);
 
     return text.replace(regex, (match) => {
       const lookupKey = config.caseSensitive ? match : match.toLowerCase();
       const vocabularyItem = wordMap.get(lookupKey);
-      
+
       if (!vocabularyItem) return match;
 
       const style = this.buildInlineStyle(config);
       const tooltip = config.showTooltip ? ` data-tooltip="${vocabularyItem.translation}"` : '';
-      
+
       return `<span class="${config.className}" style="${style}"${tooltip}>${match}</span>`;
     });
   }
@@ -540,14 +550,14 @@ export class WordHighlightingService {
 
     const observer = new MutationObserver((mutations) => {
       let shouldRefresh = false;
-      
+
       for (const mutation of mutations) {
         if (mutation.type === 'childList' || mutation.type === 'characterData') {
           shouldRefresh = true;
           break;
         }
       }
-      
+
       if (shouldRefresh) {
         setTimeout(() => {
           this.highlightElement(element, context.config);
@@ -570,7 +580,7 @@ export class WordHighlightingService {
       const result = await this.vocabularyManager.getVocabulary();
       if (result.success && result.data) {
         this.vocabularyCache.clear();
-        result.data.forEach(item => {
+        result.data.forEach((item) => {
           this.vocabularyCache.set(item.id, item);
         });
         this.lastCacheUpdate = now;
@@ -601,10 +611,10 @@ export class WordHighlightingService {
     startTime: number,
     totalWords: number,
     highlightedWords: number,
-    elementsProcessed: number
+    elementsProcessed: number,
   ): HighlightStats {
     const processingTime = performance.now() - startTime;
-    
+
     this.stats = {
       totalWords: this.stats.totalWords + totalWords,
       highlightedWords: this.stats.highlightedWords + highlightedWords,
@@ -627,7 +637,7 @@ export class WordHighlightingService {
  */
 export async function highlightVocabularyInElement(
   element: HTMLElement,
-  config?: Partial<HighlightConfig>
+  config?: Partial<HighlightConfig>,
 ): Promise<HighlightStats> {
   const service = WordHighlightingService.getInstance();
   return service.highlightElement(element, config);
@@ -646,8 +656,8 @@ export function removeVocabularyHighlighting(element: HTMLElement): void {
  */
 export async function highlightVocabularyInText(
   text: string,
-  config?: Partial<HighlightConfig>
+  config?: Partial<HighlightConfig>,
 ): Promise<string> {
   const service = WordHighlightingService.getInstance();
   return service.highlightText(text, config);
-} 
+}

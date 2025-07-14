@@ -3,21 +3,19 @@
  * Handles cross-origin requests for subtitle files with multiple fallback strategies
  */
 
-import {
-  SubtitleErrorCode,
-  SubtitleFetchError,
-  FetchConfig
-} from './types';
+import { SubtitleErrorCode, SubtitleFetchError, FetchConfig } from './types';
+import { Logger } from '../logging/Logger';
+import { ComponentType } from '../logging/types';
 
 /**
  * CORS handling strategy
  */
-export type CorsStrategy = 
-  | 'extension'      // Use Chrome extension permissions
-  | 'background'     // Use background script to make request
-  | 'proxy'          // Use proxy service (if available)
+export type CorsStrategy =
+  | 'extension' // Use Chrome extension permissions
+  | 'background' // Use background script to make request
+  | 'proxy' // Use proxy service (if available)
   | 'content_script' // Use content script to make request from YouTube context
-  | 'direct';        // Direct fetch (may fail due to CORS)
+  | 'direct'; // Direct fetch (may fail due to CORS)
 
 /**
  * CORS configuration
@@ -50,7 +48,7 @@ export const DEFAULT_CORS_CONFIG: CorsConfig = {
   strategies: ['extension', 'background', 'content_script', 'direct'],
   timeout: 30000,
   retryOnCorsError: true,
-  enableLogging: true
+  enableLogging: true,
 };
 
 /**
@@ -58,6 +56,7 @@ export const DEFAULT_CORS_CONFIG: CorsConfig = {
  */
 export class CorsHandler {
   private readonly config: CorsConfig;
+  private readonly logger = Logger.getInstance();
 
   constructor(config: Partial<CorsConfig> = {}) {
     this.config = { ...DEFAULT_CORS_CONFIG, ...config };
@@ -72,26 +71,52 @@ export class CorsHandler {
    */
   async fetchWithCorsHandling(
     url: string,
-    options: Partial<FetchConfig> = {}
+    options: Partial<FetchConfig> = {},
   ): Promise<CorsRequestResult> {
     const startTime = Date.now();
-    console.log(`[LinguaTube] Fetching with CORS handling: ${url}`);
+    this.logger?.info('Fetching with CORS handling', {
+      component: ComponentType.SUBTITLE_MANAGER,
+      url,
+      metadata: { strategies: this.config.strategies },
+    });
 
     for (const strategy of this.config.strategies) {
       try {
-        console.log(`[LinguaTube] Trying CORS strategy: ${strategy}`);
-        
+        this.logger?.debug('Trying CORS strategy', {
+          component: ComponentType.SUBTITLE_MANAGER,
+          url,
+          metadata: { strategy },
+        });
+
         const result = await this.executeStrategy(strategy, url, options);
-        
+
         if (result.success) {
           const duration = Date.now() - startTime;
-          console.log(`[LinguaTube] Success with ${strategy} strategy (${duration}ms)`);
+          this.logger?.info('CORS strategy succeeded', {
+            component: ComponentType.SUBTITLE_MANAGER,
+            url,
+            metadata: {
+              strategy,
+              duration,
+              statusCode: result.statusCode,
+              dataLength: result.data?.length,
+            },
+          });
           return result;
         }
 
         // Log failure but continue to next strategy
-        console.warn(`[LinguaTube] Strategy ${strategy} failed:`, result.error?.message);
-        
+        this.logger?.warn('CORS strategy failed', {
+          component: ComponentType.SUBTITLE_MANAGER,
+          url,
+          metadata: {
+            strategy,
+            errorCode: result.error?.code,
+            errorMessage: result.error?.message,
+            retryable: result.error?.retryable,
+          },
+        });
+
         // If this was a CORS error and we should retry, continue
         if (result.error?.code === SubtitleErrorCode.CORS_ERROR && this.config.retryOnCorsError) {
           continue;
@@ -99,13 +124,27 @@ export class CorsHandler {
 
         // For other errors that aren't retryable, break
         if (result.error && !result.error.retryable) {
-          console.log(`[LinguaTube] Non-retryable error, stopping strategy attempts`);
+          this.logger?.info('Non-retryable error, stopping strategy attempts', {
+            component: ComponentType.SUBTITLE_MANAGER,
+            url,
+            metadata: {
+              strategy,
+              errorCode: result.error.code,
+              errorMessage: result.error.message,
+            },
+          });
           return result;
         }
-
       } catch (error) {
-        console.error(`[LinguaTube] Strategy ${strategy} threw error:`, error);
-        
+        this.logger?.error('CORS strategy threw error', {
+          component: ComponentType.SUBTITLE_MANAGER,
+          url,
+          metadata: {
+            strategy,
+            error: error instanceof Error ? error.message : String(error),
+          },
+        });
+
         // Continue to next strategy
         continue;
       }
@@ -113,17 +152,25 @@ export class CorsHandler {
 
     // All strategies failed
     const totalDuration = Date.now() - startTime;
-    console.error(`[LinguaTube] All CORS strategies failed (${totalDuration}ms)`);
-    
+    this.logger?.error('All CORS strategies failed', {
+      component: ComponentType.SUBTITLE_MANAGER,
+      url,
+      metadata: {
+        totalDuration,
+        strategiesAttempted: this.config.strategies.length,
+        strategies: this.config.strategies,
+      },
+    });
+
     return {
       success: false,
       error: {
         code: SubtitleErrorCode.CORS_ERROR,
         message: 'All CORS handling strategies failed',
-        retryable: false
+        retryable: false,
       },
       strategy: 'direct',
-      url
+      url,
     };
   }
 
@@ -137,24 +184,24 @@ export class CorsHandler {
   private async executeStrategy(
     strategy: CorsStrategy,
     url: string,
-    options: Partial<FetchConfig>
+    options: Partial<FetchConfig>,
   ): Promise<CorsRequestResult> {
     switch (strategy) {
       case 'extension':
         return this.fetchWithExtensionPermissions(url, options);
-      
+
       case 'background':
         return this.fetchWithBackgroundScript(url, options);
-      
+
       case 'content_script':
         return this.fetchWithContentScript(url, options);
-      
+
       case 'proxy':
         return this.fetchWithProxy(url, options);
-      
+
       case 'direct':
         return this.fetchDirect(url, options);
-      
+
       default:
         throw new Error(`Unknown CORS strategy: ${strategy}`);
     }
@@ -165,7 +212,7 @@ export class CorsHandler {
    */
   private async fetchWithExtensionPermissions(
     url: string,
-    options: Partial<FetchConfig>
+    options: Partial<FetchConfig>,
   ): Promise<CorsRequestResult> {
     try {
       const controller = new AbortController();
@@ -176,13 +223,13 @@ export class CorsHandler {
         signal: controller.signal,
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          'Accept': 'text/vtt,text/plain,application/xml,text/xml,*/*',
+          Accept: 'text/vtt,text/plain,application/xml,text/xml,*/*',
           'Accept-Language': 'en-US,en;q=0.9',
           'Cache-Control': 'no-cache',
-          ...options.headers
+          ...options.headers,
         },
         credentials: 'omit', // Don't send cookies for CORS
-        mode: 'cors' // Explicitly request CORS
+        mode: 'cors', // Explicitly request CORS
       });
 
       clearTimeout(timeoutId);
@@ -191,14 +238,15 @@ export class CorsHandler {
         return {
           success: false,
           error: {
-            code: response.status === 404 ? SubtitleErrorCode.NOT_FOUND : SubtitleErrorCode.HTTP_ERROR,
+            code:
+              response.status === 404 ? SubtitleErrorCode.NOT_FOUND : SubtitleErrorCode.HTTP_ERROR,
             message: `HTTP ${response.status}: ${response.statusText}`,
             httpStatus: response.status,
-            retryable: response.status >= 500 || response.status === 408 || response.status === 429
+            retryable: response.status >= 500 || response.status === 408 || response.status === 429,
           },
           strategy: 'extension',
           url,
-          statusCode: response.status
+          statusCode: response.status,
         };
       }
 
@@ -211,15 +259,14 @@ export class CorsHandler {
         strategy: 'extension',
         url,
         responseHeaders,
-        statusCode: response.status
+        statusCode: response.status,
       };
-
     } catch (error) {
       return {
         success: false,
         error: this.convertFetchError(error),
         strategy: 'extension',
-        url
+        url,
       };
     }
   }
@@ -229,7 +276,7 @@ export class CorsHandler {
    */
   private async fetchWithBackgroundScript(
     url: string,
-    options: Partial<FetchConfig>
+    options: Partial<FetchConfig>,
   ): Promise<CorsRequestResult> {
     try {
       // Send message to background script to make the request
@@ -238,8 +285,8 @@ export class CorsHandler {
         url,
         options: {
           timeout: this.config.timeout,
-          headers: options.headers
-        }
+          headers: options.headers,
+        },
       });
 
       if (response.success) {
@@ -249,17 +296,16 @@ export class CorsHandler {
           strategy: 'background',
           url,
           responseHeaders: response.headers,
-          statusCode: response.statusCode
+          statusCode: response.statusCode,
         };
       } else {
         return {
           success: false,
           error: response.error,
           strategy: 'background',
-          url
+          url,
         };
       }
-
     } catch (error) {
       return {
         success: false,
@@ -267,10 +313,10 @@ export class CorsHandler {
           code: SubtitleErrorCode.EXTENSION_ERROR,
           message: 'Background script communication failed',
           originalError: error,
-          retryable: true
+          retryable: true,
         },
         strategy: 'background',
-        url
+        url,
       };
     }
   }
@@ -280,7 +326,7 @@ export class CorsHandler {
    */
   private async fetchWithContentScript(
     url: string,
-    options: Partial<FetchConfig>
+    options: Partial<FetchConfig>,
   ): Promise<CorsRequestResult> {
     try {
       // Inject fetch into YouTube page context to bypass some CORS restrictions
@@ -334,9 +380,8 @@ export class CorsHandler {
         error: result.error,
         strategy: 'content_script',
         url,
-        statusCode: result.statusCode
+        statusCode: result.statusCode,
       };
-
     } catch (error) {
       return {
         success: false,
@@ -344,10 +389,10 @@ export class CorsHandler {
           code: SubtitleErrorCode.CONTENT_SCRIPT_ERROR,
           message: 'Content script execution failed',
           originalError: error,
-          retryable: false
+          retryable: false,
         },
         strategy: 'content_script',
-        url
+        url,
       };
     }
   }
@@ -357,7 +402,7 @@ export class CorsHandler {
    */
   private async fetchWithProxy(
     url: string,
-    options: Partial<FetchConfig>
+    options: Partial<FetchConfig>,
   ): Promise<CorsRequestResult> {
     if (!this.config.proxyEndpoint) {
       return {
@@ -365,16 +410,16 @@ export class CorsHandler {
         error: {
           code: SubtitleErrorCode.CONFIG_ERROR,
           message: 'Proxy endpoint not configured',
-          retryable: false
+          retryable: false,
         },
         strategy: 'proxy',
-        url
+        url,
       };
     }
 
     try {
       const proxyUrl = `${this.config.proxyEndpoint}?url=${encodeURIComponent(url)}`;
-      
+
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
 
@@ -382,9 +427,9 @@ export class CorsHandler {
         method: 'GET',
         signal: controller.signal,
         headers: {
-          'Accept': 'text/plain,application/json,*/*',
-          ...options.headers
-        }
+          Accept: 'text/plain,application/json,*/*',
+          ...options.headers,
+        },
       });
 
       clearTimeout(timeoutId);
@@ -396,10 +441,10 @@ export class CorsHandler {
             code: SubtitleErrorCode.PROXY_ERROR,
             message: `Proxy failed: HTTP ${response.status}`,
             httpStatus: response.status,
-            retryable: response.status >= 500
+            retryable: response.status >= 500,
           },
           strategy: 'proxy',
-          url
+          url,
         };
       }
 
@@ -410,15 +455,14 @@ export class CorsHandler {
         data,
         strategy: 'proxy',
         url,
-        statusCode: response.status
+        statusCode: response.status,
       };
-
     } catch (error) {
       return {
         success: false,
         error: this.convertFetchError(error),
         strategy: 'proxy',
-        url
+        url,
       };
     }
   }
@@ -428,7 +472,7 @@ export class CorsHandler {
    */
   private async fetchDirect(
     url: string,
-    options: Partial<FetchConfig>
+    options: Partial<FetchConfig>,
   ): Promise<CorsRequestResult> {
     try {
       const controller = new AbortController();
@@ -438,10 +482,10 @@ export class CorsHandler {
         method: 'GET',
         signal: controller.signal,
         headers: {
-          'Accept': 'text/vtt,text/plain,application/xml,text/xml,*/*',
-          ...options.headers
+          Accept: 'text/vtt,text/plain,application/xml,text/xml,*/*',
+          ...options.headers,
         },
-        mode: 'cors'
+        mode: 'cors',
       });
 
       clearTimeout(timeoutId);
@@ -450,14 +494,15 @@ export class CorsHandler {
         return {
           success: false,
           error: {
-            code: response.status === 404 ? SubtitleErrorCode.NOT_FOUND : SubtitleErrorCode.HTTP_ERROR,
+            code:
+              response.status === 404 ? SubtitleErrorCode.NOT_FOUND : SubtitleErrorCode.HTTP_ERROR,
             message: `HTTP ${response.status}: ${response.statusText}`,
             httpStatus: response.status,
-            retryable: response.status >= 500
+            retryable: response.status >= 500,
           },
           strategy: 'direct',
           url,
-          statusCode: response.status
+          statusCode: response.status,
         };
       }
 
@@ -470,15 +515,14 @@ export class CorsHandler {
         strategy: 'direct',
         url,
         responseHeaders,
-        statusCode: response.status
+        statusCode: response.status,
       };
-
     } catch (error) {
       return {
         success: false,
         error: this.convertFetchError(error),
         strategy: 'direct',
-        url
+        url,
       };
     }
   }
@@ -517,7 +561,7 @@ export class CorsHandler {
         if (event.data?.type === 'LINGUA_TUBE_FETCH_RESULT') {
           window.removeEventListener('message', messageHandler);
           document.head.removeChild(scriptElement);
-          
+
           if (event.data.error) {
             reject(new Error(event.data.error.message));
           } else {
@@ -527,7 +571,7 @@ export class CorsHandler {
       };
 
       window.addEventListener('message', messageHandler);
-      
+
       // Timeout after 30 seconds
       setTimeout(() => {
         window.removeEventListener('message', messageHandler);
@@ -544,11 +588,11 @@ export class CorsHandler {
    */
   private extractHeaders(response: Response): Record<string, string> {
     const headers: Record<string, string> = {};
-    
+
     response.headers.forEach((value, key) => {
       headers[key.toLowerCase()] = value;
     });
-    
+
     return headers;
   }
 
@@ -561,7 +605,7 @@ export class CorsHandler {
       let retryable = true;
 
       const message = error.message.toLowerCase();
-      
+
       if (message.includes('cors')) {
         code = SubtitleErrorCode.CORS_ERROR;
         retryable = false;
@@ -575,7 +619,7 @@ export class CorsHandler {
         code,
         message: error.message,
         originalError: error,
-        retryable
+        retryable,
       };
     }
 
@@ -583,7 +627,7 @@ export class CorsHandler {
       code: SubtitleErrorCode.UNKNOWN_ERROR,
       message: 'Unknown fetch error',
       originalError: error,
-      retryable: true
+      retryable: true,
     };
   }
 
@@ -606,26 +650,26 @@ export class CorsHandler {
    */
   async testStrategy(
     strategy: CorsStrategy,
-    url: string
+    url: string,
   ): Promise<{ success: boolean; error?: string; timing: number }> {
     const startTime = Date.now();
-    
+
     try {
       const result = await this.executeStrategy(strategy, url, {});
       const timing = Date.now() - startTime;
-      
+
       return {
         success: result.success,
         error: result.error?.message,
-        timing
+        timing,
       };
     } catch (error) {
       const timing = Date.now() - startTime;
-      
+
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
-        timing
+        timing,
       };
     }
   }
@@ -650,7 +694,7 @@ export function createExtensionCorsHandler(): CorsHandler {
     strategies: ['extension', 'background'],
     timeout: 15000,
     retryOnCorsError: false,
-    enableLogging: true
+    enableLogging: true,
   });
 }
 
@@ -663,28 +707,25 @@ export function createComprehensiveCorsHandler(proxyEndpoint?: string): CorsHand
     timeout: 30000,
     retryOnCorsError: true,
     enableLogging: true,
-    proxyEndpoint
+    proxyEndpoint,
   });
 }
 
 /**
  * Quick CORS fetch function
  */
-export async function corsAwareFetch(
-  url: string,
-  options?: Partial<FetchConfig>
-): Promise<string> {
+export async function corsAwareFetch(url: string, options?: Partial<FetchConfig>): Promise<string> {
   const corsHandler = createExtensionCorsHandler();
   const result = await corsHandler.fetchWithCorsHandling(url, options);
-  
+
   if (result.success && result.data) {
     return result.data;
   }
-  
+
   throw result.error || new Error('CORS fetch failed');
 }
 
 /**
  * Default CORS handler instance
  */
-export const corsHandler = createExtensionCorsHandler(); 
+export const corsHandler = createExtensionCorsHandler();

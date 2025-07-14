@@ -8,8 +8,10 @@ import {
   SubtitleFile,
   MergeConfig,
   SubtitleSegmentMetadata,
-  SubtitleStyling
+  SubtitleStyling,
 } from './types';
+import { Logger } from '../logging/Logger';
+import { ComponentType } from '../logging/types';
 
 /**
  * Merge operation result
@@ -52,7 +54,7 @@ export const DEFAULT_MERGE_CONFIG: MergeConfig = {
   minDuration: 0.5, // 0.5 seconds
   maxDuration: 10.0, // 10 seconds
   preserveSpeakers: true,
-  mergeStrategy: 'time'
+  mergeStrategy: 'time',
 };
 
 /**
@@ -60,6 +62,7 @@ export const DEFAULT_MERGE_CONFIG: MergeConfig = {
  */
 export class SegmentMerger {
   private readonly config: MergeConfig;
+  private readonly logger = Logger.getInstance();
 
   constructor(config: Partial<MergeConfig> = {}) {
     this.config = { ...DEFAULT_MERGE_CONFIG, ...config };
@@ -74,12 +77,31 @@ export class SegmentMerger {
    */
   async mergeFile(subtitleFile: SubtitleFile): Promise<MergeResult> {
     const startTime = Date.now();
-    console.log(`[LinguaTube] Starting segment merge for ${subtitleFile.segments.length} segments`);
+    this.logger?.info('Starting segment merge', {
+      component: ComponentType.SUBTITLE_MANAGER,
+      metadata: {
+        segmentCount: subtitleFile.segments.length,
+        mergeStrategy: this.config.mergeStrategy,
+        maxGap: this.config.maxGap,
+      },
+    });
 
     const result = await this.mergeSegments(subtitleFile.segments);
 
     const processingTime = Date.now() - startTime;
-    console.log(`[LinguaTube] Merge completed: ${result.originalCount} → ${result.mergedCount} segments (${processingTime}ms)`);
+    this.logger?.info('Segment merge completed', {
+      component: ComponentType.SUBTITLE_MANAGER,
+      metadata: {
+        originalCount: result.originalCount,
+        mergedCount: result.mergedCount,
+        reductionPercent: Math.round(
+          ((result.originalCount - result.mergedCount) / result.originalCount) * 100,
+        ),
+        processingTime,
+        operationsCount: result.operations.length,
+        warningsCount: result.warnings.length,
+      },
+    });
 
     return result;
   }
@@ -99,7 +121,7 @@ export class SegmentMerger {
         mergedCount: 0,
         segments: [],
         operations: [],
-        warnings: []
+        warnings: [],
       };
     }
 
@@ -108,7 +130,7 @@ export class SegmentMerger {
 
     // Apply merge strategy
     let mergedSegments: SubtitleSegment[];
-    
+
     switch (this.config.mergeStrategy) {
       case 'time':
         mergedSegments = await this.mergeByTime(sortedSegments, operations, warnings);
@@ -132,7 +154,7 @@ export class SegmentMerger {
       mergedCount: mergedSegments.length,
       segments: mergedSegments,
       operations,
-      warnings
+      warnings,
     };
   }
 
@@ -146,7 +168,7 @@ export class SegmentMerger {
   private async mergeByTime(
     segments: SubtitleSegment[],
     operations: MergeOperation[],
-    warnings: MergeWarning[]
+    warnings: MergeWarning[],
   ): Promise<SubtitleSegment[]> {
     const merged: SubtitleSegment[] = [];
     let currentSegment: SubtitleSegment | null = null;
@@ -163,13 +185,13 @@ export class SegmentMerger {
       if (canMerge) {
         // Merge segments
         const mergedSegment = await this.combineSegments(currentSegment, segment);
-        
+
         operations.push({
           type: 'merge',
           sourceSegments: [currentSegment.id, segment.id],
           resultSegment: mergedSegment.id,
           reason: `Time gap of ${gap.toFixed(2)}s within threshold`,
-          timeSaved: gap
+          timeSaved: gap,
         });
 
         currentSegment = mergedSegment;
@@ -182,7 +204,7 @@ export class SegmentMerger {
           operations.push({
             type: 'skip',
             sourceSegments: [segment.id],
-            reason: `Gap ${gap.toFixed(2)}s exceeds threshold ${this.config.maxGap}s`
+            reason: `Gap ${gap.toFixed(2)}s exceeds threshold ${this.config.maxGap}s`,
           });
         }
       }
@@ -202,7 +224,7 @@ export class SegmentMerger {
   private async mergeBySpeaker(
     segments: SubtitleSegment[],
     operations: MergeOperation[],
-    warnings: MergeWarning[]
+    warnings: MergeWarning[],
   ): Promise<SubtitleSegment[]> {
     if (!this.config.preserveSpeakers) {
       // Fall back to time-based merging
@@ -215,7 +237,7 @@ export class SegmentMerger {
 
     for (const segment of segments) {
       const segmentSpeaker = segment.metadata?.speaker || null;
-      
+
       // Check if we should start a new speaker group
       if (currentSpeaker !== segmentSpeaker || currentGroup.length === 0) {
         // Process current group
@@ -258,7 +280,7 @@ export class SegmentMerger {
   private async mergeByContent(
     segments: SubtitleSegment[],
     operations: MergeOperation[],
-    warnings: MergeWarning[]
+    warnings: MergeWarning[],
   ): Promise<SubtitleSegment[]> {
     const merged: SubtitleSegment[] = [];
     let currentSegment: SubtitleSegment | null = null;
@@ -270,15 +292,15 @@ export class SegmentMerger {
       }
 
       const canMerge = this.canMergeByContent(currentSegment, segment);
-      
+
       if (canMerge) {
         const mergedSegment = await this.combineSegments(currentSegment, segment);
-        
+
         operations.push({
           type: 'merge',
           sourceSegments: [currentSegment.id, segment.id],
           resultSegment: mergedSegment.id,
-          reason: 'Content analysis suggests segments should be combined'
+          reason: 'Content analysis suggests segments should be combined',
         });
 
         currentSegment = mergedSegment;
@@ -302,7 +324,11 @@ export class SegmentMerger {
   /**
    * Check if segments can be merged based on timing
    */
-  private canMergeByTime(segment1: SubtitleSegment, segment2: SubtitleSegment, gap: number): boolean {
+  private canMergeByTime(
+    segment1: SubtitleSegment,
+    segment2: SubtitleSegment,
+    gap: number,
+  ): boolean {
     // Basic gap check
     if (gap > this.config.maxGap) {
       return false;
@@ -317,7 +343,7 @@ export class SegmentMerger {
     // Check minimum duration
     const segment1Duration = segment1.endTime - segment1.startTime;
     const segment2Duration = segment2.endTime - segment2.startTime;
-    
+
     if (segment1Duration < this.config.minDuration || segment2Duration < this.config.minDuration) {
       return true; // Merge short segments
     }
@@ -326,7 +352,7 @@ export class SegmentMerger {
     if (this.config.preserveSpeakers) {
       const speaker1 = segment1.metadata?.speaker;
       const speaker2 = segment2.metadata?.speaker;
-      
+
       if (speaker1 && speaker2 && speaker1 !== speaker2) {
         return false;
       }
@@ -382,7 +408,7 @@ export class SegmentMerger {
    */
   private isIncompletePhrase(text: string): boolean {
     const trimmed = text.trim();
-    
+
     // Very short segments are likely incomplete
     if (trimmed.length < 3) {
       return true;
@@ -394,7 +420,8 @@ export class SegmentMerger {
     }
 
     // Starts with conjunction or preposition
-    const continuationWords = /^(and|but|or|so|then|also|however|therefore|because|since|when|while|if|as|like|than)\s+/i;
+    const continuationWords =
+      /^(and|but|or|so|then|also|however|therefore|because|since|when|while|if|as|like|than)\s+/i;
     if (continuationWords.test(trimmed)) {
       return true;
     }
@@ -409,20 +436,23 @@ export class SegmentMerger {
   /**
    * Combine two segments into one
    */
-  private async combineSegments(segment1: SubtitleSegment, segment2: SubtitleSegment): Promise<SubtitleSegment> {
+  private async combineSegments(
+    segment1: SubtitleSegment,
+    segment2: SubtitleSegment,
+  ): Promise<SubtitleSegment> {
     // Combine text with appropriate spacing
     const combinedText = this.combineText(segment1.text, segment2.text);
-    
+
     // Merge timing
     const startTime = Math.min(segment1.startTime, segment2.startTime);
     const endTime = Math.max(segment1.endTime, segment2.endTime);
-    
+
     // Merge metadata
     const mergedMetadata = this.mergeMetadata(segment1.metadata, segment2.metadata);
-    
+
     // Merge styling (prefer first segment's styling)
     const mergedStyling = this.mergeStyling(segment1.styling, segment2.styling);
-    
+
     // Create new segment
     return {
       id: this.generateMergedId(segment1.id, segment2.id),
@@ -432,7 +462,7 @@ export class SegmentMerger {
       originalText: this.combineOriginalText(segment1.originalText, segment2.originalText),
       styling: mergedStyling,
       position: segment1.position, // Use first segment's position
-      metadata: mergedMetadata
+      metadata: mergedMetadata,
     };
   }
 
@@ -442,7 +472,7 @@ export class SegmentMerger {
   private async mergeSegmentGroup(
     segments: SubtitleSegment[],
     operations: MergeOperation[],
-    warnings: MergeWarning[]
+    warnings: MergeWarning[],
   ): Promise<SubtitleSegment[]> {
     if (segments.length <= 1) {
       return segments;
@@ -458,14 +488,17 @@ export class SegmentMerger {
   private combineText(text1: string, text2: string): string {
     const trimmed1 = text1.trim();
     const trimmed2 = text2.trim();
-    
+
     if (!trimmed1) return trimmed2;
     if (!trimmed2) return trimmed1;
-    
+
     // Determine appropriate spacing
-    const needsSpace = !trimmed1.endsWith(' ') && !trimmed2.startsWith(' ') && 
-                      !/[.!?]$/.test(trimmed1) && !/^[,;:]/.test(trimmed2);
-    
+    const needsSpace =
+      !trimmed1.endsWith(' ') &&
+      !trimmed2.startsWith(' ') &&
+      !/[.!?]$/.test(trimmed1) &&
+      !/^[,;:]/.test(trimmed2);
+
     return needsSpace ? `${trimmed1} ${trimmed2}` : `${trimmed1}${trimmed2}`;
   }
 
@@ -476,7 +509,7 @@ export class SegmentMerger {
     if (!original1 && !original2) return undefined;
     if (!original1) return original2;
     if (!original2) return original1;
-    
+
     return this.combineText(original1, original2);
   }
 
@@ -485,7 +518,7 @@ export class SegmentMerger {
    */
   private mergeMetadata(
     metadata1?: SubtitleSegmentMetadata,
-    metadata2?: SubtitleSegmentMetadata
+    metadata2?: SubtitleSegmentMetadata,
   ): SubtitleSegmentMetadata | undefined {
     if (!metadata1 && !metadata2) return undefined;
     if (!metadata1) return metadata2;
@@ -497,7 +530,7 @@ export class SegmentMerger {
       confidence: Math.min(metadata1.confidence || 1, metadata2.confidence || 1),
       region: metadata1.region || metadata2.region,
       notes: [...(metadata1.notes || []), ...(metadata2.notes || [])],
-      tags: [...new Set([...(metadata1.tags || []), ...(metadata2.tags || [])])]
+      tags: [...new Set([...(metadata1.tags || []), ...(metadata2.tags || [])])],
     };
   }
 
@@ -506,7 +539,7 @@ export class SegmentMerger {
    */
   private mergeStyling(
     styling1?: SubtitleStyling,
-    styling2?: SubtitleStyling
+    styling2?: SubtitleStyling,
   ): SubtitleStyling | undefined {
     if (!styling1 && !styling2) return undefined;
     if (!styling1) return styling2;
@@ -518,7 +551,7 @@ export class SegmentMerger {
       // Only merge if both have the same value
       bold: styling1.bold === styling2.bold ? styling1.bold : undefined,
       italic: styling1.italic === styling2.italic ? styling1.italic : undefined,
-      underline: styling1.underline === styling2.underline ? styling1.underline : undefined
+      underline: styling1.underline === styling2.underline ? styling1.underline : undefined,
     };
   }
 
@@ -539,7 +572,7 @@ export class SegmentMerger {
   private async postProcessSegments(
     segments: SubtitleSegment[],
     operations: MergeOperation[],
-    warnings: MergeWarning[]
+    warnings: MergeWarning[],
   ): Promise<SubtitleSegment[]> {
     const processed: SubtitleSegment[] = [];
 
@@ -569,7 +602,7 @@ export class SegmentMerger {
         code: 'DURATION_TOO_LONG',
         message: `Segment duration ${duration.toFixed(2)}s exceeds maximum ${this.config.maxDuration}s`,
         segmentIds: [segment.id],
-        severity: 'warning'
+        severity: 'warning',
       });
     }
 
@@ -578,7 +611,7 @@ export class SegmentMerger {
         code: 'DURATION_TOO_SHORT',
         message: `Segment duration ${duration.toFixed(2)}s below minimum ${this.config.minDuration}s`,
         segmentIds: [segment.id],
-        severity: 'info'
+        severity: 'info',
       });
     }
 
@@ -588,7 +621,7 @@ export class SegmentMerger {
         code: 'TEXT_TOO_LONG',
         message: `Segment text length ${segment.text.length} characters may be too long for display`,
         segmentIds: [segment.id],
-        severity: 'warning'
+        severity: 'warning',
       });
     }
 
@@ -605,7 +638,7 @@ export class SegmentMerger {
 
     return {
       ...segment,
-      text: cleanedText
+      text: cleanedText,
     };
   }
 
@@ -654,7 +687,7 @@ export class SegmentMerger {
     return {
       mergeable,
       timeGaps: totalTimeGaps,
-      estimatedReduction
+      estimatedReduction,
     };
   }
 }
@@ -679,7 +712,7 @@ export function createTimeMerger(): SegmentMerger {
     minDuration: 0.3,
     maxDuration: 8.0,
     mergeStrategy: 'time',
-    preserveSpeakers: false
+    preserveSpeakers: false,
   });
 }
 
@@ -692,7 +725,7 @@ export function createSpeakerMerger(): SegmentMerger {
     minDuration: 0.5,
     maxDuration: 12.0,
     mergeStrategy: 'speaker',
-    preserveSpeakers: true
+    preserveSpeakers: true,
   });
 }
 
@@ -705,7 +738,7 @@ export function createContentMerger(): SegmentMerger {
     minDuration: 0.4,
     maxDuration: 10.0,
     mergeStrategy: 'content',
-    preserveSpeakers: true
+    preserveSpeakers: true,
   });
 }
 
@@ -714,7 +747,7 @@ export function createContentMerger(): SegmentMerger {
  */
 export async function mergeSubtitleSegments(
   segments: SubtitleSegment[],
-  config?: Partial<MergeConfig>
+  config?: Partial<MergeConfig>,
 ): Promise<SubtitleSegment[]> {
   const merger = createSegmentMerger(config);
   const result = await merger.mergeSegments(segments);
@@ -724,4 +757,4 @@ export async function mergeSubtitleSegments(
 /**
  * Default segment merger instance
  */
-export const segmentMerger = createSegmentMerger(); 
+export const segmentMerger = createSegmentMerger();

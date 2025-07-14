@@ -10,7 +10,7 @@ export enum LogLevel {
   INFO = 'info',
   WARN = 'warn',
   ERROR = 'error',
-  CRITICAL = 'critical'
+  CRITICAL = 'critical',
 }
 
 /**
@@ -21,7 +21,7 @@ export const LOG_LEVEL_PRIORITY: Record<LogLevel, number> = {
   [LogLevel.INFO]: 1,
   [LogLevel.WARN]: 2,
   [LogLevel.ERROR]: 3,
-  [LogLevel.CRITICAL]: 4
+  [LogLevel.CRITICAL]: 4,
 };
 
 /**
@@ -39,17 +39,17 @@ export enum ErrorType {
   POPUP = 'popup',
   PERFORMANCE = 'performance',
   SECURITY = 'security',
-  UNKNOWN = 'unknown'
+  UNKNOWN = 'unknown',
 }
 
 /**
  * Error severity levels for user-facing error handling
  */
 export enum ErrorSeverity {
-  LOW = 'low',           // Minor issues, extension continues normally
-  MEDIUM = 'medium',     // Some functionality affected
-  HIGH = 'high',         // Major functionality broken
-  CRITICAL = 'critical'  // Extension unusable
+  LOW = 'low', // Minor issues, extension continues normally
+  MEDIUM = 'medium', // Some functionality affected
+  HIGH = 'high', // Major functionality broken
+  CRITICAL = 'critical', // Extension unusable
 }
 
 /**
@@ -67,7 +67,7 @@ export enum ComponentType {
   TTS_SERVICE = 'tts_service',
   STORAGE_SERVICE = 'storage_service',
   YOUTUBE_INTEGRATION = 'youtube_integration',
-  ERROR_HANDLER = 'error_handler'
+  ERROR_HANDLER = 'error_handler',
 }
 
 /**
@@ -152,7 +152,7 @@ export enum MessageType {
   LOG_EXPORT_REQUEST = 'LOG_EXPORT_REQUEST',
   LOG_CLEAR_REQUEST = 'LOG_CLEAR_REQUEST',
   LOG_STATS_REQUEST = 'LOG_STATS_REQUEST',
-  ERROR_REPORT = 'ERROR_REPORT'
+  ERROR_REPORT = 'ERROR_REPORT',
 }
 
 /**
@@ -168,7 +168,7 @@ export interface LogMessage {
 /**
  * Payload types for different message types
  */
-export type LogMessagePayload = 
+export type LogMessagePayload =
   | LogEventPayload
   | LogBatchPayload
   | LogConfigPayload
@@ -327,17 +327,17 @@ export const DEFAULT_LOGGER_CONFIG: LoggerConfig = {
   rateLimiting: {
     enabled: true,
     maxLogsPerSecond: 10,
-    burstLimit: 50
+    burstLimit: 50,
   },
   deduplication: {
     enabled: true,
     windowMs: 60000, // 1 minute
-    maxDuplicates: 5
+    maxDuplicates: 5,
   },
   batching: {
     enabled: true,
     batchSize: 10,
-    flushInterval: 5000 // 5 seconds
+    flushInterval: 5000, // 5 seconds
   },
   filters: {},
   sensitiveDataPatterns: [
@@ -348,16 +348,17 @@ export const DEFAULT_LOGGER_CONFIG: LoggerConfig = {
     'auth',
     'credential',
     'session',
-    'cookie'
-  ]
+    'cookie',
+  ],
 };
 
 /**
  * Environment detection
  */
 export const isProduction = (): boolean => {
-  return process.env.NODE_ENV === 'production' || 
-         !chrome.runtime.getManifest().name.includes('Dev');
+  return (
+    process.env.NODE_ENV === 'production' || !chrome.runtime.getManifest().name.includes('Dev')
+  );
 };
 
 /**
@@ -370,14 +371,18 @@ export const generateLogId = (): string => {
 /**
  * Generate fingerprint for log deduplication
  */
-export const generateFingerprint = (level: LogLevel, message: string, component: ComponentType): string => {
+export const generateFingerprint = (
+  level: LogLevel,
+  message: string,
+  component: ComponentType,
+): string => {
   const content = `${level}:${component}:${message}`;
   // Simple hash function for fingerprinting
   let hash = 0;
   for (let i = 0; i < content.length; i++) {
     const char = content.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
+    hash = (hash << 5) - hash + char;
     hash = hash & hash; // Convert to 32-bit integer
   }
   return Math.abs(hash).toString(36);
-}; 
+};

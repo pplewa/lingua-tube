@@ -11,7 +11,7 @@ import {
   SupportedLanguagesResponse,
   TranslationError,
   TranslationErrorCode,
-  LanguageCode
+  LanguageCode,
 } from './types';
 import { configService } from './ConfigService';
 
@@ -39,9 +39,9 @@ export class TranslationErrorImpl extends Error implements TranslationError {
       TranslationErrorCode.NETWORK_ERROR,
       TranslationErrorCode.TIMEOUT,
       TranslationErrorCode.SERVICE_UNAVAILABLE,
-      TranslationErrorCode.RATE_LIMIT_EXCEEDED
+      TranslationErrorCode.RATE_LIMIT_EXCEEDED,
     ];
-    
+
     return retryableCodes.includes(code);
   }
 }
@@ -74,32 +74,30 @@ export class TranslationApiService {
   private async _doInitializeClient(): Promise<void> {
     try {
       this.config = await configService.getConfig();
-      
+
       // Create the credential and client
       const credential: TranslatorCredential = {
         key: this.config.apiKey,
-        region: this.config.region || 'global'
+        region: this.config.region || 'global',
       };
       this.client = createClient(this.config.endpoint, credential);
-
-      console.log('Microsoft Translator API client initialized successfully');
     } catch (error) {
       this.client = null;
       this.config = null;
       this.clientInitPromise = null;
-      
+
       if (error instanceof Error) {
         throw this.createTranslationError(
           `Failed to initialize translation client: ${error.message}`,
           TranslationErrorCode.INVALID_CONFIG,
-          { originalError: error }
+          { originalError: error },
         );
       }
-      
+
       throw this.createTranslationError(
         'Failed to initialize translation client',
         TranslationErrorCode.INVALID_CONFIG,
-        { originalError: error }
+        { originalError: error },
       );
     }
   }
@@ -125,12 +123,15 @@ export class TranslationApiService {
       await this.ensureClientReady();
     } catch (error) {
       // If client initialization fails due to missing API key, provide graceful fallback
-      if (error instanceof TranslationErrorImpl && error.code === TranslationErrorCode.MISSING_API_KEY) {
+      if (
+        error instanceof TranslationErrorImpl &&
+        error.code === TranslationErrorCode.MISSING_API_KEY
+      ) {
         console.warn('[TranslationApiService] API key not configured, returning fallback message');
         throw this.createTranslationError(
           'Translation service not configured. Please add your Microsoft Translator API key to enable translation features.',
           TranslationErrorCode.SERVICE_NOT_CONFIGURED,
-          { originalError: error }
+          { originalError: error },
         );
       }
       throw error;
@@ -141,16 +142,18 @@ export class TranslationApiService {
 
     try {
       const { text, fromLanguage, toLanguage, category, textType } = request;
-      
+
       // Prepare the API request body
-      const requestBody = [{
-        Text: text
-      }];
+      const requestBody = [
+        {
+          Text: text,
+        },
+      ];
 
       // Prepare query parameters
       const queryParams: any = {
         'api-version': this.config!.apiVersion,
-        to: [toLanguage]
+        to: [toLanguage],
       };
 
       if (fromLanguage && fromLanguage !== 'auto') {
@@ -170,8 +173,8 @@ export class TranslationApiService {
         body: requestBody,
         queryParameters: queryParams,
         headers: {
-          'Content-Type': 'application/json'
-        }
+          'Content-Type': 'application/json',
+        },
       });
 
       // Handle the response
@@ -180,27 +183,26 @@ export class TranslationApiService {
       }
 
       const responseData = await response.body;
-      
+
       if (!Array.isArray(responseData) || responseData.length === 0) {
         throw this.createTranslationError(
           'Invalid response format from translation API',
           TranslationErrorCode.PARSING_ERROR,
-          { response: responseData }
+          { response: responseData },
         );
       }
 
       const translation = responseData[0];
-      
+
       if (!translation.translations || translation.translations.length === 0) {
         throw this.createTranslationError(
           'No translation returned from API',
           TranslationErrorCode.PARSING_ERROR,
-          { response: responseData }
+          { response: responseData },
         );
       }
 
       return translation.translations[0].text;
-
     } catch (error) {
       if (error instanceof TranslationErrorImpl) {
         throw error;
@@ -209,7 +211,7 @@ export class TranslationApiService {
       throw this.createTranslationError(
         'Translation request failed',
         TranslationErrorCode.NETWORK_ERROR,
-        { originalError: error, request }
+        { originalError: error, request },
       );
     }
   }
@@ -218,18 +220,18 @@ export class TranslationApiService {
    * Translate multiple texts in a batch
    */
   async translateTexts(
-    texts: string[], 
-    fromLanguage: string | undefined, 
+    texts: string[],
+    fromLanguage: string | undefined,
     toLanguage: string,
     category?: string,
-    textType?: 'plain' | 'html'
+    textType?: 'plain' | 'html',
   ): Promise<string[]> {
     await this.ensureClientReady();
 
     if (!texts || texts.length === 0) {
       throw this.createTranslationError(
         'No texts provided for translation',
-        TranslationErrorCode.EMPTY_TEXT
+        TranslationErrorCode.EMPTY_TEXT,
       );
     }
 
@@ -238,13 +240,13 @@ export class TranslationApiService {
       throw this.createTranslationError(
         `Batch size exceeds limit of ${this.config!.batchConfig.maxTextsPerBatch}`,
         TranslationErrorCode.BATCH_ERROR,
-        { textsCount: texts.length, maxAllowed: this.config!.batchConfig.maxTextsPerBatch }
+        { textsCount: texts.length, maxAllowed: this.config!.batchConfig.maxTextsPerBatch },
       );
     }
 
     try {
       // Prepare the API request body
-      const requestBody = texts.map(text => ({ Text: text }));
+      const requestBody = texts.map((text) => ({ Text: text }));
 
       // Calculate total size
       const totalSize = JSON.stringify(requestBody).length;
@@ -252,14 +254,14 @@ export class TranslationApiService {
         throw this.createTranslationError(
           'Batch size exceeds byte limit',
           TranslationErrorCode.BATCH_ERROR,
-          { size: totalSize, maxAllowed: this.config!.batchConfig.maxBatchSizeBytes }
+          { size: totalSize, maxAllowed: this.config!.batchConfig.maxBatchSizeBytes },
         );
       }
 
       // Prepare query parameters
       const queryParams: any = {
         'api-version': this.config!.apiVersion,
-        to: [toLanguage]
+        to: [toLanguage],
       };
 
       if (fromLanguage && fromLanguage !== 'auto') {
@@ -279,8 +281,8 @@ export class TranslationApiService {
         body: requestBody,
         queryParameters: queryParams,
         headers: {
-          'Content-Type': 'application/json'
-        }
+          'Content-Type': 'application/json',
+        },
       });
 
       // Handle the response
@@ -289,12 +291,12 @@ export class TranslationApiService {
       }
 
       const responseData = await response.body;
-      
+
       if (!Array.isArray(responseData)) {
         throw this.createTranslationError(
           'Invalid response format from batch translation API',
           TranslationErrorCode.PARSING_ERROR,
-          { response: responseData }
+          { response: responseData },
         );
       }
 
@@ -302,12 +304,12 @@ export class TranslationApiService {
       const translations: string[] = [];
       for (let i = 0; i < responseData.length; i++) {
         const translation = responseData[i];
-        
+
         if (!translation.translations || translation.translations.length === 0) {
           throw this.createTranslationError(
             `No translation returned for text at index ${i}`,
             TranslationErrorCode.PARSING_ERROR,
-            { index: i, response: translation }
+            { index: i, response: translation },
           );
         }
 
@@ -315,7 +317,6 @@ export class TranslationApiService {
       }
 
       return translations;
-
     } catch (error) {
       if (error instanceof TranslationErrorImpl) {
         throw error;
@@ -324,7 +325,7 @@ export class TranslationApiService {
       throw this.createTranslationError(
         'Batch translation request failed',
         TranslationErrorCode.BATCH_ERROR,
-        { originalError: error, textsCount: texts.length }
+        { originalError: error, textsCount: texts.length },
       );
     }
   }
@@ -338,25 +339,27 @@ export class TranslationApiService {
     if (!request.text || request.text.trim().length === 0) {
       throw this.createTranslationError(
         'Text is required for language detection',
-        TranslationErrorCode.EMPTY_TEXT
+        TranslationErrorCode.EMPTY_TEXT,
       );
     }
 
     try {
       // Prepare the API request body
-      const requestBody = [{
-        Text: request.text
-      }];
+      const requestBody = [
+        {
+          Text: request.text,
+        },
+      ];
 
       // Make the API call
       const response = await this.client.path('/detect').post({
         body: requestBody,
         queryParameters: {
-          'api-version': this.config!.apiVersion
+          'api-version': this.config!.apiVersion,
         },
         headers: {
-          'Content-Type': 'application/json'
-        }
+          'Content-Type': 'application/json',
+        },
       });
 
       // Handle the response
@@ -365,27 +368,26 @@ export class TranslationApiService {
       }
 
       const responseData = await response.body;
-      
+
       if (!Array.isArray(responseData) || responseData.length === 0) {
         throw this.createTranslationError(
           'Invalid response format from language detection API',
           TranslationErrorCode.PARSING_ERROR,
-          { response: responseData }
+          { response: responseData },
         );
       }
 
       const detection = responseData[0];
-      
+
       if (!detection.language) {
         throw this.createTranslationError(
           'No language detected in response',
           TranslationErrorCode.PARSING_ERROR,
-          { response: responseData }
+          { response: responseData },
         );
       }
 
       return detection.language;
-
     } catch (error) {
       if (error instanceof TranslationErrorImpl) {
         throw error;
@@ -394,7 +396,7 @@ export class TranslationApiService {
       throw this.createTranslationError(
         'Language detection request failed',
         TranslationErrorCode.NETWORK_ERROR,
-        { originalError: error, request }
+        { originalError: error, request },
       );
     }
   }
@@ -410,8 +412,8 @@ export class TranslationApiService {
       const response = await this.client.path('/languages').get({
         queryParameters: {
           'api-version': this.config!.apiVersion,
-          scope: 'translation'
-        }
+          scope: 'translation',
+        },
       });
 
       // Handle the response
@@ -420,17 +422,16 @@ export class TranslationApiService {
       }
 
       const responseData = await response.body;
-      
+
       if (!responseData || typeof responseData !== 'object') {
         throw this.createTranslationError(
           'Invalid response format from languages API',
           TranslationErrorCode.PARSING_ERROR,
-          { response: responseData }
+          { response: responseData },
         );
       }
 
       return responseData as SupportedLanguagesResponse;
-
     } catch (error) {
       if (error instanceof TranslationErrorImpl) {
         throw error;
@@ -439,7 +440,7 @@ export class TranslationApiService {
       throw this.createTranslationError(
         'Failed to get supported languages',
         TranslationErrorCode.NETWORK_ERROR,
-        { originalError: error }
+        { originalError: error },
       );
     }
   }
@@ -455,14 +456,14 @@ export class TranslationApiService {
     if (!request.text || request.text.trim().length === 0) {
       throw this.createTranslationError(
         'Text is required for translation',
-        TranslationErrorCode.EMPTY_TEXT
+        TranslationErrorCode.EMPTY_TEXT,
       );
     }
 
     if (!request.toLanguage) {
       throw this.createTranslationError(
         'Target language is required',
-        TranslationErrorCode.UNSUPPORTED_LANGUAGE
+        TranslationErrorCode.UNSUPPORTED_LANGUAGE,
       );
     }
 
@@ -471,7 +472,7 @@ export class TranslationApiService {
       throw this.createTranslationError(
         'Text exceeds maximum length of 50,000 characters',
         TranslationErrorCode.TEXT_TOO_LONG,
-        { textLength: request.text.length, maxLength: 50000 }
+        { textLength: request.text.length, maxLength: 50000 },
       );
     }
 
@@ -481,7 +482,7 @@ export class TranslationApiService {
         throw this.createTranslationError(
           'Invalid source language code',
           TranslationErrorCode.UNSUPPORTED_LANGUAGE,
-          { language: request.fromLanguage }
+          { language: request.fromLanguage },
         );
       }
     }
@@ -490,7 +491,7 @@ export class TranslationApiService {
       throw this.createTranslationError(
         'Invalid target language code',
         TranslationErrorCode.UNSUPPORTED_LANGUAGE,
-        { language: request.toLanguage }
+        { language: request.toLanguage },
       );
     }
   }
@@ -546,7 +547,7 @@ export class TranslationApiService {
 
     return this.createTranslationError(message, code, {
       status,
-      response: response.body
+      response: response.body,
     });
   }
 
@@ -556,7 +557,7 @@ export class TranslationApiService {
   private createTranslationError(
     message: string,
     code: TranslationErrorCode,
-    details?: any
+    details?: any,
   ): TranslationErrorImpl {
     return new TranslationErrorImpl(message, code, details);
   }
@@ -595,4 +596,4 @@ export class TranslationApiService {
 // ============================================================================
 
 // Export a singleton instance for use throughout the application
-export const translationApiService = new TranslationApiService(); 
+export const translationApiService = new TranslationApiService();

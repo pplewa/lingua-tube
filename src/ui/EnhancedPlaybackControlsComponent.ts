@@ -4,11 +4,17 @@
  * variable speed control, sentence navigation, and vocabulary integration.
  */
 
-import { PlayerInteractionService, PlayerEvent, PlayerState } from '../youtube/PlayerInteractionService';
+import {
+  PlayerInteractionService,
+  PlayerEvent,
+  PlayerState,
+} from '../youtube/PlayerInteractionService';
 import { StorageService } from '../storage';
 import { UserSettings } from '../storage/types';
 import { VocabularyManager } from '../vocabulary/VocabularyManager';
 import { SentenceLoopingService, SentenceLoop, LoopEvent } from './SentenceLoopingService';
+import { Logger } from '../logging';
+import { ComponentType } from '../logging/types';
 
 // ========================================
 // Types and Interfaces
@@ -30,7 +36,7 @@ export interface EnhancedControlsConfig {
 
 /**
  * Enhanced Playback Controls State Interface
- * 
+ *
  * Manages persistent state for playback controls including speed, loop, and vocabulary mode.
  * Supports auto-resume functionality and state restoration on reload or navigation.
  */
@@ -61,7 +67,12 @@ export interface PlaybackSpeed {
 }
 
 export interface ControlsEventData {
-  readonly type: 'speed_change' | 'loop_toggle' | 'sentence_nav' | 'vocabulary_mode' | 'fullscreen_change';
+  readonly type:
+    | 'speed_change'
+    | 'loop_toggle'
+    | 'sentence_nav'
+    | 'vocabulary_mode'
+    | 'fullscreen_change';
   readonly value: any;
   readonly timestamp: number;
 }
@@ -70,7 +81,7 @@ export type ControlsEventCallback = (event: ControlsEventData) => void;
 
 /**
  * Enhanced Playback Controls API Interface
- * 
+ *
  * Comprehensive API for programmatic control of enhanced YouTube playback features.
  * Enables external systems to control speed, looping, navigation, and vocabulary modes.
  */
@@ -78,10 +89,10 @@ export interface EnhancedPlaybackControlsAPI {
   // ========================================
   // Initialization & State
   // ========================================
-  
+
   /** Check if the controls are ready for use */
   isReady(): boolean;
-  
+
   /** Get current component state including all settings and modes */
   getState(): {
     isReady: boolean;
@@ -91,119 +102,119 @@ export interface EnhancedPlaybackControlsAPI {
     vocabularyModeActive: boolean;
     config: EnhancedControlsConfig;
   };
-  
+
   /** Get current configuration */
   getConfig(): EnhancedControlsConfig;
-  
+
   /** Update configuration with new settings */
   updateConfig(newConfig: Partial<EnhancedControlsConfig>): void;
-  
+
   // ========================================
   // Visibility Control
   // ========================================
-  
+
   /** Check if controls are currently visible */
   getVisibility(): boolean;
-  
+
   /** Check if player is in fullscreen mode */
   isFullscreen(): boolean;
-  
+
   /** Show the controls */
   show(): void;
-  
+
   /** Hide the controls */
   hide(): void;
-  
+
   /** Toggle controls visibility */
   toggle(): void;
-  
+
   // ========================================
   // Speed Control
   // ========================================
-  
+
   /** Get current playback speed */
   getCurrentSpeed(): number;
-  
+
   /** Set playback speed to specific value (0.25x - 2.0x) */
   setSpeed(speed: number): void;
-  
+
   /** Adjust speed by delta amount (e.g., +0.25 or -0.25) */
   adjustSpeedBy(delta: number): void;
-  
+
   /** Reset speed to normal (1.0x) */
   resetSpeedToNormal(): void;
-  
+
   /** Get all available speed presets */
   getAvailableSpeeds(): PlaybackSpeed[];
-  
+
   // ========================================
   // Loop Control
   // ========================================
-  
+
   /** Get current loop segment if active */
   getCurrentLoop(): LoopSegment | null;
-  
+
   /** Create a custom loop with specified start/end times */
   createCustomLoop(startTime?: number, endTime?: number): LoopSegment | null;
-  
+
   /** Remove the current loop */
   removeLoop(): boolean;
-  
+
   /** Toggle loop on/off */
   toggleCurrentLoop(): LoopSegment | null;
-  
+
   // ========================================
   // Navigation Control
   // ========================================
-  
+
   /** Navigate to previous sentence */
   navigateToPreviousSentence(): void;
-  
+
   /** Navigate to next sentence */
   navigateToNextSentence(): void;
-  
+
   /** Skip backward by specified seconds (default: 5) */
   skipBackward(seconds?: number): void;
-  
+
   /** Skip forward by specified seconds (default: 5) */
   skipForward(seconds?: number): void;
-  
+
   /** Jump to specific subtitle by ID */
   jumpToSubtitle(subtitleId: string): void;
-  
+
   /** Jump to specific percentage of video (0-100) */
   jumpToVideoPercentage(percentage: number): void;
-  
+
   /** Replay current sentence from beginning */
   replaySentence(): void;
-  
+
   // ========================================
   // Vocabulary Mode
   // ========================================
-  
+
   /** Check if vocabulary mode is active */
   isVocabularyModeActive(): boolean;
-  
+
   /** Set vocabulary mode state */
   setVocabularyModeState(active: boolean): void;
-  
+
   /** Toggle vocabulary mode on/off */
   toggleVocabularyModeState(): boolean;
-  
+
   // ========================================
   // Event System
   // ========================================
-  
+
   /** Add event listener for control events */
   addEventListener(callback: ControlsEventCallback): void;
-  
+
   /** Remove event listener */
   removeEventListener(callback: ControlsEventCallback): void;
-  
+
   // ========================================
   // Cleanup
   // ========================================
-  
+
   /** Destroy the component and clean up resources */
   destroy(): Promise<void>;
 }
@@ -223,7 +234,7 @@ const DEFAULT_CONFIG: EnhancedControlsConfig = {
   theme: 'dark',
   opacity: 0.9,
   autoHide: true,
-  autoHideDelay: 3000
+  autoHideDelay: 3000,
 };
 
 const PLAYBACK_SPEEDS: PlaybackSpeed[] = [
@@ -234,7 +245,7 @@ const PLAYBACK_SPEEDS: PlaybackSpeed[] = [
   { value: 1.25, label: '1.25×', isDefault: false },
   { value: 1.5, label: '1.5×', isDefault: false },
   { value: 1.75, label: '1.75×', isDefault: false },
-  { value: 2.0, label: '2×', isDefault: false }
+  { value: 2.0, label: '2×', isDefault: false },
 ];
 
 const CONTROLS_STYLES = `
@@ -257,7 +268,7 @@ const CONTROLS_STYLES = `
     left: 50%;
     transform: translateX(-50%);
     z-index: 2147483646; /* Just below subtitles */
-    font-family: 'YouTube Sans', 'Roboto', Arial, sans-serif;
+    font-family: 'YouTube Sans', 'Roboto', ns-serif;
     font-size: 14px;
     pointer-events: none;
   }
@@ -822,18 +833,18 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
   private container: HTMLElement | null = null;
   private shadowRoot: ShadowRoot | null = null;
   private controlsContainer: HTMLElement | null = null;
-  
+
   private config: EnhancedControlsConfig = { ...DEFAULT_CONFIG };
   private isVisible: boolean = true;
   private isInitialized: boolean = false;
   private autoHideTimeout: number | null = null;
-  
+
   private playerService: PlayerInteractionService;
   private storageService: StorageService;
   private vocabularyManager: VocabularyManager;
   private sentenceLoopingService: SentenceLoopingService;
-  
-    private currentSpeed: number = 1.0;
+
+  private currentSpeed: number = 1.0;
   private currentLoop: LoopSegment | null = null;
   private vocabularyModeActive: boolean = false;
 
@@ -857,11 +868,12 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
   private playerEventHandlers: Map<string, (event: any) => void> = new Map();
   private keyboardShortcuts: Map<string, () => void> = new Map();
   private keyboardEventHandler: (event: KeyboardEvent) => void;
+  private readonly logger = Logger.getInstance();
 
   constructor(
     playerService: PlayerInteractionService,
     storageService: StorageService,
-    initialConfig?: Partial<EnhancedControlsConfig>
+    initialConfig?: Partial<EnhancedControlsConfig>,
   ) {
     this.playerService = playerService;
     this.storageService = storageService;
@@ -879,13 +891,13 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       sessionStartTime: Date.now(),
       totalWatchTime: 0,
       loopCount: 0,
-      speedChanges: 0
+      speedChanges: 0,
     };
 
     if (initialConfig) {
       this.config = { ...this.config, ...initialConfig };
     }
-    
+
     this.loadConfigFromStorage();
     this.setupPlayerEventHandlers();
 
@@ -903,21 +915,27 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
   public async initialize(): Promise<boolean> {
     try {
       if (this.isInitialized) {
-        console.warn('[EnhancedPlaybackControls] Already initialized');
+        this.logger?.warn('Already initialized', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+        });
         return true;
       }
 
       // Find YouTube player container
       const playerContainer = this.findPlayerContainer();
       if (!playerContainer) {
-        console.error('[EnhancedPlaybackControls] Could not find YouTube player container');
+        this.logger?.error('Could not find YouTube player container', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+        });
         return false;
       }
 
       // Create container element
       this.container = this.createContainer();
       if (!this.container) {
-        console.error('[EnhancedPlaybackControls] Failed to create container');
+        this.logger?.error('Failed to create container', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+        });
         return false;
       }
 
@@ -939,7 +957,9 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       // Initialize sentence looping service
       const loopServiceInitialized = await this.sentenceLoopingService.initialize();
       if (!loopServiceInitialized) {
-        console.warn('[EnhancedPlaybackControls] Failed to initialize sentence looping service');
+        this.logger?.warn('Failed to initialize sentence looping service', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+        });
       }
 
       // Set up sentence looping event listeners
@@ -956,11 +976,17 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       this.updateStateIndicators();
 
       this.isInitialized = true;
-      console.log('[EnhancedPlaybackControls] Initialized successfully');
+      this.logger?.info('Initialized successfully', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+      });
       return true;
-
     } catch (error) {
-      console.error('[EnhancedPlaybackControls] Initialization failed:', error);
+      this.logger?.error('Initialization failed', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
       return false;
     }
   }
@@ -999,23 +1025,29 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       this.container = null;
       this.shadowRoot = null;
       this.controlsContainer = null;
-      
+
       // Clear listeners
       this.eventListeners.clear();
       this.playerEventHandlers.clear();
-      
+
       // Clean up keyboard shortcuts
       this.removeKeyboardShortcuts();
 
       // Stop state tracking and save final state
       this.stopStateTracking();
       await this.saveState();
-      
-      this.isInitialized = false;
-      console.log('[EnhancedPlaybackControls] Destroyed successfully');
 
+      this.isInitialized = false;
+      this.logger?.info('Destroyed successfully', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+      });
     } catch (error) {
-      console.error('[EnhancedPlaybackControls] Destroy failed:', error);
+      this.logger?.error('Destroy failed', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
     }
   }
 
@@ -1024,7 +1056,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       '#movie_player',
       '.html5-video-player',
       '[data-layer="0"]',
-      '.ytp-player-content'
+      '.ytp-player-content',
     ];
 
     for (const selector of selectors) {
@@ -1038,9 +1070,9 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
   }
 
   private isValidPlayerContainer(element: HTMLElement): boolean {
-    return element.offsetWidth > 0 && 
-           element.offsetHeight > 0 && 
-           element.querySelector('video') !== null;
+    return (
+      element.offsetWidth > 0 && element.offsetHeight > 0 && element.querySelector('video') !== null
+    );
   }
 
   private createContainer(): HTMLElement {
@@ -1062,7 +1094,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     if (!this.container) return;
 
     this.shadowRoot = this.container.attachShadow({ mode: 'closed' });
-    
+
     // Create and inject styles
     const styleSheet = document.createElement('style');
     styleSheet.textContent = CONTROLS_STYLES;
@@ -1251,22 +1283,22 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
   private createTimeDisplay(): HTMLElement {
     const timeDisplay = document.createElement('div');
     timeDisplay.className = 'control-group time-display';
-    
+
     const currentTime = document.createElement('span');
     currentTime.className = 'current-time';
     currentTime.textContent = '0:00';
-    
+
     const separator = document.createElement('span');
     separator.textContent = ' / ';
-    
+
     const totalTime = document.createElement('span');
     totalTime.className = 'total-time';
     totalTime.textContent = '0:00';
-    
+
     timeDisplay.appendChild(currentTime);
     timeDisplay.appendChild(separator);
     timeDisplay.appendChild(totalTime);
-    
+
     return timeDisplay;
   }
 
@@ -1286,19 +1318,19 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     // Create state indicator dots
     const stateIndicators = document.createElement('div');
     stateIndicators.className = 'state-indicators';
-    
+
     // Speed state dot
     const speedDot = document.createElement('div');
     speedDot.className = 'state-dot speed';
     speedDot.title = 'Speed Control Active';
     stateIndicators.appendChild(speedDot);
-    
+
     // Loop state dot
     const loopDot = document.createElement('div');
     loopDot.className = 'state-dot loop';
     loopDot.title = 'Loop Active';
     stateIndicators.appendChild(loopDot);
-    
+
     // Vocabulary state dot
     const vocabularyDot = document.createElement('div');
     vocabularyDot.className = 'state-dot vocabulary';
@@ -1312,7 +1344,11 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
   // Visual Feedback Methods
   // ========================================
 
-  private showActionToast(message: string, type: 'success' | 'warning' | 'error' = 'success', duration: number = 2000): void {
+  private showActionToast(
+    message: string,
+    type: 'success' | 'warning' | 'error' = 'success',
+    duration: number = 2000,
+  ): void {
     if (!this.shadowRoot) return;
 
     const toast = this.shadowRoot.querySelector('.action-toast') as HTMLElement;
@@ -1335,7 +1371,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     if (!button) return;
 
     button.classList.add('clicked');
-    
+
     // Remove the class after animation completes
     setTimeout(() => {
       button.classList.remove('clicked');
@@ -1346,7 +1382,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     if (!button) return;
 
     button.classList.add('navigating');
-    
+
     setTimeout(() => {
       button.classList.remove('navigating');
     }, 400);
@@ -1359,7 +1395,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     if (!speedButton) return;
 
     speedButton.classList.add('changed');
-    
+
     setTimeout(() => {
       speedButton.classList.remove('changed');
     }, 500);
@@ -1372,7 +1408,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     if (!loopIndicator) return;
 
     loopIndicator.classList.add('creating');
-    
+
     setTimeout(() => {
       loopIndicator.classList.remove('creating');
     }, 800);
@@ -1381,11 +1417,13 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
   private showVocabularyToggleFeedback(): void {
     if (!this.shadowRoot) return;
 
-    const vocabularyIndicator = this.shadowRoot.querySelector('.vocabulary-indicator') as HTMLElement;
+    const vocabularyIndicator = this.shadowRoot.querySelector(
+      '.vocabulary-indicator',
+    ) as HTMLElement;
     if (!vocabularyIndicator) return;
 
     vocabularyIndicator.classList.add('toggling');
-    
+
     setTimeout(() => {
       vocabularyIndicator.classList.remove('toggling');
     }, 600);
@@ -1457,7 +1495,12 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
         this.updateConfigFromSettings(result.data);
       }
     } catch (error) {
-      console.warn('[EnhancedPlaybackControls] Failed to load config from storage:', error);
+      this.logger?.warn('Failed to load config from storage', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
     }
   }
 
@@ -1466,7 +1509,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     this.config = {
       ...this.config,
       theme: settings.ui.theme as 'dark' | 'light' | 'auto',
-      compactMode: settings.ui.compactMode || false
+      compactMode: settings.ui.compactMode || false,
     };
 
     if (this.isInitialized) {
@@ -1504,7 +1547,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     if (!this.shadowRoot) return;
 
     const root = this.shadowRoot.host as HTMLElement;
-    
+
     switch (this.config.position) {
       case 'top':
         root.style.bottom = 'auto';
@@ -1539,22 +1582,28 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       this.playerService.setPlaybackRate(speed);
       this.currentSpeed = speed;
       this.updateSpeedDisplay();
-      
+
       // Update state tracking
       this.updateCurrentState();
-      
+
       // Show visual feedback
       this.showSpeedChangeFeedback();
       this.showActionToast(`Speed: ${speed}×`, 'success', 1500);
       this.updateStateIndicators();
-      
+
       this.emitEvent({
         type: 'speed_change',
         value: speed,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       });
     } catch (error) {
-      console.error('[EnhancedPlaybackControls] Failed to set playback speed:', error);
+      this.logger?.error('Failed to set playback speed', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          speed,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
       this.showActionToast('Failed to change speed', 'error');
     }
   }
@@ -1580,37 +1629,43 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     try {
       const currentTime = this.playerService.getCurrentTime();
       const duration = this.playerService.getDuration();
-      
+
       // Create a 10-second loop around current time
       const loopStart = Math.max(0, currentTime - 5);
       const loopEnd = Math.min(duration, currentTime + 5);
-      
+
       this.currentLoop = {
         id: `loop_${Date.now()}`,
         startTime: loopStart,
         endTime: loopEnd,
         isActive: true,
-        title: `Loop ${this.formatTime(loopStart)} - ${this.formatTime(loopEnd)}`
+        title: `Loop ${this.formatTime(loopStart)} - ${this.formatTime(loopEnd)}`,
       };
-      
+
       this.playerService.createSegmentLoop(loopStart, loopEnd);
       this.updateLoopDisplay();
-      
+
       // Update state tracking
       this.updateCurrentState();
-      
+
       // Show visual feedback
       this.showLoopCreationFeedback();
       this.showActionToast(`Loop created: ${this.currentLoop.title}`, 'success', 2000);
       this.updateStateIndicators();
-      
+
       this.emitEvent({
         type: 'loop_toggle',
         value: this.currentLoop,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       });
     } catch (error) {
-      console.error('[EnhancedPlaybackControls] Failed to create loop:', error);
+      this.logger?.error('Failed to create loop', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          currentTime: this.playerService.getCurrentTime(),
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
       this.showActionToast('Failed to create loop', 'error');
     }
   }
@@ -1620,21 +1675,24 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       this.playerService.stopSegmentLoop();
       this.currentLoop = null;
       this.updateLoopDisplay();
-      
+
       // Update state tracking
       this.updateCurrentState();
-      
+
       // Show visual feedback
       this.showActionToast('Loop removed', 'success', 1500);
       this.updateStateIndicators();
-      
+
       this.emitEvent({
         type: 'loop_toggle',
         value: null,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       });
     } catch (error) {
-      console.error('[EnhancedPlaybackControls] Failed to clear loop:', error);
+      this.logger?.error('Failed to clear loop in clearLoop method', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: { error: error instanceof Error ? error.message : String(error) },
+      });
       this.showActionToast('Failed to remove loop', 'error');
     }
   }
@@ -1644,7 +1702,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
 
     const loopIndicator = this.shadowRoot.querySelector('.loop-indicator');
     const loopBtn = this.shadowRoot.querySelector('.loop-control .control-button');
-    
+
     if (loopIndicator && loopBtn) {
       if (this.currentLoop) {
         loopIndicator.textContent = this.currentLoop.title || 'Active Loop';
@@ -1667,66 +1725,74 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       if (this.sentenceLoopingService && this.isInitialized) {
         const sentences = this.sentenceLoopingService.getAvailableSentences();
         const currentSentence = this.sentenceLoopingService.getSentenceAtTime(currentTime);
-        
+
         if (sentences.length > 0) {
-          const currentIndex = currentSentence ? sentences.findIndex(s => s.startIndex === currentSentence.startIndex) : -1;
+          const currentIndex = currentSentence
+            ? sentences.findIndex((s) => s.startIndex === currentSentence.startIndex)
+            : -1;
           let targetIndex: number;
-          
+
           if (direction === 'next') {
-            targetIndex = currentIndex < sentences.length - 1 ? currentIndex + 1 : sentences.length - 1;
+            targetIndex =
+              currentIndex < sentences.length - 1 ? currentIndex + 1 : sentences.length - 1;
           } else {
             targetIndex = currentIndex > 0 ? currentIndex - 1 : 0;
           }
-          
+
           const targetSentence = sentences[targetIndex];
           if (targetSentence && targetSentence.segments.length > 0) {
             targetTime = targetSentence.segments[0].startTime;
             this.playerService.seek(targetTime);
-            
+
             // Show visual feedback
             this.showActionToast(
               `${direction === 'next' ? 'Next' : 'Previous'} sentence`,
               'success',
-              1000
+              1000,
             );
-            
+
             this.emitEvent({
               type: 'sentence_nav',
-              value: { 
-                direction, 
-                fromTime: currentTime, 
+              value: {
+                direction,
+                fromTime: currentTime,
                 toTime: targetTime,
                 sentence: targetSentence.combinedText,
-                sentenceIndex: targetIndex
+                sentenceIndex: targetIndex,
               },
-              timestamp: Date.now()
+              timestamp: Date.now(),
             });
             return;
           }
         }
       }
-      
+
       // Fallback to time-based navigation
       const jumpSeconds = direction === 'next' ? 5 : -5;
       targetTime = Math.max(0, currentTime + jumpSeconds);
-      
+
       this.playerService.seek(targetTime);
-      
+
       // Show visual feedback for fallback navigation
       this.showActionToast(
         `${direction === 'next' ? 'Forward' : 'Backward'} ${Math.abs(jumpSeconds)}s`,
         'warning',
-        1000
+        1000,
       );
-      
+
       this.emitEvent({
         type: 'sentence_nav',
         value: { direction, fromTime: currentTime, toTime: targetTime },
-        timestamp: Date.now()
+        timestamp: Date.now(),
       });
-      
     } catch (error) {
-      console.error('[EnhancedPlaybackControls] Failed to navigate sentence:', error);
+      this.logger?.error('Failed to navigate sentence', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          direction,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
       this.showActionToast('Navigation failed', 'error');
     }
   }
@@ -1736,76 +1802,88 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       const currentTime = this.playerService.getCurrentTime();
       const duration = this.playerService.getDuration();
       const targetTime = Math.max(0, Math.min(duration, currentTime + seconds));
-      
+
       this.playerService.seek(targetTime);
-      
+
       this.emitEvent({
         type: 'sentence_nav',
-        value: { 
+        value: {
           direction: seconds > 0 ? 'next' : 'previous',
-          fromTime: currentTime, 
+          fromTime: currentTime,
           toTime: targetTime,
-          skipSeconds: seconds
+          skipSeconds: seconds,
         },
-        timestamp: Date.now()
+        timestamp: Date.now(),
       });
     } catch (error) {
-      console.error('[EnhancedPlaybackControls] Failed to skip time:', error);
+      this.logger?.error('Failed to skip time', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          seconds,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
     }
   }
 
   private replayCurrentSentence(): void {
     try {
       const currentTime = this.playerService.getCurrentTime();
-      
+
       // Try to use sentence looping service for intelligent replay
       if (this.sentenceLoopingService && this.isInitialized) {
         const currentSentence = this.sentenceLoopingService.getSentenceAtTime(currentTime);
-        
+
         if (currentSentence && currentSentence.segments.length > 0) {
           const startTime = currentSentence.segments[0].startTime;
-          
+
           // Seek to the beginning of the current sentence
           this.playerService.seek(startTime);
-          
+
           // Show visual feedback
           this.showActionToast('Replaying sentence', 'success', 1000);
-          
+
           this.emitEvent({
             type: 'sentence_nav',
-            value: { 
+            value: {
               direction: 'replay',
-              fromTime: currentTime, 
+              fromTime: currentTime,
               toTime: startTime,
               sentence: currentSentence.combinedText,
-              sentenceIndex: this.sentenceLoopingService.getAvailableSentences().findIndex(s => s.startIndex === currentSentence.startIndex)
+              sentenceIndex: this.sentenceLoopingService
+                .getAvailableSentences()
+                .findIndex((s) => s.startIndex === currentSentence.startIndex),
             },
-            timestamp: Date.now()
+            timestamp: Date.now(),
           });
           return;
         }
       }
-      
+
       // Fallback: replay last 5 seconds
       const replayTime = Math.max(0, currentTime - 5);
       this.playerService.seek(replayTime);
-      
+
       // Show visual feedback for fallback
       this.showActionToast('Replaying 5 seconds', 'warning', 1000);
-      
+
       this.emitEvent({
         type: 'sentence_nav',
-        value: { 
+        value: {
           direction: 'replay',
-          fromTime: currentTime, 
+          fromTime: currentTime,
           toTime: replayTime,
-          fallback: true
+          fallback: true,
         },
-        timestamp: Date.now()
+        timestamp: Date.now(),
       });
-      
     } catch (error) {
-      console.error('[EnhancedPlaybackControls] Failed to replay sentence:', error);
+      this.logger?.error('Failed to replay sentence', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
       this.showActionToast('Replay failed', 'error');
     }
   }
@@ -1813,35 +1891,44 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
   private navigateToSubtitle(subtitleId: string): void {
     try {
       if (!this.sentenceLoopingService || !this.isInitialized) {
-        console.warn('[EnhancedPlaybackControls] Sentence looping service not available');
+        this.logger?.warn('Sentence looping service not available', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: {},
+        });
         return;
       }
 
       const sentences = this.sentenceLoopingService.getAvailableSentences();
-      const targetSentence = sentences.find(sentence => 
-        sentence.segments.some(segment => segment.id === subtitleId)
+      const targetSentence = sentences.find((sentence) =>
+        sentence.segments.some((segment) => segment.id === subtitleId),
       );
 
       if (targetSentence && targetSentence.segments.length > 0) {
         const currentTime = this.playerService.getCurrentTime();
         const targetTime = targetSentence.segments[0].startTime;
-        
+
         this.playerService.seek(targetTime);
-        
+
         this.emitEvent({
           type: 'sentence_nav',
-          value: { 
+          value: {
             direction: targetTime > currentTime ? 'next' : 'previous',
-            fromTime: currentTime, 
+            fromTime: currentTime,
             toTime: targetTime,
             sentence: targetSentence.combinedText,
-            subtitleId: subtitleId
+            subtitleId: subtitleId,
           },
-          timestamp: Date.now()
+          timestamp: Date.now(),
         });
       }
     } catch (error) {
-      console.error('[EnhancedPlaybackControls] Failed to navigate to subtitle:', error);
+      this.logger?.error('Failed to navigate to subtitle', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          subtitleId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
     }
   }
 
@@ -1850,44 +1937,50 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       const duration = this.playerService.getDuration();
       const currentTime = this.playerService.getCurrentTime();
       const targetTime = Math.max(0, Math.min(duration, duration * (percentage / 100)));
-      
+
       this.playerService.seek(targetTime);
-      
+
       this.emitEvent({
         type: 'sentence_nav',
-        value: { 
+        value: {
           direction: targetTime > currentTime ? 'next' : 'previous',
-          fromTime: currentTime, 
+          fromTime: currentTime,
           toTime: targetTime,
-          percentage: percentage
+          percentage: percentage,
         },
-        timestamp: Date.now()
+        timestamp: Date.now(),
       });
     } catch (error) {
-      console.error('[EnhancedPlaybackControls] Failed to jump to percentage:', error);
+      this.logger?.error('Failed to jump to percentage', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          percentage,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
     }
   }
 
   private toggleVocabularyMode(): void {
     this.vocabularyModeActive = !this.vocabularyModeActive;
     this.updateVocabularyDisplay();
-    
+
     // Update state tracking
     this.updateCurrentState();
-    
+
     // Show visual feedback
     this.showVocabularyToggleFeedback();
     this.showActionToast(
       `Vocabulary Mode: ${this.vocabularyModeActive ? 'ON' : 'OFF'}`,
       'success',
-      1500
+      1500,
     );
     this.updateStateIndicators();
-    
+
     this.emitEvent({
       type: 'vocabulary_mode',
       value: this.vocabularyModeActive,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
   }
 
@@ -1896,7 +1989,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
 
     const vocabIndicator = this.shadowRoot.querySelector('.vocabulary-indicator');
     const vocabBtn = this.shadowRoot.querySelector('.vocabulary-mode .control-button');
-    
+
     if (vocabIndicator && vocabBtn) {
       if (this.vocabularyModeActive) {
         vocabIndicator.textContent = 'Vocab Mode';
@@ -1916,7 +2009,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     try {
       const currentTime = this.playerService.getCurrentTime();
       const duration = this.playerService.getDuration();
-      
+
       const timeDisplay = this.shadowRoot.querySelector('.time-display span');
       if (timeDisplay) {
         timeDisplay.textContent = `${this.formatTime(currentTime)} / ${this.formatTime(duration)}`;
@@ -1971,7 +2064,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
             endTime: event.loop.endTime,
             id: event.loop.id,
             title: event.loop.text,
-            isActive: true
+            isActive: true,
           };
           this.updateLoopDisplay();
           break;
@@ -1982,7 +2075,13 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
           break;
 
         case 'loop_completed':
-          console.log('[EnhancedPlaybackControls] Loop completed:', event.loop.text);
+          this.logger?.debug('Loop completed', {
+            component: ComponentType.YOUTUBE_INTEGRATION,
+            metadata: {
+              loopText: event.loop.text,
+              loopId: event.loop.id,
+            },
+          });
           break;
       }
     });
@@ -2072,28 +2171,29 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
   private handleKeyboardEvent(event: KeyboardEvent): void {
     // Only handle shortcuts when controls are visible and not in input fields
     if (!this.isVisible || !this.isInitialized) return;
-    
+
     const activeElement = document.activeElement;
-    const isInputField = activeElement && (
-      activeElement.tagName === 'INPUT' ||
-      activeElement.tagName === 'TEXTAREA' ||
-      (activeElement as HTMLElement).contentEditable === 'true'
-    );
+    const isInputField =
+      activeElement &&
+      (activeElement.tagName === 'INPUT' ||
+        activeElement.tagName === 'TEXTAREA' ||
+        (activeElement as HTMLElement).contentEditable === 'true');
 
     if (isInputField) return;
 
     // Build shortcut key from event
     let shortcutKey = '';
-    
+
     if (event.ctrlKey) shortcutKey += 'Ctrl+';
     if (event.altKey) shortcutKey += 'Alt+';
     if (event.shiftKey) shortcutKey += 'Shift+';
-    
+
     shortcutKey += event.code;
 
     // Check for shortcuts
-    const handler = this.keyboardShortcuts.get(shortcutKey) || this.keyboardShortcuts.get(event.code);
-    
+    const handler =
+      this.keyboardShortcuts.get(shortcutKey) || this.keyboardShortcuts.get(event.code);
+
     if (handler) {
       event.preventDefault();
       event.stopPropagation();
@@ -2128,11 +2228,15 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
 
     // Listen for user activity
     const activityEvents = ['mousemove', 'keydown', 'click'];
-    
-    activityEvents.forEach(eventType => {
-      document.addEventListener(eventType, () => {
-        this.resetAutoHide();
-      }, { passive: true });
+
+    activityEvents.forEach((eventType) => {
+      document.addEventListener(
+        eventType,
+        () => {
+          this.resetAutoHide();
+        },
+        { passive: true },
+      );
     });
   }
 
@@ -2141,7 +2245,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
 
     this.clearAutoHide();
     this.show();
-    
+
     this.autoHideTimeout = window.setTimeout(() => {
       this.hide();
     }, this.config.autoHideDelay);
@@ -2200,15 +2304,17 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
   private setupMutationObserver(): void {
     this.mutationObserver = new MutationObserver((mutations) => {
       let needsRepositioning = false;
-      
+
       for (const mutation of mutations) {
-        if (mutation.type === 'attributes' && 
-            (mutation.attributeName === 'class' || mutation.attributeName === 'style')) {
+        if (
+          mutation.type === 'attributes' &&
+          (mutation.attributeName === 'class' || mutation.attributeName === 'style')
+        ) {
           needsRepositioning = true;
           break;
         }
       }
-      
+
       if (needsRepositioning) {
         setTimeout(() => this.updateControlsPosition(), 100);
       }
@@ -2219,7 +2325,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       this.mutationObserver.observe(playerContainer, {
         attributes: true,
         attributeFilter: ['class', 'style'],
-        subtree: true
+        subtree: true,
       });
     }
   }
@@ -2316,7 +2422,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       { value: 1.25, label: '1.25×', isDefault: false },
       { value: 1.5, label: '1.5×', isDefault: false },
       { value: 1.75, label: '1.75×', isDefault: false },
-      { value: 2.0, label: '2×', isDefault: false }
+      { value: 2.0, label: '2×', isDefault: false },
     ];
   }
 
@@ -2328,35 +2434,47 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     try {
       const currentTime = this.playerService.getCurrentTime();
       const duration = this.playerService.getDuration();
-      
-      const loopStart = startTime !== undefined ? Math.max(0, startTime) : Math.max(0, currentTime - 5);
-      const loopEnd = endTime !== undefined ? Math.min(duration, endTime) : Math.min(duration, currentTime + 5);
-      
+
+      const loopStart =
+        startTime !== undefined ? Math.max(0, startTime) : Math.max(0, currentTime - 5);
+      const loopEnd =
+        endTime !== undefined ? Math.min(duration, endTime) : Math.min(duration, currentTime + 5);
+
       if (loopEnd <= loopStart) {
-        console.warn('[EnhancedPlaybackControls] Invalid loop times:', { loopStart, loopEnd });
+        this.logger?.warn('Invalid loop times', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: { loopStart, loopEnd },
+        });
         return null;
       }
-      
+
       this.currentLoop = {
         id: `loop_${Date.now()}`,
         startTime: loopStart,
         endTime: loopEnd,
         isActive: true,
-        title: `Loop ${this.formatTime(loopStart)} - ${this.formatTime(loopEnd)}`
+        title: `Loop ${this.formatTime(loopStart)} - ${this.formatTime(loopEnd)}`,
       };
-      
+
       this.playerService.createSegmentLoop(loopStart, loopEnd);
       this.updateLoopDisplay();
-      
+
       this.emitEvent({
         type: 'loop_toggle',
         value: this.currentLoop,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       });
-      
+
       return this.currentLoop;
     } catch (error) {
-      console.error('[EnhancedPlaybackControls] Failed to create loop:', error);
+      this.logger?.error('Failed to create loop', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          startTime,
+          endTime,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
       return null;
     }
   }
@@ -2366,16 +2484,19 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       this.playerService.stopSegmentLoop();
       this.currentLoop = null;
       this.updateLoopDisplay();
-      
+
       this.emitEvent({
         type: 'loop_toggle',
         value: null,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       });
-      
+
       return true;
     } catch (error) {
-      console.error('[EnhancedPlaybackControls] Failed to clear loop:', error);
+      this.logger?.error('Failed to clear loop in removeLoop method', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: { error: error instanceof Error ? error.message : String(error) },
+      });
       return false;
     }
   }
@@ -2397,11 +2518,11 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     if (this.vocabularyModeActive !== active) {
       this.vocabularyModeActive = active;
       this.updateVocabularyDisplay();
-      
+
       this.emitEvent({
         type: 'vocabulary_mode',
         value: active,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       });
     }
   }
@@ -2441,7 +2562,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       currentSpeed: this.currentSpeed,
       currentLoop: this.currentLoop,
       vocabularyModeActive: this.vocabularyModeActive,
-      config: this.getConfig()
+      config: this.getConfig(),
     };
   }
 
@@ -2453,21 +2574,24 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     try {
       const stateKey = `enhanced-controls-state-${this.getCurrentVideoId()}`;
       const result = await this.storageService.getCache<EnhancedControlsState>(stateKey);
-      
+
       if (result.success && result.data) {
         const savedState = result.data;
-        
+
         // Restore state if auto-resume is enabled
         if (this.autoResumeEnabled) {
           await this.restoreState(savedState);
         }
-        
+
         return true;
       }
-      
+
       return false;
     } catch (error) {
-      console.error('[EnhancedPlaybackControls] Failed to load state:', error);
+      this.logger?.error('Failed to load state', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: { error: error instanceof Error ? error.message : String(error) },
+      });
       return false;
     }
   }
@@ -2479,14 +2603,17 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
 
       // Update current state
       this.updateCurrentState();
-      
+
       const stateKey = `enhanced-controls-state-${currentVideoId}`;
       // Cache state for 24 hours (86400 seconds)
       const result = await this.storageService.setCache(stateKey, this.currentState, 86400);
-      
+
       return result.success;
     } catch (error) {
-      console.error('[EnhancedPlaybackControls] Failed to save state:', error);
+      this.logger?.error('Failed to save state', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: { error: error instanceof Error ? error.message : String(error) },
+      });
       return false;
     }
   }
@@ -2514,19 +2641,24 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       this.currentState = {
         ...savedState,
         sessionStartTime: Date.now(), // Reset session time
-        lastPosition: this.playerService.getCurrentTime()
+        lastPosition: this.playerService.getCurrentTime(),
       };
 
-      console.log('[EnhancedPlaybackControls] State restored successfully');
+      this.logger?.info('State restored successfully', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+      });
     } catch (error) {
-      console.error('[EnhancedPlaybackControls] Failed to restore state:', error);
+      this.logger?.error('Failed to restore state', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: { error: error instanceof Error ? error.message : String(error) },
+      });
     }
   }
 
   private updateCurrentState(): void {
     const currentTime = this.playerService.getCurrentTime();
     const videoId = this.getCurrentVideoId();
-    
+
     this.currentState = {
       ...this.currentState,
       speed: this.currentSpeed,
@@ -2534,7 +2666,8 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       vocabularyMode: this.vocabularyModeActive,
       lastVideoId: videoId,
       lastPosition: currentTime,
-      totalWatchTime: this.currentState.totalWatchTime + (Date.now() - this.currentState.sessionStartTime) / 1000
+      totalWatchTime:
+        this.currentState.totalWatchTime + (Date.now() - this.currentState.sessionStartTime) / 1000,
     };
   }
 
@@ -2549,9 +2682,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
 
   private isValidLoopSegment(loop: LoopSegment): boolean {
     const duration = this.playerService.getDuration();
-    return loop.startTime >= 0 && 
-           loop.endTime <= duration && 
-           loop.startTime < loop.endTime;
+    return loop.startTime >= 0 && loop.endTime <= duration && loop.startTime < loop.endTime;
   }
 
   private startStateTracking(): void {
@@ -2589,13 +2720,13 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     averageSpeed: number;
   } {
     const sessionDuration = (Date.now() - this.currentState.sessionStartTime) / 1000;
-    
+
     return {
       sessionDuration,
       totalWatchTime: this.currentState.totalWatchTime,
       loopCount: this.currentState.loopCount,
       speedChanges: this.currentState.speedChanges,
-      averageSpeed: this.currentSpeed // Could be enhanced to track true average
+      averageSpeed: this.currentSpeed, // Could be enhanced to track true average
     };
   }
 
@@ -2607,7 +2738,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       const stateKey = `enhanced-controls-state-${currentVideoId}`;
       // Clear cache by setting null with immediate expiry
       const result = await this.storageService.setCache(stateKey, null, 0);
-      
+
       // Reset current state to defaults
       this.currentState = {
         speed: 1.0,
@@ -2618,12 +2749,15 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
         sessionStartTime: Date.now(),
         totalWatchTime: 0,
         loopCount: 0,
-        speedChanges: 0
+        speedChanges: 0,
       };
-      
+
       return result.success;
     } catch (error) {
-      console.error('[EnhancedPlaybackControls] Failed to clear state:', error);
+      this.logger?.error('Failed to clear state', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: { error: error instanceof Error ? error.message : String(error) },
+      });
       return false;
     }
   }
@@ -2634,19 +2768,22 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
 
   private formatTime(seconds: number): string {
     if (isNaN(seconds) || seconds < 0) return '0:00';
-    
+
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = Math.floor(seconds % 60);
-    
+
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   }
 
   private emitEvent(event: ControlsEventData): void {
-    this.eventListeners.forEach(listener => {
+    this.eventListeners.forEach((listener) => {
       try {
         listener(event);
       } catch (error) {
-        console.error('[EnhancedPlaybackControls] Event listener error:', error);
+        this.logger?.error('Event listener error', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: { error: error instanceof Error ? error.message : String(error) },
+        });
       }
     });
   }
@@ -2668,12 +2805,14 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     });
 
     // Watch for changes on video container and player elements
-    const videoContainer = document.querySelector('#movie_player, .html5-video-container, .ytp-fullscreen');
+    const videoContainer = document.querySelector(
+      '#movie_player, .html5-video-container, .ytp-fullscreen',
+    );
     if (videoContainer) {
       this.fullscreenObserver.observe(videoContainer, {
         attributes: true,
         attributeFilter: ['class'],
-        subtree: true
+        subtree: true,
       });
     }
 
@@ -2690,7 +2829,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
 
   private checkFullscreenState(): void {
     const wasFullscreen = this.isFullscreenMode;
-    
+
     // Check multiple fullscreen indicators
     const isDocumentFullscreen = !!(
       document.fullscreenElement ||
@@ -2710,12 +2849,12 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     // Update UI if fullscreen state changed
     if (wasFullscreen !== this.isFullscreenMode) {
       this.updateFullscreenMode();
-      
+
       // Emit fullscreen change event
       this.emitEvent({
         type: 'fullscreen_change' as any,
         value: this.isFullscreenMode,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       });
     }
   }
@@ -2725,18 +2864,18 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
 
     if (this.isFullscreenMode) {
       this.container.classList.add('fullscreen-mode');
-      
+
       // Adjust positioning for fullscreen
       this.adjustFullscreenPosition();
-      
+
       // Show fullscreen feedback
       this.showActionToast('Fullscreen mode', 'success', 1500);
     } else {
       this.container.classList.remove('fullscreen-mode');
-      
+
       // Reset to normal positioning
       this.updateControlsPosition();
-      
+
       // Show exit fullscreen feedback
       this.showActionToast('Exited fullscreen', 'success', 1500);
     }
@@ -2767,4 +2906,4 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       this.fullscreenObserver = null;
     }
   }
-} 
+}

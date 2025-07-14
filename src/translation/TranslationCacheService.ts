@@ -1,11 +1,7 @@
 // Translation caching service for Microsoft Translator API integration
 // Provides Chrome storage-based caching with TTL, compression, and cache management
 
-import {
-  CacheConfig,
-  TranslationErrorCode,
-  LanguageCode
-} from './types';
+import { CacheConfig, TranslationErrorCode, LanguageCode } from './types';
 import { configService } from './ConfigService';
 import { TranslationErrorImpl } from './TranslationApiService';
 
@@ -16,7 +12,7 @@ import { TranslationErrorImpl } from './TranslationApiService';
 const CACHE_STORAGE_KEYS = {
   TRANSLATIONS: 'translator_cache_translations',
   METADATA: 'translator_cache_metadata',
-  STATS: 'translator_cache_stats'
+  STATS: 'translator_cache_stats',
 } as const;
 
 // ============================================================================
@@ -86,7 +82,7 @@ export class TranslationCacheService {
       await this.loadConfig();
       await this.loadMetadata();
       await this.loadStats();
-      
+
       if (this.config?.enabled) {
         this.startPeriodicCleanup();
       }
@@ -94,7 +90,7 @@ export class TranslationCacheService {
       throw new TranslationErrorImpl(
         'Failed to initialize translation cache service',
         TranslationErrorCode.CACHE_ERROR,
-        { originalError: error }
+        { originalError: error },
       );
     }
   }
@@ -118,14 +114,14 @@ export class TranslationCacheService {
         totalEntries: 0,
         totalSize: 0,
         lastCleanup: Date.now(),
-        version: '1.0'
+        version: '1.0',
       };
     } catch (error) {
       this.metadata = {
         totalEntries: 0,
         totalSize: 0,
         lastCleanup: Date.now(),
-        version: '1.0'
+        version: '1.0',
       };
     }
   }
@@ -141,7 +137,7 @@ export class TranslationCacheService {
         misses: 0,
         evictions: 0,
         compressionSavings: 0,
-        lastReset: Date.now()
+        lastReset: Date.now(),
       };
     } catch (error) {
       this.stats = {
@@ -149,7 +145,7 @@ export class TranslationCacheService {
         misses: 0,
         evictions: 0,
         compressionSavings: 0,
-        lastReset: Date.now()
+        lastReset: Date.now(),
       };
     }
   }
@@ -195,7 +191,6 @@ export class TranslationCacheService {
       this.stats!.misses++;
       await this.saveStats();
       return null;
-
     } catch (error) {
       console.warn('Cache lookup failed:', error);
       this.stats!.misses++;
@@ -208,10 +203,10 @@ export class TranslationCacheService {
    * Store translation in cache
    */
   async set(
-    text: string, 
-    translation: string, 
-    fromLanguage: string, 
-    toLanguage: string
+    text: string,
+    translation: string,
+    fromLanguage: string,
+    toLanguage: string,
   ): Promise<void> {
     await this.ensureInitialized();
 
@@ -222,7 +217,7 @@ export class TranslationCacheService {
     try {
       const key = this.generateCacheKey({ text, fromLanguage, toLanguage });
       const now = Date.now();
-      
+
       // Calculate entry size
       const originalSize = this.calculateEntrySize(text, translation);
       let compressedData = translation;
@@ -233,10 +228,11 @@ export class TranslationCacheService {
         try {
           compressedData = this.compressData(translation);
           const compressedSize = compressedData.length;
-          
-          if (compressedSize < originalSize * 0.8) { // Only use if significant savings
+
+          if (compressedSize < originalSize * 0.8) {
+            // Only use if significant savings
             isCompressed = true;
-            this.stats!.compressionSavings += (originalSize - compressedSize);
+            this.stats!.compressionSavings += originalSize - compressedSize;
           } else {
             compressedData = translation;
           }
@@ -251,11 +247,11 @@ export class TranslationCacheService {
         fromLanguage,
         toLanguage,
         timestamp: now,
-        expiresAt: now + (this.config.ttlHours * 60 * 60 * 1000),
+        expiresAt: now + this.config.ttlHours * 60 * 60 * 1000,
         accessCount: 0,
         lastAccessed: now,
         size: isCompressed ? compressedData.length : originalSize,
-        compressed: isCompressed
+        compressed: isCompressed,
       };
 
       // Check if we need to make space
@@ -263,13 +259,12 @@ export class TranslationCacheService {
 
       // Store the entry
       await this.storeEntry(key, entry);
-
     } catch (error) {
       console.warn('Cache store failed:', error);
       throw new TranslationErrorImpl(
         'Failed to store translation in cache',
         TranslationErrorCode.CACHE_ERROR,
-        { originalError: error }
+        { originalError: error },
       );
     }
   }
@@ -300,17 +295,17 @@ export class TranslationCacheService {
 
     try {
       await chrome.storage.local.remove([CACHE_STORAGE_KEYS.TRANSLATIONS]);
-      
+
       this.metadata!.totalEntries = 0;
       this.metadata!.totalSize = 0;
       this.metadata!.lastCleanup = Date.now();
-      
+
       await this.saveMetadata();
     } catch (error) {
       throw new TranslationErrorImpl(
         'Failed to clear translation cache',
         TranslationErrorCode.CACHE_ERROR,
-        { originalError: error }
+        { originalError: error },
       );
     }
   }
@@ -329,9 +324,10 @@ export class TranslationCacheService {
     const maxEntries = this.config.maxEntries;
 
     // Check if we need to free up space
-    if (this.metadata.totalSize + newEntrySize > maxSize || 
-        this.metadata.totalEntries >= maxEntries) {
-      
+    if (
+      this.metadata.totalSize + newEntrySize > maxSize ||
+      this.metadata.totalEntries >= maxEntries
+    ) {
       await this.evictEntries(newEntrySize);
     }
   }
@@ -343,7 +339,7 @@ export class TranslationCacheService {
     try {
       const result = await chrome.storage.local.get([CACHE_STORAGE_KEYS.TRANSLATIONS]);
       const cache = result[CACHE_STORAGE_KEYS.TRANSLATIONS] || {};
-      
+
       // Get all entries with their keys
       const entries: Array<{ key: string; entry: CacheEntry }> = [];
       for (const [key, entry] of Object.entries(cache)) {
@@ -365,7 +361,7 @@ export class TranslationCacheService {
         delete cache[key];
         freedSpace += entry.size;
         evictedCount++;
-        
+
         this.metadata!.totalEntries--;
         this.metadata!.totalSize -= entry.size;
       }
@@ -373,14 +369,13 @@ export class TranslationCacheService {
       // Save updated cache and metadata
       if (evictedCount > 0) {
         await chrome.storage.local.set({
-          [CACHE_STORAGE_KEYS.TRANSLATIONS]: cache
+          [CACHE_STORAGE_KEYS.TRANSLATIONS]: cache,
         });
-        
+
         this.stats!.evictions += evictedCount;
         await this.saveMetadata();
         await this.saveStats();
       }
-
     } catch (error) {
       console.warn('Cache eviction failed:', error);
     }
@@ -398,13 +393,13 @@ export class TranslationCacheService {
       const result = await chrome.storage.local.get([CACHE_STORAGE_KEYS.TRANSLATIONS]);
       const cache = result[CACHE_STORAGE_KEYS.TRANSLATIONS] || {};
       const now = Date.now();
-      
+
       let cleanedCount = 0;
       let freedSize = 0;
 
       for (const [key, entry] of Object.entries(cache)) {
         const cacheEntry = entry as CacheEntry;
-        
+
         if (cacheEntry.expiresAt < now) {
           delete cache[key];
           cleanedCount++;
@@ -414,7 +409,7 @@ export class TranslationCacheService {
 
       if (cleanedCount > 0) {
         await chrome.storage.local.set({
-          [CACHE_STORAGE_KEYS.TRANSLATIONS]: cache
+          [CACHE_STORAGE_KEYS.TRANSLATIONS]: cache,
         });
 
         this.metadata!.totalEntries -= cleanedCount;
@@ -423,7 +418,6 @@ export class TranslationCacheService {
 
         await this.saveMetadata();
       }
-
     } catch (error) {
       console.warn('Cache cleanup failed:', error);
     }
@@ -441,7 +435,7 @@ export class TranslationCacheService {
     const normalizedText = params.text.trim().toLowerCase();
     const normalizedFrom = params.fromLanguage.toLowerCase();
     const normalizedTo = params.toLanguage.toLowerCase();
-    
+
     // Create a hash-like key (simple implementation)
     return `${normalizedFrom}-${normalizedTo}-${this.hashString(normalizedText)}`;
   }
@@ -453,7 +447,7 @@ export class TranslationCacheService {
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
       const char = str.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
+      hash = (hash << 5) - hash + char;
       hash = hash & hash; // Convert to 32-bit integer
     }
     return Math.abs(hash).toString(36);
@@ -466,11 +460,11 @@ export class TranslationCacheService {
     try {
       const result = await chrome.storage.local.get([CACHE_STORAGE_KEYS.TRANSLATIONS]);
       const cache = result[CACHE_STORAGE_KEYS.TRANSLATIONS] || {};
-      
+
       if (cache[key]) {
         const entry = cache[key] as CacheEntry;
         let translation = entry.translation;
-        
+
         // Decompress if necessary
         if (entry.compressed) {
           try {
@@ -480,14 +474,14 @@ export class TranslationCacheService {
             return { found: false };
           }
         }
-        
+
         return {
           found: true,
           translation,
-          entry
+          entry,
         };
       }
-      
+
       return { found: false };
     } catch (error) {
       console.warn('Cache lookup error:', error);
@@ -501,15 +495,15 @@ export class TranslationCacheService {
   private async storeEntry(key: string, entry: CacheEntry): Promise<void> {
     const result = await chrome.storage.local.get([CACHE_STORAGE_KEYS.TRANSLATIONS]);
     const cache = result[CACHE_STORAGE_KEYS.TRANSLATIONS] || {};
-    
+
     // Check if this is an update or new entry
     const isUpdate = !!cache[key];
     const oldSize = isUpdate ? (cache[key] as CacheEntry).size : 0;
-    
+
     cache[key] = entry;
-    
+
     await chrome.storage.local.set({
-      [CACHE_STORAGE_KEYS.TRANSLATIONS]: cache
+      [CACHE_STORAGE_KEYS.TRANSLATIONS]: cache,
     });
 
     // Update metadata
@@ -517,7 +511,7 @@ export class TranslationCacheService {
       this.metadata!.totalEntries++;
     }
     this.metadata!.totalSize = this.metadata!.totalSize - oldSize + entry.size;
-    
+
     await this.saveMetadata();
   }
 
@@ -535,18 +529,18 @@ export class TranslationCacheService {
     try {
       const result = await chrome.storage.local.get([CACHE_STORAGE_KEYS.TRANSLATIONS]);
       const cache = result[CACHE_STORAGE_KEYS.TRANSLATIONS] || {};
-      
+
       if (cache[key]) {
         const entry = cache[key] as CacheEntry;
         delete cache[key];
-        
+
         await chrome.storage.local.set({
-          [CACHE_STORAGE_KEYS.TRANSLATIONS]: cache
+          [CACHE_STORAGE_KEYS.TRANSLATIONS]: cache,
         });
 
         this.metadata!.totalEntries--;
         this.metadata!.totalSize -= entry.size;
-        
+
         await this.saveMetadata();
       }
     } catch (error) {
@@ -613,7 +607,7 @@ export class TranslationCacheService {
       totalEntries: this.metadata!.totalEntries,
       totalSize: this.metadata!.totalSize,
       evictions: this.stats!.evictions,
-      compressionSavings: this.stats!.compressionSavings
+      compressionSavings: this.stats!.compressionSavings,
     };
   }
 
@@ -626,7 +620,7 @@ export class TranslationCacheService {
       misses: 0,
       evictions: 0,
       compressionSavings: 0,
-      lastReset: Date.now()
+      lastReset: Date.now(),
     };
     await this.saveStats();
   }
@@ -643,7 +637,7 @@ export class TranslationCacheService {
 
     try {
       await chrome.storage.local.set({
-        [CACHE_STORAGE_KEYS.METADATA]: this.metadata
+        [CACHE_STORAGE_KEYS.METADATA]: this.metadata,
       });
     } catch (error) {
       console.warn('Failed to save cache metadata:', error);
@@ -658,7 +652,7 @@ export class TranslationCacheService {
 
     try {
       await chrome.storage.local.set({
-        [CACHE_STORAGE_KEYS.STATS]: this.stats
+        [CACHE_STORAGE_KEYS.STATS]: this.stats,
       });
     } catch (error) {
       console.warn('Failed to save cache stats:', error);
@@ -678,11 +672,12 @@ export class TranslationCacheService {
     }
 
     // Run cleanup every hour
-    this.cleanupInterval = setInterval(() => {
-      this.cleanup().catch(error => 
-        console.warn('Periodic cache cleanup failed:', error)
-      );
-    }, 60 * 60 * 1000) as any;
+    this.cleanupInterval = setInterval(
+      () => {
+        this.cleanup().catch((error) => console.warn('Periodic cache cleanup failed:', error));
+      },
+      60 * 60 * 1000,
+    ) as any;
   }
 
   /**
@@ -733,4 +728,4 @@ export class TranslationCacheService {
 // ============================================================================
 
 // Export a singleton instance for use throughout the application
-export const translationCacheService = new TranslationCacheService(); 
+export const translationCacheService = new TranslationCacheService();

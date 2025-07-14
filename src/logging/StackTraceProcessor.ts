@@ -41,7 +41,7 @@ export enum ErrorSource {
   CONTENT_SCRIPT = 'content_script',
   BACKGROUND_SCRIPT = 'background_script',
   POPUP_SCRIPT = 'popup_script',
-  UNKNOWN = 'unknown'
+  UNKNOWN = 'unknown',
 }
 
 /**
@@ -77,7 +77,7 @@ export const DEFAULT_REDACTION_CONFIG: RedactionConfig = {
   redactApiKeys: true,
   redactTokens: true,
   customPatterns: [],
-  preserveExtensionPaths: true
+  preserveExtensionPaths: true,
 };
 
 /**
@@ -111,13 +111,13 @@ export class StackTraceProcessor {
     const originalStack = this.captureStackTrace(error);
     const frames = this.parseStackTrace(originalStack);
     const errorSource = this.classifyErrorSource(frames, context?.component);
-    
+
     // Apply redaction
     const { redactedStack, sensitiveDataFound } = this.redactStackTrace(originalStack);
-    
+
     // Process frames for additional information
     const processedFrames = this.enhanceFrames(frames);
-    
+
     return {
       original: originalStack,
       processed: redactedStack,
@@ -125,7 +125,7 @@ export class StackTraceProcessor {
       redacted: sensitiveDataFound,
       sourceMapApplied: false, // TODO: Implement source map processing
       errorSource,
-      sensitiveDataFound
+      sensitiveDataFound,
     };
   }
 
@@ -139,12 +139,12 @@ export class StackTraceProcessor {
       (Error as any).captureStackTrace(captureTarget, this.captureStackTrace);
       return (captureTarget as any).stack || error.stack || '';
     }
-    
+
     // Fallback to error.stack
     if (error.stack) {
       return error.stack;
     }
-    
+
     // Last resort: create new error for stack trace
     try {
       throw new Error('Stack trace capture');
@@ -159,14 +159,14 @@ export class StackTraceProcessor {
   private parseStackTrace(stackTrace: string): StackFrame[] {
     const frames: StackFrame[] = [];
     const lines = stackTrace.split('\n');
-    
+
     for (const line of lines) {
       const frame = this.parseStackFrame(line.trim());
       if (frame) {
         frames.push(frame);
       }
     }
-    
+
     return frames;
   }
 
@@ -188,7 +188,7 @@ export class StackTraceProcessor {
         columnNumber: parseInt(chromeMatch[4], 10),
         source: line,
         isNative: chromeMatch[2].includes('[native code]'),
-        isExtensionCode: this.isExtensionFile(chromeMatch[2])
+        isExtensionCode: this.isExtensionFile(chromeMatch[2]),
       };
     }
 
@@ -201,7 +201,7 @@ export class StackTraceProcessor {
         columnNumber: parseInt(chromeSimpleMatch[3], 10),
         source: line,
         isNative: chromeSimpleMatch[1].includes('[native code]'),
-        isExtensionCode: this.isExtensionFile(chromeSimpleMatch[1])
+        isExtensionCode: this.isExtensionFile(chromeSimpleMatch[1]),
       };
     }
 
@@ -215,7 +215,7 @@ export class StackTraceProcessor {
         columnNumber: parseInt(firefoxMatch[4], 10),
         source: line,
         isNative: firefoxMatch[2].includes('[native code]'),
-        isExtensionCode: this.isExtensionFile(firefoxMatch[2])
+        isExtensionCode: this.isExtensionFile(firefoxMatch[2]),
       };
     }
 
@@ -223,7 +223,7 @@ export class StackTraceProcessor {
     return {
       source: line,
       isNative: line.includes('[native code]'),
-      isExtensionCode: false
+      isExtensionCode: false,
     };
   }
 
@@ -236,7 +236,7 @@ export class StackTraceProcessor {
     }
 
     const topFrame = frames[0];
-    
+
     // Check if error originates from extension code
     if (topFrame.isExtensionCode) {
       if (component) {
@@ -255,21 +255,27 @@ export class StackTraceProcessor {
     }
 
     // Check for browser API errors
-    if (topFrame.fileName?.includes('chrome-extension://') || 
-        topFrame.fileName?.includes('moz-extension://')) {
+    if (
+      topFrame.fileName?.includes('chrome-extension://') ||
+      topFrame.fileName?.includes('moz-extension://')
+    ) {
       return ErrorSource.BROWSER_API;
     }
 
     // Check for third-party code
-    if (topFrame.fileName?.includes('node_modules') ||
-        topFrame.fileName?.includes('vendor') ||
-        topFrame.fileName?.includes('lib/')) {
+    if (
+      topFrame.fileName?.includes('node_modules') ||
+      topFrame.fileName?.includes('vendor') ||
+      topFrame.fileName?.includes('lib/')
+    ) {
       return ErrorSource.THIRD_PARTY;
     }
 
     // Check for user script injection
-    if (topFrame.fileName?.includes('userscript') ||
-        topFrame.functionName?.includes('userScript')) {
+    if (
+      topFrame.fileName?.includes('userscript') ||
+      topFrame.functionName?.includes('userScript')
+    ) {
       return ErrorSource.USER_SCRIPT;
     }
 
@@ -279,7 +285,10 @@ export class StackTraceProcessor {
   /**
    * Redact sensitive information from stack trace
    */
-  private redactStackTrace(stackTrace: string): { redactedStack: string; sensitiveDataFound: boolean } {
+  private redactStackTrace(stackTrace: string): {
+    redactedStack: string;
+    sensitiveDataFound: boolean;
+  } {
     let redacted = stackTrace;
     let sensitiveDataFound = false;
 
@@ -289,8 +298,10 @@ export class StackTraceProcessor {
       if (urlPattern.test(redacted)) {
         sensitiveDataFound = true;
         redacted = redacted.replace(urlPattern, (match) => {
-          if (this.redactionConfig.preserveExtensionPaths && 
-              (match.includes('chrome-extension://') || match.includes('moz-extension://'))) {
+          if (
+            this.redactionConfig.preserveExtensionPaths &&
+            (match.includes('chrome-extension://') || match.includes('moz-extension://'))
+          ) {
             return match;
           }
           return '[REDACTED_URL]';
@@ -301,11 +312,11 @@ export class StackTraceProcessor {
     // Redact file paths
     if (this.redactionConfig.redactPaths) {
       const pathPatterns = [
-        /\/Users\/[^\/\s)]+/g,  // macOS user paths
-        /C:\\Users\\[^\\\/\s)]+/g,  // Windows user paths
-        /\/home\/[^\/\s)]+/g,   // Linux user paths
-        /\/tmp\/[^\s)]+/g,      // Temporary paths
-        /\/var\/[^\s)]+/g       // Variable paths
+        /\/Users\/[^\/\s)]+/g, // macOS user paths
+        /C:\\Users\\[^\\\/\s)]+/g, // Windows user paths
+        /\/home\/[^\/\s)]+/g, // Linux user paths
+        /\/tmp\/[^\s)]+/g, // Temporary paths
+        /\/var\/[^\s)]+/g, // Variable paths
       ];
 
       for (const pattern of pathPatterns) {
@@ -319,11 +330,11 @@ export class StackTraceProcessor {
     // Redact API keys and tokens
     if (this.redactionConfig.redactApiKeys) {
       const apiKeyPatterns = [
-        /[A-Za-z0-9]{32,}/g,     // Generic long strings (potential API keys)
-        /sk-[A-Za-z0-9]{48}/g,   // OpenAI API keys
-        /xoxb-[A-Za-z0-9-]+/g,   // Slack tokens
-        /ghp_[A-Za-z0-9]{36}/g,  // GitHub tokens
-        /Bearer\s+[A-Za-z0-9._-]+/g  // Bearer tokens
+        /[A-Za-z0-9]{32,}/g, // Generic long strings (potential API keys)
+        /sk-[A-Za-z0-9]{48}/g, // OpenAI API keys
+        /xoxb-[A-Za-z0-9-]+/g, // Slack tokens
+        /ghp_[A-Za-z0-9]{36}/g, // GitHub tokens
+        /Bearer\s+[A-Za-z0-9._-]+/g, // Bearer tokens
       ];
 
       for (const pattern of apiKeyPatterns) {
@@ -337,9 +348,9 @@ export class StackTraceProcessor {
     // Redact user data patterns
     if (this.redactionConfig.redactUserData) {
       const userDataPatterns = [
-        /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g,  // Email addresses
-        /\b\d{3}-\d{2}-\d{4}\b/g,  // SSN patterns
-        /\b\d{4}\s?\d{4}\s?\d{4}\s?\d{4}\b/g  // Credit card patterns
+        /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g, // Email addresses
+        /\b\d{3}-\d{2}-\d{4}\b/g, // SSN patterns
+        /\b\d{4}\s?\d{4}\s?\d{4}\s?\d{4}\b/g, // Credit card patterns
       ];
 
       for (const pattern of userDataPatterns) {
@@ -365,10 +376,10 @@ export class StackTraceProcessor {
    * Enhance frames with additional metadata
    */
   private enhanceFrames(frames: StackFrame[]): StackFrame[] {
-    return frames.map(frame => ({
+    return frames.map((frame) => ({
       ...frame,
       isExtensionCode: this.isExtensionFile(frame.fileName || ''),
-      isNative: frame.isNative || this.isNativeCode(frame.fileName || '')
+      isNative: frame.isNative || this.isNativeCode(frame.fileName || ''),
     }));
   }
 
@@ -377,21 +388,23 @@ export class StackTraceProcessor {
    */
   private isExtensionFile(fileName: string): boolean {
     if (!fileName) return false;
-    
-    return fileName.includes(`chrome-extension://${this.extensionId}`) ||
-           fileName.includes(`moz-extension://${this.extensionId}`) ||
-           fileName.includes('/build/') ||
-           fileName.includes('/dist/') ||
-           fileName.includes('/src/');
+
+    return (
+      fileName.includes(`chrome-extension://${this.extensionId}`) ||
+      fileName.includes(`moz-extension://${this.extensionId}`) ||
+      fileName.includes('/build/') ||
+      fileName.includes('/dist/') ||
+      fileName.includes('/src/')
+    );
   }
 
   /**
    * Check if code is native browser code
    */
   private isNativeCode(fileName: string): boolean {
-    return fileName.includes('[native code]') ||
-           fileName.includes('<anonymous>') ||
-           fileName === '';
+    return (
+      fileName.includes('[native code]') || fileName.includes('<anonymous>') || fileName === ''
+    );
   }
 
   /**
@@ -434,24 +447,26 @@ export class StackTraceProcessor {
    */
   public extractTechnicalDetails(error: Error, processedTrace: ProcessedStackTrace): string {
     const details = [];
-    
+
     details.push(`Error Type: ${error.name}`);
     details.push(`Message: ${error.message}`);
     details.push(`Source: ${processedTrace.errorSource}`);
-    details.push(`Extension Code: ${processedTrace.frames.some(f => f.isExtensionCode)}`);
+    details.push(`Extension Code: ${processedTrace.frames.some((f) => f.isExtensionCode)}`);
     details.push(`Sensitive Data Redacted: ${processedTrace.sensitiveDataFound}`);
     details.push(`Frame Count: ${processedTrace.frames.length}`);
-    
+
     if (processedTrace.frames.length > 0) {
       const topFrame = processedTrace.frames[0];
       if (topFrame.fileName) {
-        details.push(`Top Frame: ${topFrame.fileName}:${topFrame.lineNumber}:${topFrame.columnNumber}`);
+        details.push(
+          `Top Frame: ${topFrame.fileName}:${topFrame.lineNumber}:${topFrame.columnNumber}`,
+        );
       }
       if (topFrame.functionName) {
         details.push(`Function: ${topFrame.functionName}`);
       }
     }
-    
+
     return details.join('\n');
   }
 
@@ -460,8 +475,8 @@ export class StackTraceProcessor {
    */
   public generateUserMessage(error: Error, processedTrace: ProcessedStackTrace): string {
     const errorSource = processedTrace.errorSource;
-    const hasExtensionCode = processedTrace.frames.some(f => f.isExtensionCode);
-    
+    const hasExtensionCode = processedTrace.frames.some((f) => f.isExtensionCode);
+
     if (hasExtensionCode) {
       switch (errorSource) {
         case ErrorSource.EXTENSION_CODE:
@@ -469,18 +484,18 @@ export class StackTraceProcessor {
         case ErrorSource.CONTENT_SCRIPT:
         case ErrorSource.POPUP_SCRIPT:
           return 'An error occurred in the extension. Please try refreshing the page or restarting the extension.';
-        
+
         case ErrorSource.THIRD_PARTY:
           return 'An error occurred with a third-party component. The extension may continue to work normally.';
-        
+
         case ErrorSource.BROWSER_API:
           return 'An error occurred while communicating with the browser. Please check your browser permissions.';
-        
+
         default:
           return 'An unexpected error occurred. Please try again.';
       }
     }
-    
+
     return 'An error occurred. Please try again or contact support if the problem persists.';
   }
-} 
+}

@@ -7,7 +7,11 @@
 export { VocabularyManager, vocabularyManager } from './VocabularyManager';
 
 // Export VocabularyObserver functionality
-export { VocabularyObserver, VocabularyEventType, createReactiveVocabularyComponent } from './VocabularyObserver';
+export {
+  VocabularyObserver,
+  VocabularyEventType,
+  createReactiveVocabularyComponent,
+} from './VocabularyObserver';
 export type {
   VocabularyEvent,
   VocabularyEventData,
@@ -22,7 +26,7 @@ export type {
 } from './VocabularyObserver';
 
 // Export WordHighlightingService functionality
-export { 
+export {
   WordHighlightingService,
   highlightVocabularyInElement,
   removeVocabularyHighlighting,
@@ -50,4 +54,4 @@ export type {
 export type { VocabularyItem } from '../storage';
 
 // Export singleton instance as default
-export { vocabularyManager as default } from './VocabularyManager'; 
+export { vocabularyManager as default } from './VocabularyManager';

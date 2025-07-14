@@ -5,6 +5,10 @@
  */
 
 import { YouTubePageContext, SubtitleDiscoveryEvent } from './types';
+import { Logger } from '../logging/Logger';
+import { ComponentType } from '../logging/types';
+
+const logger = Logger?.getInstance();
 
 // ========================================
 // Player Interaction Types
@@ -20,7 +24,7 @@ export enum PlayerState {
   PAUSED = 2,
   BUFFERING = 3,
   CUED = 5,
-  UNKNOWN = 999
+  UNKNOWN = 999,
 }
 
 /**
@@ -43,7 +47,7 @@ export enum PlayerEvent {
   CAN_PLAY_THROUGH = 'canplaythrough',
   ERROR = 'error',
   STALLED = 'stalled',
-  VOLUME_CHANGE = 'volumechange'
+  VOLUME_CHANGE = 'volumechange',
 }
 
 /**
@@ -69,7 +73,7 @@ export enum PlayerErrorCode {
   INVALID_CONFIGURATION = 'INVALID_CONFIGURATION',
   SERVICE_UNAVAILABLE = 'SERVICE_UNAVAILABLE',
   PERMISSION_DENIED = 'PERMISSION_DENIED',
-  FEATURE_NOT_SUPPORTED = 'FEATURE_NOT_SUPPORTED'
+  FEATURE_NOT_SUPPORTED = 'FEATURE_NOT_SUPPORTED',
 }
 
 /**
@@ -139,7 +143,7 @@ export const DEFAULT_PLAYER_CONFIG: PlayerInteractionConfig = {
   retryAttempts: 3,
   retryDelay: 1000,
   enableStateTracking: true,
-  throttleEventInterval: 100
+  throttleEventInterval: 100,
 };
 
 /**
@@ -163,7 +167,7 @@ export const DEFAULT_STATE_TRACKING_CONFIG: StateTrackingConfig = {
   stateChangeThreshold: 0.1, // 100ms
   trackTimeUpdates: true,
   trackVolumeChanges: true,
-  trackDimensionChanges: false
+  trackDimensionChanges: false,
 };
 
 /**
@@ -174,7 +178,10 @@ export type PlayerEventCallback = (event: Event, playerState?: PlayerStateInfo) 
 /**
  * Player change callback interface
  */
-export type PlayerChangeCallback = (videoElement: HTMLVideoElement | null, error?: PlayerError) => void;
+export type PlayerChangeCallback = (
+  videoElement: HTMLVideoElement | null,
+  error?: PlayerError,
+) => void;
 
 /**
  * Player state change callback interface
@@ -182,7 +189,7 @@ export type PlayerChangeCallback = (videoElement: HTMLVideoElement | null, error
 export type PlayerStateChangeCallback = (
   newState: PlayerStateInfo,
   previousState: PlayerStateInfo | null,
-  changes: PlayerStateChanges
+  changes: PlayerStateChanges,
 ) => void;
 
 /**
@@ -230,6 +237,7 @@ export interface SubtitleCue {
   readonly startTime: number; // In seconds
   readonly endTime: number; // In seconds
   readonly text: string;
+  readonly nativeText?: string;
   readonly language?: string;
   readonly confidence?: number; // Auto-generated subtitle confidence (0-1)
   readonly position?: SubtitlePosition; // Display position
@@ -332,7 +340,7 @@ export enum SubtitleSyncErrorCode {
   TRACK_LOAD_FAILED = 'TRACK_LOAD_FAILED',
   TIMING_ADJUSTMENT_FAILED = 'TIMING_ADJUSTMENT_FAILED',
   INVALID_CUE_DATA = 'INVALID_CUE_DATA',
-  SYNC_SERVICE_ERROR = 'SYNC_SERVICE_ERROR'
+  SYNC_SERVICE_ERROR = 'SYNC_SERVICE_ERROR',
 }
 
 /**
@@ -361,12 +369,12 @@ export interface YouTubeSubtitleData {
 export const DEFAULT_SUBTITLE_SYNC_CONFIG: SubtitleSyncConfig = {
   enabled: true,
   timeOffset: 0,
-  lookAheadTime: 2.0, // 2 seconds ahead
-  lookBehindTime: 1.0, // 1 second behind
-  timingTolerance: 0.2, // 200ms tolerance
+  lookAheadTime: 0,
+  lookBehindTime: 0,
+  timingTolerance: 0,
   autoCorrectTiming: true,
   enableSmoothing: true,
-  maxConcurrentCues: 3
+  maxConcurrentCues: 3,
 };
 
 // ========================================
@@ -403,7 +411,12 @@ export interface ActiveSegmentLoop extends SegmentLoop {
  * Segment loop event
  */
 export interface SegmentLoopEvent {
-  readonly type: 'loop_start' | 'loop_iteration' | 'loop_end' | 'loop_disabled' | 'loop_seek_outside';
+  readonly type:
+    | 'loop_start'
+    | 'loop_iteration'
+    | 'loop_end'
+    | 'loop_disabled'
+    | 'loop_seek_outside';
   readonly loop: ActiveSegmentLoop;
   readonly currentTime: number;
   readonly iteration?: number; // Specific to loop_iteration events
@@ -433,7 +446,7 @@ export enum LoopSeekBehavior {
   IMMEDIATE = 'immediate', // Seek immediately when end is reached
   SMOOTH = 'smooth', // Smooth transition with fade
   DELAYED = 'delayed', // Wait before seeking back
-  USER_CONTROLLED = 'user_controlled' // Only seek when user confirms
+  USER_CONTROLLED = 'user_controlled', // Only seek when user confirms
 }
 
 /**
@@ -453,7 +466,7 @@ export const DEFAULT_SEGMENT_LOOP_CONFIG: SegmentLoopConfig = {
   delayBeforeLoop: 0.2,
   maxConsecutiveLoops: 10,
   enableLoopNotifications: true,
-  seekBackOffset: 0.1
+  seekBackOffset: 0.1,
 };
 
 // ========================================
@@ -483,7 +496,7 @@ export const DEFAULT_ERROR_RECOVERY_CONFIG: ErrorRecoveryConfig = {
   retryBackoffFactor: 2,
   enableCircuitBreaker: true,
   circuitBreakerThreshold: 5,
-  circuitBreakerTimeoutMs: 30000
+  circuitBreakerTimeoutMs: 30000,
 };
 
 /**
@@ -545,27 +558,27 @@ export class ErrorCollector {
   public addError(error: PlayerError, context: string = 'unknown'): void {
     const key = `${error.code}-${error.message}`;
     const now = Date.now();
-    
+
     const existing = this.errors.get(key);
     if (existing) {
       this.errors.set(key, {
         ...existing,
         count: existing.count + 1,
         lastSeen: now,
-        context: [...new Set([...existing.context, context])]
+        context: [...new Set([...existing.context, context])],
       });
     } else {
       // Cleanup old errors if we exceed max unique errors
       if (this.errors.size >= this.maxUniqueErrors) {
         this.cleanupOldErrors();
       }
-      
+
       this.errors.set(key, {
         error,
         count: 1,
         firstSeen: now,
         lastSeen: now,
-        context: [context]
+        context: [context],
       });
     }
   }
@@ -576,7 +589,7 @@ export class ErrorCollector {
   public getAggregatedErrors(timeWindow?: number): ErrorAggregationEntry[] {
     const cutoff = Date.now() - (timeWindow || this.maxAggregationTime);
     return Array.from(this.errors.values())
-      .filter(entry => entry.lastSeen >= cutoff)
+      .filter((entry) => entry.lastSeen >= cutoff)
       .sort((a, b) => b.count - a.count);
   }
 
@@ -598,13 +611,14 @@ export class ErrorCollector {
   } {
     const entries = Array.from(this.errors.values());
     const totalErrorCount = entries.reduce((sum, entry) => sum + entry.count, 0);
-    const mostFrequentError = entries.length > 0 
-      ? entries.reduce((max, entry) => entry.count > max.count ? entry : max)
-      : null;
-    
+    const mostFrequentError =
+      entries.length > 0
+        ? entries.reduce((max, entry) => (entry.count > max.count ? entry : max))
+        : null;
+
     const errorsByContext: Record<string, number> = {};
-    entries.forEach(entry => {
-      entry.context.forEach(ctx => {
+    entries.forEach((entry) => {
+      entry.context.forEach((ctx) => {
         errorsByContext[ctx] = (errorsByContext[ctx] || 0) + entry.count;
       });
     });
@@ -613,21 +627,21 @@ export class ErrorCollector {
       totalUniqueErrors: this.errors.size,
       totalErrorCount,
       mostFrequentError,
-      errorsByContext
+      errorsByContext,
     };
   }
 
   private cleanupOldErrors(): void {
     const cutoff = Date.now() - this.maxAggregationTime;
     const toDelete: string[] = [];
-    
+
     this.errors.forEach((entry, key) => {
       if (entry.lastSeen < cutoff) {
         toDelete.push(key);
       }
     });
-    
-    toDelete.forEach(key => this.errors.delete(key));
+
+    toDelete.forEach((key) => this.errors.delete(key));
   }
 }
 
@@ -656,7 +670,7 @@ export class PlayerOperationError extends Error {
       retryable?: boolean;
       context?: string;
       details?: Record<string, unknown>;
-    } = {}
+    } = {},
   ) {
     super(message);
     this.name = 'PlayerOperationError';
@@ -678,7 +692,7 @@ export class PlayerOperationError extends Error {
       severity: this.severity,
       recoverable: this.recoverable,
       retryable: this.retryable,
-      context: this.context
+      context: this.context,
     };
   }
 }
@@ -694,14 +708,14 @@ export class ValidationError extends PlayerOperationError {
     field: string,
     value: unknown,
     message: string,
-    code: PlayerErrorCode = PlayerErrorCode.INVALID_CONFIGURATION
+    code: PlayerErrorCode = PlayerErrorCode.INVALID_CONFIGURATION,
   ) {
     super(code, message, {
       severity: 'medium',
       recoverable: true,
       retryable: false,
       context: 'validation',
-      details: { field, value }
+      details: { field, value },
     });
     this.name = 'ValidationError';
     this.field = field;
@@ -717,18 +731,14 @@ export class BrowserCompatibilityError extends PlayerOperationError {
   public readonly userAgent: string;
   public readonly fallbackAvailable: boolean;
 
-  constructor(
-    feature: string,
-    fallbackAvailable: boolean = false,
-    customMessage?: string
-  ) {
+  constructor(feature: string, fallbackAvailable: boolean = false, customMessage?: string) {
     const message = customMessage || `Browser does not support feature: ${feature}`;
     super(PlayerErrorCode.BROWSER_COMPATIBILITY, message, {
       severity: fallbackAvailable ? 'medium' : 'high',
       recoverable: fallbackAvailable,
       retryable: false,
       context: 'browser_compatibility',
-      details: { feature, fallbackAvailable, userAgent: navigator.userAgent }
+      details: { feature, fallbackAvailable, userAgent: navigator.userAgent },
     });
     this.name = 'BrowserCompatibilityError';
     this.feature = feature;
@@ -749,7 +759,7 @@ export class NetworkError extends PlayerOperationError {
     operation: string,
     retryCount: number = 0,
     maxRetries: number = 3,
-    customMessage?: string
+    customMessage?: string,
   ) {
     const message = customMessage || `Network operation failed: ${operation}`;
     super(PlayerErrorCode.NETWORK_TIMEOUT, message, {
@@ -757,7 +767,7 @@ export class NetworkError extends PlayerOperationError {
       recoverable: true,
       retryable: retryCount < maxRetries,
       context: 'network',
-      details: { operation, retryCount, maxRetries }
+      details: { operation, retryCount, maxRetries },
     });
     this.name = 'NetworkError';
     this.operation = operation;
@@ -908,11 +918,11 @@ export const DEFAULT_MEDIA_PROXY_CONFIG: MediaElementProxyConfig = {
     ended: false,
     readyState: 0,
     videoWidth: 0,
-    videoHeight: 0
+    videoHeight: 0,
   },
   operationTimeoutMs: 5000,
   enableLogging: true,
-  gracefulDegradation: true
+  gracefulDegradation: true,
 };
 
 /**
@@ -940,13 +950,16 @@ export class MediaElementProxy {
   public setElement(element: HTMLVideoElement | null): void {
     this.element = element;
     this.clearCache();
-    
+
     if (this.config.enableLogging) {
-      console.log('[MediaElementProxy] Element updated:', {
-        hasElement: !!element,
-        elementType: element?.tagName,
-        readyState: element?.readyState,
-        quirks: this.quirks
+      logger?.info('Element updated', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          hasElement: !!element,
+          elementType: element?.tagName,
+          readyState: element?.readyState,
+          quirks: this.quirks,
+        },
       });
     }
   }
@@ -976,7 +989,7 @@ export class MediaElementProxy {
   public async executeOperation<T>(
     operation: () => T | Promise<T>,
     operationName: string,
-    fallbackValue?: T
+    fallbackValue?: T,
   ): Promise<MediaElementOperationResult<T>> {
     const startTime = performance.now();
     this.operationCount++;
@@ -992,17 +1005,17 @@ export class MediaElementProxy {
             error: new PlayerOperationError(
               PlayerErrorCode.VIDEO_ELEMENT_UNAVAILABLE,
               `Element unavailable for operation: ${operationName}`,
-              { severity: 'medium', recoverable: true, context: 'media_proxy' }
+              { severity: 'medium', recoverable: true, context: 'media_proxy' },
             ),
             fallbackUsed: true,
-            operationTime: performance.now() - startTime
+            operationTime: performance.now() - startTime,
           };
         }
-        
+
         throw new PlayerOperationError(
           PlayerErrorCode.VIDEO_ELEMENT_UNAVAILABLE,
           `No video element available for operation: ${operationName}`,
-          { severity: 'high', recoverable: true, context: 'media_proxy' }
+          { severity: 'high', recoverable: true, context: 'media_proxy' },
         );
       }
 
@@ -1010,32 +1023,42 @@ export class MediaElementProxy {
       const result = await this.withTimeout(operation(), this.config.operationTimeoutMs);
 
       if (this.config.enableLogging) {
-        console.log(`[MediaElementProxy] Operation "${operationName}" succeeded:`, result);
+        logger?.info(`Operation "${operationName}" succeeded`, {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: {
+            result,
+          },
+        });
       }
 
       return {
         success: true,
         value: result,
         fallbackUsed: false,
-        operationTime: performance.now() - startTime
+        operationTime: performance.now() - startTime,
       };
-
     } catch (error) {
-      const operationError = error instanceof PlayerOperationError 
-        ? error 
-        : new PlayerOperationError(
-            PlayerErrorCode.PLAYBACK_FAILED,
-            `Operation failed: ${operationName} - ${error instanceof Error ? error.message : String(error)}`,
-            { 
-              severity: 'medium', 
-              recoverable: true, 
-              context: 'media_proxy',
-              details: { operationName, originalError: error }
-            }
-          );
+      const operationError =
+        error instanceof PlayerOperationError
+          ? error
+          : new PlayerOperationError(
+              PlayerErrorCode.PLAYBACK_FAILED,
+              `Operation failed: ${operationName} - ${error instanceof Error ? error.message : String(error)}`,
+              {
+                severity: 'medium',
+                recoverable: true,
+                context: 'media_proxy',
+                details: { operationName, originalError: error },
+              },
+            );
 
       if (this.config.enableLogging) {
-        console.error(`[MediaElementProxy] Operation "${operationName}" failed:`, operationError);
+        logger?.error(`Operation "${operationName}" failed`, {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: {
+            operationError,
+          },
+        });
       }
 
       // Try fallback if available
@@ -1045,7 +1068,7 @@ export class MediaElementProxy {
           value: fallbackValue,
           error: operationError,
           fallbackUsed: true,
-          operationTime: performance.now() - startTime
+          operationTime: performance.now() - startTime,
         };
       }
 
@@ -1053,7 +1076,7 @@ export class MediaElementProxy {
         success: false,
         error: operationError,
         fallbackUsed: false,
-        operationTime: performance.now() - startTime
+        operationTime: performance.now() - startTime,
       };
     }
   }
@@ -1063,7 +1086,7 @@ export class MediaElementProxy {
    */
   public getProperty<K extends keyof MediaElementFallbackValues>(
     property: K,
-    allowCached: boolean = true
+    allowCached: boolean = true,
   ): MediaElementOperationResult<MediaElementFallbackValues[K]> {
     const startTime = performance.now();
 
@@ -1073,7 +1096,7 @@ export class MediaElementProxy {
         success: true,
         value: this.cachedProperties[property] as MediaElementFallbackValues[K],
         fallbackUsed: false,
-        operationTime: performance.now() - startTime
+        operationTime: performance.now() - startTime,
       };
     }
 
@@ -1086,15 +1109,15 @@ export class MediaElementProxy {
           error: new PlayerOperationError(
             PlayerErrorCode.VIDEO_ELEMENT_UNAVAILABLE,
             `Element unavailable for property: ${property}`,
-            { severity: 'low', recoverable: true, context: 'media_proxy' }
+            { severity: 'low', recoverable: true, context: 'media_proxy' },
           ),
           fallbackUsed: true,
-          operationTime: performance.now() - startTime
+          operationTime: performance.now() - startTime,
         };
       }
 
       const value = this.getElementProperty(property);
-      
+
       // Cache the value
       this.cacheProperty(property, value);
 
@@ -1102,15 +1125,14 @@ export class MediaElementProxy {
         success: true,
         value,
         fallbackUsed: false,
-        operationTime: performance.now() - startTime
+        operationTime: performance.now() - startTime,
       };
-
     } catch (error) {
       const fallbackValue = this.config.fallbackValues[property];
       const operationError = new PlayerOperationError(
         PlayerErrorCode.UNKNOWN_ERROR,
         `Failed to get property ${property}: ${error instanceof Error ? error.message : String(error)}`,
-        { severity: 'low', recoverable: true, context: 'media_proxy' }
+        { severity: 'low', recoverable: true, context: 'media_proxy' },
       );
 
       return {
@@ -1118,7 +1140,7 @@ export class MediaElementProxy {
         value: fallbackValue,
         error: operationError,
         fallbackUsed: true,
-        operationTime: performance.now() - startTime
+        operationTime: performance.now() - startTime,
       };
     }
   }
@@ -1126,10 +1148,12 @@ export class MediaElementProxy {
   /**
    * Set a property value with validation and error handling
    */
-  public setProperty<K extends keyof Pick<MediaElementFallbackValues, 'currentTime' | 'playbackRate' | 'volume' | 'muted'>>(
-    property: K,
-    value: MediaElementFallbackValues[K]
-  ): MediaElementOperationResult<void> {
+  public setProperty<
+    K extends keyof Pick<
+      MediaElementFallbackValues,
+      'currentTime' | 'playbackRate' | 'volume' | 'muted'
+    >,
+  >(property: K, value: MediaElementFallbackValues[K]): MediaElementOperationResult<void> {
     const startTime = performance.now();
 
     try {
@@ -1137,39 +1161,44 @@ export class MediaElementProxy {
         throw new PlayerOperationError(
           PlayerErrorCode.VIDEO_ELEMENT_UNAVAILABLE,
           `Element unavailable for setting property: ${property}`,
-          { severity: 'medium', recoverable: true, context: 'media_proxy' }
+          { severity: 'medium', recoverable: true, context: 'media_proxy' },
         );
       }
 
       this.setElementProperty(property, value);
-      
+
       // Update cache
       this.cacheProperty(property, value);
 
       if (this.config.enableLogging) {
-        console.log(`[MediaElementProxy] Set property "${property}" to:`, value);
+        logger?.info(`Set property "${property}" to`, {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: {
+            value,
+          },
+        });
       }
 
       return {
         success: true,
         fallbackUsed: false,
-        operationTime: performance.now() - startTime
+        operationTime: performance.now() - startTime,
       };
-
     } catch (error) {
-      const operationError = error instanceof PlayerOperationError 
-        ? error 
-        : new PlayerOperationError(
-            PlayerErrorCode.UNKNOWN_ERROR,
-            `Failed to set property ${property}: ${error instanceof Error ? error.message : String(error)}`,
-            { severity: 'medium', recoverable: true, context: 'media_proxy' }
-          );
+      const operationError =
+        error instanceof PlayerOperationError
+          ? error
+          : new PlayerOperationError(
+              PlayerErrorCode.UNKNOWN_ERROR,
+              `Failed to set property ${property}: ${error instanceof Error ? error.message : String(error)}`,
+              { severity: 'medium', recoverable: true, context: 'media_proxy' },
+            );
 
       return {
         success: false,
         error: operationError,
         fallbackUsed: false,
-        operationTime: performance.now() - startTime
+        operationTime: performance.now() - startTime,
       };
     }
   }
@@ -1180,7 +1209,7 @@ export class MediaElementProxy {
   public async addEventListener(
     eventType: string,
     listener: EventListener,
-    options?: boolean | AddEventListenerOptions
+    options?: boolean | AddEventListenerOptions,
   ): Promise<MediaElementOperationResult<void>> {
     return this.executeOperation(
       () => {
@@ -1190,7 +1219,7 @@ export class MediaElementProxy {
         this.element.addEventListener(eventType, listener, options);
       },
       `addEventListener(${eventType})`,
-      undefined
+      undefined,
     );
   }
 
@@ -1200,7 +1229,7 @@ export class MediaElementProxy {
   public async removeEventListener(
     eventType: string,
     listener: EventListener,
-    options?: boolean | EventListenerOptions
+    options?: boolean | EventListenerOptions,
   ): Promise<MediaElementOperationResult<void>> {
     return this.executeOperation(
       () => {
@@ -1210,7 +1239,7 @@ export class MediaElementProxy {
         this.element.removeEventListener(eventType, listener, options);
       },
       `removeEventListener(${eventType})`,
-      undefined
+      undefined,
     );
   }
 
@@ -1235,9 +1264,9 @@ export class MediaElementProxy {
       cacheStats: {
         isValid: this.isCacheValid(),
         properties: Object.keys(this.cachedProperties),
-        timestamp: this.cacheTimestamp
+        timestamp: this.cacheTimestamp,
       },
-      quirks: this.quirks
+      quirks: this.quirks,
     };
   }
 
@@ -1267,19 +1296,21 @@ export class MediaElementProxy {
 
     return new Promise<T>((resolve, reject) => {
       const timeoutId = setTimeout(() => {
-        reject(new PlayerOperationError(
-          PlayerErrorCode.OPERATION_TIMEOUT,
-          `Operation timed out after ${timeoutMs}ms`,
-          { severity: 'medium', recoverable: true, context: 'media_proxy' }
-        ));
+        reject(
+          new PlayerOperationError(
+            PlayerErrorCode.OPERATION_TIMEOUT,
+            `Operation timed out after ${timeoutMs}ms`,
+            { severity: 'medium', recoverable: true, context: 'media_proxy' },
+          ),
+        );
       }, timeoutMs);
 
       promise
-        .then(result => {
+        .then((result) => {
           clearTimeout(timeoutId);
           resolve(result);
         })
-        .catch(error => {
+        .catch((error) => {
           clearTimeout(timeoutId);
           reject(error);
         });
@@ -1287,7 +1318,7 @@ export class MediaElementProxy {
   }
 
   private getElementProperty<K extends keyof MediaElementFallbackValues>(
-    property: K
+    property: K,
   ): MediaElementFallbackValues[K] {
     if (!this.element) {
       throw new Error('No element available');
@@ -1319,10 +1350,12 @@ export class MediaElementProxy {
     }
   }
 
-  private setElementProperty<K extends keyof Pick<MediaElementFallbackValues, 'currentTime' | 'playbackRate' | 'volume' | 'muted'>>(
-    property: K,
-    value: MediaElementFallbackValues[K]
-  ): void {
+  private setElementProperty<
+    K extends keyof Pick<
+      MediaElementFallbackValues,
+      'currentTime' | 'playbackRate' | 'volume' | 'muted'
+    >,
+  >(property: K, value: MediaElementFallbackValues[K]): void {
     if (!this.element) {
       throw new Error('No element available');
     }
@@ -1347,14 +1380,14 @@ export class MediaElementProxy {
 
   private cacheProperty<K extends keyof MediaElementFallbackValues>(
     property: K,
-    value: MediaElementFallbackValues[K]
+    value: MediaElementFallbackValues[K],
   ): void {
     this.cachedProperties[property] = value;
     this.cacheTimestamp = Date.now();
   }
 
   private isCacheValid(): boolean {
-    return this.cacheTimestamp > 0 && (Date.now() - this.cacheTimestamp) < this.CACHE_DURATION_MS;
+    return this.cacheTimestamp > 0 && Date.now() - this.cacheTimestamp < this.CACHE_DURATION_MS;
   }
 
   private detectYouTubeQuirks(): YouTubeMediaElementQuirks {
@@ -1366,9 +1399,9 @@ export class MediaElementProxy {
       eventTimingIssues: [
         'timeupdate events may be throttled',
         'seeking/seeked events may fire inconsistently',
-        'loadeddata event timing varies'
+        'loadeddata event timing varies',
       ],
-      domReplacementBehavior: 'frequent' // YouTube replaces video elements during navigation
+      domReplacementBehavior: 'frequent', // YouTube replaces video elements during navigation
     };
   }
 }
@@ -1388,15 +1421,15 @@ export class NavigationHandler {
   private debounceTimeout: number | null = null;
   private isInitialized: boolean = false;
   private cleanupFunctions: Array<() => void> = [];
-  
+
   // URL and history tracking
   private originalPushState: typeof history.pushState;
   private originalReplaceState: typeof history.replaceState;
   private urlObserver: MutationObserver | null = null;
-  
+
   // YouTube-specific event listeners
   private youTubeEventListeners: Map<string, EventListener> = new Map();
-  
+
   constructor(config: NavigationDetectionConfig = DEFAULT_NAVIGATION_CONFIG) {
     this.config = { ...config };
     this.originalPushState = history.pushState.bind(history);
@@ -1408,11 +1441,15 @@ export class NavigationHandler {
    */
   public initialize(): void {
     if (this.isInitialized) {
-      console.warn('[NavigationHandler] Already initialized');
+      logger?.warn('Already initialized', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+      });
       return;
     }
 
-    console.log('[NavigationHandler] Initializing navigation detection');
+    logger?.info('Initializing navigation detection', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+    });
 
     try {
       if (this.config.enableUrlTracking) {
@@ -1431,13 +1468,20 @@ export class NavigationHandler {
       this.currentVideoId = this.extractVideoId(this.currentUrl);
       this.isInitialized = true;
 
-      console.log('[NavigationHandler] Navigation detection initialized successfully');
+      logger?.info('Navigation detection initialized successfully', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+      });
     } catch (error) {
-      console.error('[NavigationHandler] Initialization failed:', error);
+      logger?.error('Initialization failed', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
       throw new PlayerOperationError(
         PlayerErrorCode.OBSERVER_FAILURE,
         'Failed to initialize navigation handler',
-        { severity: 'high', recoverable: true, context: 'navigation_init', details: { error } }
+        { severity: 'high', recoverable: true, context: 'navigation_init', details: { error } },
       );
     }
   }
@@ -1446,7 +1490,9 @@ export class NavigationHandler {
    * Shutdown navigation tracking and cleanup resources
    */
   public shutdown(): void {
-    console.log('[NavigationHandler] Shutting down navigation detection');
+    logger?.info('Shutting down navigation detection', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+    });
 
     // Clear debounce timeout
     if (this.debounceTimeout !== null) {
@@ -1473,11 +1519,16 @@ export class NavigationHandler {
     }
 
     // Execute cleanup functions
-    this.cleanupFunctions.forEach(cleanup => {
+    this.cleanupFunctions.forEach((cleanup) => {
       try {
         cleanup();
       } catch (error) {
-        console.warn('[NavigationHandler] Cleanup function failed:', error);
+        logger?.warn('Cleanup function failed', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        });
       }
     });
     this.cleanupFunctions = [];
@@ -1488,7 +1539,9 @@ export class NavigationHandler {
     this.preservedStates.clear();
     this.isInitialized = false;
 
-    console.log('[NavigationHandler] Navigation detection shut down successfully');
+    logger?.info('Navigation detection shut down successfully', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+    });
   }
 
   /**
@@ -1519,7 +1572,7 @@ export class NavigationHandler {
     const videoId = state.videoId || this.currentVideoId;
     if (videoId) {
       this.preservedStates.set(videoId, state);
-      
+
       // Clean up old preserved states
       setTimeout(() => {
         if (this.preservedStates.has(videoId)) {
@@ -1557,16 +1610,20 @@ export class NavigationHandler {
    * Update configuration
    */
   public updateConfig(newConfig: Partial<NavigationDetectionConfig>): void {
-    const requiresReinitialization = (
-      (newConfig.enableUrlTracking !== undefined && newConfig.enableUrlTracking !== this.config.enableUrlTracking) ||
-      (newConfig.enableYouTubeEvents !== undefined && newConfig.enableYouTubeEvents !== this.config.enableYouTubeEvents) ||
-      (newConfig.enableHistoryTracking !== undefined && newConfig.enableHistoryTracking !== this.config.enableHistoryTracking)
-    );
+    const requiresReinitialization =
+      (newConfig.enableUrlTracking !== undefined &&
+        newConfig.enableUrlTracking !== this.config.enableUrlTracking) ||
+      (newConfig.enableYouTubeEvents !== undefined &&
+        newConfig.enableYouTubeEvents !== this.config.enableYouTubeEvents) ||
+      (newConfig.enableHistoryTracking !== undefined &&
+        newConfig.enableHistoryTracking !== this.config.enableHistoryTracking);
 
     this.config = { ...this.config, ...newConfig };
 
     if (requiresReinitialization && this.isInitialized) {
-      console.log('[NavigationHandler] Configuration changed, reinitializing...');
+      logger?.info('Configuration changed, reinitializing...', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+      });
       this.shutdown();
       this.initialize();
     }
@@ -1595,7 +1652,7 @@ export class NavigationHandler {
       subtree: true,
       childList: true,
       attributes: true,
-      attributeFilter: ['href', 'src']
+      attributeFilter: ['href', 'src'],
     });
 
     // Track via periodic checking
@@ -1619,32 +1676,28 @@ export class NavigationHandler {
       'yt-page-data-updated',
       'yt-navigate-redirect',
       'spfdone', // Legacy SPFJS navigation
-      'yt-spf-done'
+      'yt-spf-done',
     ];
 
-    youtubeEvents.forEach(eventType => {
+    youtubeEvents.forEach((eventType) => {
       const listener = (event: Event) => {
         this.handleYouTubeNavigationEvent(eventType, event);
       };
-      
+
       window.addEventListener(eventType, listener);
       this.youTubeEventListeners.set(eventType, listener);
     });
 
     // YouTube player state events that might indicate navigation
-    const playerEvents = [
-      'yt-player-updated',
-      'yt-load-start',
-      'video-data-change'
-    ];
+    const playerEvents = ['yt-player-updated', 'yt-load-start', 'video-data-change'];
 
-    playerEvents.forEach(eventType => {
+    playerEvents.forEach((eventType) => {
       const listener = (event: Event) => {
         this.debouncedNavigationCheck(() => {
           this.handleYouTubePlayerEvent(eventType, event);
         });
       };
-      
+
       window.addEventListener(eventType, listener);
       this.youTubeEventListeners.set(eventType, listener);
     });
@@ -1671,7 +1724,7 @@ export class NavigationHandler {
     const popstateListener = () => {
       this.debouncedUrlCheck();
     };
-    
+
     window.addEventListener('popstate', popstateListener);
     this.cleanupFunctions.push(() => {
       window.removeEventListener('popstate', popstateListener);
@@ -1690,13 +1743,15 @@ export class NavigationHandler {
         if (mutation.type === 'childList') {
           const removedNodes = Array.from(mutation.removedNodes);
           const addedNodes = Array.from(mutation.addedNodes);
-          
+
           const hasVideoChange = [
-            ...removedNodes.filter(node => node.nodeType === Node.ELEMENT_NODE),
-            ...addedNodes.filter(node => node.nodeType === Node.ELEMENT_NODE)
-          ].some(element => {
-            return (element as Element).tagName === 'VIDEO' || 
-                   (element as Element).querySelector?.('video') !== null;
+            ...removedNodes.filter((node) => node.nodeType === Node.ELEMENT_NODE),
+            ...addedNodes.filter((node) => node.nodeType === Node.ELEMENT_NODE),
+          ].some((element) => {
+            return (
+              (element as Element).tagName === 'VIDEO' ||
+              (element as Element).querySelector?.('video') !== null
+            );
           });
 
           if (hasVideoChange) {
@@ -1708,28 +1763,29 @@ export class NavigationHandler {
 
       if (hasSignificantChange) {
         this.debouncedNavigationCheck(() => {
-                  this.emitNavigationEvent({
-          type: 'dom_replace',
-          fromUrl: this.currentUrl,
-          toUrl: window.location.href,
-          videoId: this.extractVideoId(window.location.href) || undefined,
-          timestamp: Date.now(),
-          preserveState: true,
-          metadata: { trigger: 'dom_mutation' }
-        });
+          this.emitNavigationEvent({
+            type: 'dom_replace',
+            fromUrl: this.currentUrl,
+            toUrl: window.location.href,
+            videoId: this.extractVideoId(window.location.href) || undefined,
+            timestamp: Date.now(),
+            preserveState: true,
+            metadata: { trigger: 'dom_mutation' },
+          });
         });
       }
     });
 
     // Observe the main container for video content
-    const targetNode = document.getElementById('page-manager') || 
-                      document.getElementById('content') || 
-                      document.body;
+    const targetNode =
+      document.getElementById('page-manager') ||
+      document.getElementById('content') ||
+      document.body;
 
     observer.observe(targetNode, {
       childList: true,
       subtree: true,
-      attributes: false
+      attributes: false,
     });
 
     this.cleanupFunctions.push(() => {
@@ -1788,8 +1844,8 @@ export class NavigationHandler {
       metadata: {
         fromVideoId,
         toVideoId,
-        sameVideo: fromVideoId === toVideoId
-      }
+        sameVideo: fromVideoId === toVideoId,
+      },
     });
   }
 
@@ -1799,7 +1855,7 @@ export class NavigationHandler {
   private handleYouTubeNavigationEvent(eventType: string, event: Event): void {
     this.debouncedNavigationCheck(() => {
       const videoId = this.extractVideoId(window.location.href);
-      
+
       this.emitNavigationEvent({
         type: 'yt_navigate',
         fromUrl: this.currentUrl,
@@ -1810,8 +1866,8 @@ export class NavigationHandler {
         metadata: {
           eventType,
           eventDetails: event,
-          previousVideoId: this.currentVideoId
-        }
+          previousVideoId: this.currentVideoId,
+        },
       });
 
       this.currentUrl = window.location.href;
@@ -1824,7 +1880,7 @@ export class NavigationHandler {
    */
   private handleYouTubePlayerEvent(eventType: string, event: Event): void {
     const videoId = this.extractVideoId(window.location.href);
-    
+
     if (videoId && videoId !== this.currentVideoId) {
       this.emitNavigationEvent({
         type: 'yt_navigate',
@@ -1836,8 +1892,8 @@ export class NavigationHandler {
         metadata: {
           eventType,
           eventDetails: event,
-          trigger: 'player_event'
-        }
+          trigger: 'player_event',
+        },
       });
 
       this.currentUrl = window.location.href;
@@ -1852,11 +1908,16 @@ export class NavigationHandler {
     let callbackSuccess = true;
 
     // Notify all callbacks
-    this.callbacks.forEach(callback => {
+    this.callbacks.forEach((callback) => {
       try {
         callback(event);
       } catch (error) {
-        console.error('[NavigationHandler] Navigation callback failed:', error);
+        logger?.error('Navigation callback failed', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        });
         callbackSuccess = false;
       }
     });
@@ -1865,7 +1926,7 @@ export class NavigationHandler {
     const historyEntry: NavigationHistoryEntry = {
       event,
       recoveryAttempts: 0,
-      successful: callbackSuccess
+      successful: callbackSuccess,
     };
 
     this.navigationHistory.push(historyEntry);
@@ -1875,12 +1936,15 @@ export class NavigationHandler {
       this.navigationHistory = this.navigationHistory.slice(-this.config.maxNavigationHistory);
     }
 
-    console.log('[NavigationHandler] Navigation event emitted:', {
-      type: event.type,
-      fromUrl: event.fromUrl?.substring(0, 100),
-      toUrl: event.toUrl?.substring(0, 100),
-      videoId: event.videoId,
-      preserveState: event.preserveState
+    logger?.info('Navigation event emitted:', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+      metadata: {
+        type: event.type,
+        fromUrl: event.fromUrl?.substring(0, 100),
+        toUrl: event.toUrl?.substring(0, 100),
+        videoId: event.videoId,
+        preserveState: event.preserveState,
+      },
     });
   }
 
@@ -1890,22 +1954,22 @@ export class NavigationHandler {
   private extractVideoId(url: string): string | null {
     try {
       const urlObj = new URL(url);
-      
+
       // Standard watch URL: youtube.com/watch?v=VIDEO_ID
       if (urlObj.pathname === '/watch') {
         return urlObj.searchParams.get('v');
       }
-      
+
       // Short URL: youtu.be/VIDEO_ID
       if (urlObj.hostname === 'youtu.be') {
         return urlObj.pathname.substring(1);
       }
-      
+
       // Embed URL: youtube.com/embed/VIDEO_ID
       if (urlObj.pathname.startsWith('/embed/')) {
         return urlObj.pathname.substring(7);
       }
-      
+
       return null;
     } catch {
       return null;
@@ -1926,7 +1990,7 @@ export class NavigationHandler {
     const navigationsByType: Record<string, number> = {};
     let lastNavigationTime = 0;
 
-    this.navigationHistory.forEach(entry => {
+    this.navigationHistory.forEach((entry) => {
       const type = entry.event.type;
       navigationsByType[type] = (navigationsByType[type] || 0) + 1;
       lastNavigationTime = Math.max(lastNavigationTime, entry.event.timestamp);
@@ -1934,14 +1998,15 @@ export class NavigationHandler {
 
     const oldestNavigation = this.navigationHistory[0]?.event.timestamp || now;
     const timeSpanMinutes = (now - oldestNavigation) / (1000 * 60);
-    const averageNavigationsPerMinute = timeSpanMinutes > 0 ? this.navigationHistory.length / timeSpanMinutes : 0;
+    const averageNavigationsPerMinute =
+      timeSpanMinutes > 0 ? this.navigationHistory.length / timeSpanMinutes : 0;
 
     return {
       totalNavigations: this.navigationHistory.length,
       navigationsByType,
       preservedStateCount: this.preservedStates.size,
       averageNavigationsPerMinute,
-      lastNavigationTime
+      lastNavigationTime,
     };
   }
 }
@@ -1956,7 +2021,7 @@ export class NavigationHandler {
  */
 export class PlayerInteractionService {
   private static instance: PlayerInteractionService | null = null;
-  
+
   private videoElement: HTMLVideoElement | null = null;
   private mutationObserver: MutationObserver | null = null;
   private eventListeners: Map<string, Set<PlayerEventCallback>> = new Map();
@@ -1971,7 +2036,7 @@ export class PlayerInteractionService {
   private stateTransitionStartTime: number = 0;
   private retryTimeoutId: number | null = null;
   private stateUpdateThrottleId: number | null = null;
-  
+
   // Subtitle synchronization properties
   private subtitleSyncConfig: SubtitleSyncConfig;
   private currentSubtitleTrack: SubtitleTrack | null = null;
@@ -1980,7 +2045,7 @@ export class PlayerInteractionService {
   private lastSyncTime: number = 0;
   private syncUpdateIntervalId: number | null = null;
   private timingAdjustmentHistory: Array<{ time: number; adjustment: number }> = [];
-  
+
   // Segment looping properties
   private segmentLoopConfig: SegmentLoopConfig;
   private activeLoop: ActiveSegmentLoop | null = null;
@@ -1989,7 +2054,7 @@ export class PlayerInteractionService {
   private userSeekDetected: boolean = false;
   private lastLoopSeekTime: number = 0;
   private loopSeekTimeoutId: number | null = null;
-  
+
   // Enhanced error handling properties
   private errorRecoveryConfig: ErrorRecoveryConfig;
   private errorCollector: ErrorCollector;
@@ -1998,24 +2063,25 @@ export class PlayerInteractionService {
   private circuitBreakerState: 'closed' | 'open' | 'half-open' = 'closed';
   private circuitBreakerFailureCount: number = 0;
   private circuitBreakerLastFailureTime: number = 0;
-  private retryQueues: Map<string, Array<{ operation: () => Promise<any>; retryCount: number }>> = new Map();
+  private retryQueues: Map<string, Array<{ operation: () => Promise<any>; retryCount: number }>> =
+    new Map();
   private operationTimeouts: Map<string, number> = new Map();
   private startTime: number = Date.now();
-  
+
   // HTMLMediaElement abstraction layer
   private mediaProxy: MediaElementProxy;
 
   private constructor(
-    config: PlayerInteractionConfig = DEFAULT_PLAYER_CONFIG, 
+    config: PlayerInteractionConfig = DEFAULT_PLAYER_CONFIG,
     stateTrackingConfig: StateTrackingConfig = DEFAULT_STATE_TRACKING_CONFIG,
     subtitleSyncConfig: SubtitleSyncConfig = DEFAULT_SUBTITLE_SYNC_CONFIG,
-    segmentLoopConfig: SegmentLoopConfig = DEFAULT_SEGMENT_LOOP_CONFIG
+    segmentLoopConfig: SegmentLoopConfig = DEFAULT_SEGMENT_LOOP_CONFIG,
   ) {
     this.config = { ...config };
     this.stateTrackingConfig = { ...stateTrackingConfig };
     this.subtitleSyncConfig = { ...subtitleSyncConfig };
     this.segmentLoopConfig = { ...segmentLoopConfig };
-    
+
     // Initialize error handling
     this.errorRecoveryConfig = { ...DEFAULT_ERROR_RECOVERY_CONFIG };
     this.errorCollector = new ErrorCollector();
@@ -2025,10 +2091,10 @@ export class PlayerInteractionService {
       errorsBySeverity: { low: 0, medium: 0, high: 0, critical: 0 },
       averageErrorsPerMinute: 0,
       lastErrorTime: 0,
-      uptime: Date.now() - this.startTime
+      uptime: Date.now() - this.startTime,
     };
     this.browserCompatibility = this.detectBrowserCompatibility();
-    
+
     this.setupMutationObserver();
     this.mediaProxy = new MediaElementProxy();
   }
@@ -2037,13 +2103,18 @@ export class PlayerInteractionService {
    * Get singleton instance
    */
   public static getInstance(
-    config?: PlayerInteractionConfig, 
+    config?: PlayerInteractionConfig,
     stateTrackingConfig?: StateTrackingConfig,
     subtitleSyncConfig?: SubtitleSyncConfig,
-    segmentLoopConfig?: SegmentLoopConfig
+    segmentLoopConfig?: SegmentLoopConfig,
   ): PlayerInteractionService {
     if (!PlayerInteractionService.instance) {
-      PlayerInteractionService.instance = new PlayerInteractionService(config, stateTrackingConfig, subtitleSyncConfig, segmentLoopConfig);
+      PlayerInteractionService.instance = new PlayerInteractionService(
+        config,
+        stateTrackingConfig,
+        subtitleSyncConfig,
+        segmentLoopConfig,
+      );
     }
     return PlayerInteractionService.instance;
   }
@@ -2053,26 +2124,34 @@ export class PlayerInteractionService {
    */
   public async initialize(): Promise<boolean> {
     try {
-      console.log('[PlayerInteractionService] Initializing...');
-      
+      logger?.info('Initializing...', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+      });
+
       this.isInitialized = true;
-      
+
       // Start observing DOM changes
       this.startObserving();
-      
+
       // Try to find existing video element
       const foundElement = await this.findVideoElement();
       if (foundElement) {
         await this.setVideoElement(foundElement);
         return true;
       }
-      
+
       // If not found, wait for it to appear
       return this.waitForVideoElement();
-      
     } catch (error) {
-      console.error('[PlayerInteractionService] Initialization failed:', error);
-      this.notifyError(PlayerErrorCode.UNKNOWN_ERROR, 'Failed to initialize player service', { error });
+      logger?.error('Initialization failed', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+      this.notifyError(PlayerErrorCode.UNKNOWN_ERROR, 'Failed to initialize player service', {
+        error,
+      });
       return false;
     }
   }
@@ -2081,68 +2160,70 @@ export class PlayerInteractionService {
    * Shutdown the service and clean up resources
    */
   public async shutdown(): Promise<void> {
-    console.log('[PlayerInteractionService] Shutting down...');
-    
+    logger?.info('Shutting down...', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+    });
+
     this.isInitialized = false;
-    
+
     // Clear retry timeout
     if (this.retryTimeoutId !== null) {
       window.clearTimeout(this.retryTimeoutId);
       this.retryTimeoutId = null;
     }
-    
+
     // Clear state update throttle
     if (this.stateUpdateThrottleId !== null) {
       window.clearTimeout(this.stateUpdateThrottleId);
       this.stateUpdateThrottleId = null;
     }
-    
+
     // Clear subtitle sync interval
     if (this.syncUpdateIntervalId !== null) {
       window.clearInterval(this.syncUpdateIntervalId);
       this.syncUpdateIntervalId = null;
     }
-    
+
     // Clear segment loop monitoring
     if (this.loopMonitorIntervalId !== null) {
       window.clearInterval(this.loopMonitorIntervalId);
       this.loopMonitorIntervalId = null;
     }
-    
+
     // Clear loop seek timeout
     if (this.loopSeekTimeoutId !== null) {
       window.clearTimeout(this.loopSeekTimeoutId);
       this.loopSeekTimeoutId = null;
     }
-    
+
     // Stop observing
     this.stopObserving();
-    
+
     // Remove all event listeners
     this.removeAllEventListeners();
-    
+
     // Clear video element reference
     await this.setVideoElement(null);
-    
+
     // Clear listeners
     this.eventListeners.clear();
     this.playerChangeListeners.clear();
     this.stateChangeListeners.clear();
     this.subtitleSyncListeners.clear();
     this.segmentLoopListeners.clear();
-    
+
     // Clear state tracking
     this.lastKnownState = null;
     this.previousState = null;
     this.stateHistory = [];
     this.stateTransitionStartTime = 0;
-    
+
     // Clear subtitle synchronization
     this.currentSubtitleTrack = null;
     this.activeCues = [];
     this.lastSyncTime = 0;
     this.timingAdjustmentHistory = [];
-    
+
     // Clear segment looping
     this.activeLoop = null;
     this.userSeekDetected = false;
@@ -2161,14 +2242,21 @@ export class PlayerInteractionService {
       try {
         const element = document.querySelector(selector) as HTMLVideoElement;
         if (element && this.isValidVideoElement(element)) {
-          console.log(`[PlayerInteractionService] Found video element with selector: ${selector}`);
+          logger?.info(`Found video element with selector: ${selector}`, {
+            component: ComponentType.YOUTUBE_INTEGRATION,
+          });
           return element;
         }
       } catch (error) {
-        console.warn(`[PlayerInteractionService] Error with selector "${selector}":`, error);
+        logger?.warn(`Error with selector "${selector}":`, {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        });
       }
     }
-    
+
     return null;
   }
 
@@ -2192,33 +2280,37 @@ export class PlayerInteractionService {
   private async waitForVideoElement(): Promise<boolean> {
     return new Promise((resolve) => {
       let attempts = 0;
-      
+
       const tryFind = async () => {
         attempts++;
-        console.log(`[PlayerInteractionService] Attempt ${attempts}/${this.config.retryAttempts} to find video element`);
-        
+        logger?.info(`Attempt ${attempts}/${this.config.retryAttempts} to find video element`, {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+        });
+
         const element = await this.findVideoElement();
         if (element) {
           await this.setVideoElement(element);
           resolve(true);
           return;
         }
-        
+
         if (attempts >= this.config.retryAttempts) {
-          console.warn('[PlayerInteractionService] Max retry attempts reached');
+          logger?.warn('Max retry attempts reached', {
+            component: ComponentType.YOUTUBE_INTEGRATION,
+          });
           this.notifyError(
             PlayerErrorCode.VIDEO_ELEMENT_NOT_FOUND,
             'Video element not found after maximum retry attempts',
-            { attempts }
+            { attempts },
           );
           resolve(false);
           return;
         }
-        
+
         // Schedule next attempt
         this.retryTimeoutId = window.setTimeout(tryFind, this.config.retryDelay);
       };
-      
+
       // Start first attempt
       tryFind();
     });
@@ -2232,23 +2324,27 @@ export class PlayerInteractionService {
     if (this.videoElement) {
       await this.removeVideoElementListeners();
     }
-    
+
     const previousElement = this.videoElement;
     this.videoElement = element;
-    
+
     // Update the media proxy with the new element
     this.mediaProxy.setElement(element);
-    
+
     // Add listeners to new element
     if (this.videoElement) {
       await this.addVideoElementListeners();
       this.updatePlayerState();
-      console.log('[PlayerInteractionService] Video element set and ready, proxy updated');
+      logger?.info('Video element set and ready, proxy updated', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+      });
     } else {
       this.lastKnownState = null;
-      console.log('[PlayerInteractionService] Video element cleared, proxy cleared');
+      logger?.info('Video element cleared, proxy cleared', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+      });
     }
-    
+
     // Notify listeners of change
     this.notifyPlayerChange(element);
   }
@@ -2271,7 +2367,7 @@ export class PlayerInteractionService {
    */
   private startObserving(): void {
     if (!this.mutationObserver || !this.isInitialized) return;
-    
+
     try {
       this.mutationObserver.observe(document.body, {
         childList: true,
@@ -2279,12 +2375,19 @@ export class PlayerInteractionService {
         attributes: false,
         attributeOldValue: false,
         characterData: false,
-        characterDataOldValue: false
+        characterDataOldValue: false,
       });
-      
-      console.log('[PlayerInteractionService] Started observing DOM changes');
+
+      logger?.info('Started observing DOM changes', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+      });
     } catch (error) {
-      console.error('[PlayerInteractionService] Failed to start observing:', error);
+      logger?.error('Failed to start observing', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
     }
   }
 
@@ -2294,7 +2397,9 @@ export class PlayerInteractionService {
   private stopObserving(): void {
     if (this.mutationObserver) {
       this.mutationObserver.disconnect();
-      console.log('[PlayerInteractionService] Stopped observing DOM changes');
+      logger?.info('Stopped observing DOM changes', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+      });
     }
   }
 
@@ -2303,28 +2408,28 @@ export class PlayerInteractionService {
    */
   private handleMutations(mutations: MutationRecord[]): void {
     let shouldCheckForVideoElement = false;
-    
+
     for (const mutation of mutations) {
       if (mutation.type === 'childList') {
         // Check if video-related nodes were added or removed
         const addedNodes = Array.from(mutation.addedNodes);
         const removedNodes = Array.from(mutation.removedNodes);
-        
-        const hasVideoNodes = [...addedNodes, ...removedNodes].some(node => 
-          node.nodeType === Node.ELEMENT_NODE && (
-            (node as Element).tagName?.toLowerCase() === 'video' ||
-            (node as Element).querySelector?.('video') ||
-            (node as Element).closest?.('#movie_player, .html5-video-player')
-          )
+
+        const hasVideoNodes = [...addedNodes, ...removedNodes].some(
+          (node) =>
+            node.nodeType === Node.ELEMENT_NODE &&
+            ((node as Element).tagName?.toLowerCase() === 'video' ||
+              (node as Element).querySelector?.('video') ||
+              (node as Element).closest?.('#movie_player, .html5-video-player')),
         );
-        
+
         if (hasVideoNodes) {
           shouldCheckForVideoElement = true;
           break;
         }
       }
     }
-    
+
     if (shouldCheckForVideoElement) {
       // Debounce rapid changes
       clearTimeout(this.retryTimeoutId || 0);
@@ -2339,21 +2444,29 @@ export class PlayerInteractionService {
    */
   private async recheckVideoElement(): Promise<void> {
     if (!this.isInitialized) return;
-    
-    console.log('[PlayerInteractionService] Rechecking video element due to DOM changes');
-    
+
+    logger?.info('Rechecking video element due to DOM changes', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+    });
+
     const currentElement = await this.findVideoElement();
-    
+
     // If we found a different element or lost the current one
     if (currentElement !== this.videoElement) {
       if (currentElement && !this.videoElement) {
-        console.log('[PlayerInteractionService] Video element appeared');
+        logger?.info('Video element appeared', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+        });
         await this.setVideoElement(currentElement);
       } else if (!currentElement && this.videoElement) {
-        console.log('[PlayerInteractionService] Video element disappeared');
+        logger?.info('Video element disappeared', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+        });
         await this.setVideoElement(null);
       } else if (currentElement && this.videoElement && currentElement !== this.videoElement) {
-        console.log('[PlayerInteractionService] Video element replaced');
+        logger?.info('Video element replaced', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+        });
         await this.setVideoElement(currentElement);
       }
     }
@@ -2368,15 +2481,23 @@ export class PlayerInteractionService {
    */
   private async addVideoElementListeners(): Promise<void> {
     if (!this.videoElement || !this.mediaProxy.isElementReady()) return;
-    
+
     // Add listeners for all registered events using proxy
     for (const [eventType, callbacks] of this.eventListeners) {
-      const result = await this.mediaProxy.addEventListener(eventType, this.createEventHandler(eventType));
+      const result = await this.mediaProxy.addEventListener(
+        eventType,
+        this.createEventHandler(eventType),
+      );
       if (!result.success && result.error) {
-        console.warn(`[PlayerInteractionService] Failed to add listener for ${eventType}:`, result.error.message);
+        logger?.warn(`Failed to add listener for ${eventType}:`, {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: {
+            error: result.error.message,
+          },
+        });
       }
     }
-    
+
     // Add state tracking listeners if enabled
     if (this.config.enableStateTracking) {
       const stateEvents = [
@@ -2394,9 +2515,9 @@ export class PlayerInteractionService {
         PlayerEvent.LOADED_DATA,
         PlayerEvent.LOADED_METADATA,
         PlayerEvent.CAN_PLAY,
-        PlayerEvent.CAN_PLAY_THROUGH
+        PlayerEvent.CAN_PLAY_THROUGH,
       ];
-      
+
       for (const eventType of stateEvents) {
         const stateListener = () => {
           // Use throttled updates for high-frequency events like timeupdate
@@ -2406,10 +2527,15 @@ export class PlayerInteractionService {
             this.updatePlayerState(eventType);
           }
         };
-        
+
         const result = await this.mediaProxy.addEventListener(eventType, stateListener);
         if (!result.success && result.error) {
-          console.warn(`[PlayerInteractionService] Failed to add state listener for ${eventType}:`, result.error.message);
+          logger?.warn(`Failed to add state listener for ${eventType}:`, {
+            component: ComponentType.YOUTUBE_INTEGRATION,
+            metadata: {
+              error: result.error.message,
+            },
+          });
         }
       }
     }
@@ -2420,12 +2546,20 @@ export class PlayerInteractionService {
    */
   private async removeVideoElementListeners(): Promise<void> {
     if (!this.videoElement) return;
-    
+
     // Remove all event listeners using proxy
     for (const eventType of this.eventListeners.keys()) {
-      const result = await this.mediaProxy.removeEventListener(eventType, this.createEventHandler(eventType));
+      const result = await this.mediaProxy.removeEventListener(
+        eventType,
+        this.createEventHandler(eventType),
+      );
       if (!result.success && result.error) {
-        console.warn(`[PlayerInteractionService] Failed to remove listener for ${eventType}:`, result.error.message);
+        logger?.warn(`Failed to remove listener for ${eventType}:`, {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: {
+            error: result.error.message,
+          },
+        });
       }
     }
   }
@@ -2437,15 +2571,20 @@ export class PlayerInteractionService {
     return (event: Event) => {
       const callbacks = this.eventListeners.get(eventType);
       if (!callbacks) return;
-      
+
       const playerState = this.lastKnownState;
-      
+
       // Call all registered callbacks
-      callbacks.forEach(callback => {
+      callbacks.forEach((callback) => {
         try {
           callback(event, playerState || undefined);
         } catch (error) {
-          console.error(`[PlayerInteractionService] Error in event callback for ${eventType}:`, error);
+          logger?.error(`Error in event callback for ${eventType}:`, {
+            component: ComponentType.YOUTUBE_INTEGRATION,
+            metadata: {
+              error: error instanceof Error ? error.message : String(error),
+            },
+          });
         }
       });
     };
@@ -2469,63 +2608,71 @@ export class PlayerInteractionService {
       this.previousState = null;
       return;
     }
-    
+
     try {
       const currentState = this.determinePlayerState();
       const currentMetadata = this.getPlayerMetadata();
       const timestamp = Date.now();
-      
+
       const newStateInfo: PlayerStateInfo = {
         state: currentState,
         metadata: currentMetadata,
-        timestamp
+        timestamp,
       };
-      
+
       // Check if this is a significant state change
       const changes = this.compareStates(this.lastKnownState, newStateInfo);
       const hasSignificantChanges = this.hasSignificantChanges(changes);
-      
+
       if (hasSignificantChanges || !this.lastKnownState) {
         // Store previous state for transition tracking
         this.previousState = this.lastKnownState;
-        
+
         // Create state transition if we have a previous state
         let transition: PlayerStateTransition | undefined;
         if (this.previousState && this.previousState.state !== currentState) {
-          const duration = timestamp - (this.stateTransitionStartTime || this.previousState.timestamp);
+          const duration =
+            timestamp - (this.stateTransitionStartTime || this.previousState.timestamp);
           transition = {
             from: this.previousState.state,
             to: currentState,
             duration,
-            trigger
+            trigger,
           };
           this.stateTransitionStartTime = timestamp;
         } else if (!this.previousState) {
           this.stateTransitionStartTime = timestamp;
         }
-        
+
         // Update current state
         this.lastKnownState = newStateInfo;
-        
+
         // Add to history if enabled
         if (this.stateTrackingConfig.enableStateHistory && transition) {
           this.addToStateHistory(newStateInfo, changes, transition);
         }
-        
+
         // Notify state change listeners
         if (this.stateChangeListeners.size > 0) {
           this.notifyStateChange(newStateInfo, this.previousState, changes);
         }
-        
-        console.log(`[PlayerInteractionService] State changed to ${PlayerState[currentState]}`, {
-          changes,
-          transition,
-          trigger
+
+        logger?.info(`State changed to ${PlayerState[currentState]}`, {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: {
+            changes,
+            transition,
+            trigger,
+          },
         });
       }
-      
     } catch (error) {
-      console.error('[PlayerInteractionService] Failed to update player state:', error);
+      logger?.error('Failed to update player state', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
     }
   }
 
@@ -2536,7 +2683,7 @@ export class PlayerInteractionService {
     if (this.stateUpdateThrottleId !== null) {
       return; // Already scheduled
     }
-    
+
     this.stateUpdateThrottleId = window.setTimeout(() => {
       this.updatePlayerState(trigger);
       this.stateUpdateThrottleId = null;
@@ -2547,8 +2694,8 @@ export class PlayerInteractionService {
    * Compare two player states and return what changed
    */
   private compareStates(
-    previousState: PlayerStateInfo | null, 
-    currentState: PlayerStateInfo
+    previousState: PlayerStateInfo | null,
+    currentState: PlayerStateInfo,
   ): PlayerStateChanges {
     if (!previousState) {
       return {
@@ -2559,25 +2706,27 @@ export class PlayerInteractionService {
         volumeChanged: true,
         muteChanged: true,
         dimensionsChanged: true,
-        readyStateChanged: true
+        readyStateChanged: true,
       };
     }
-    
+
     const prev = previousState.metadata;
     const curr = currentState.metadata;
-    
+
     return {
       stateChanged: previousState.state !== currentState.state,
-      timeChanged: this.stateTrackingConfig.trackTimeUpdates && 
-                  Math.abs(prev.currentTime - curr.currentTime) >= this.stateTrackingConfig.stateChangeThreshold,
+      timeChanged:
+        this.stateTrackingConfig.trackTimeUpdates &&
+        Math.abs(prev.currentTime - curr.currentTime) >=
+          this.stateTrackingConfig.stateChangeThreshold,
       durationChanged: prev.duration !== curr.duration,
       rateChanged: prev.playbackRate !== curr.playbackRate,
-      volumeChanged: this.stateTrackingConfig.trackVolumeChanges && 
-                    (prev.volume !== curr.volume),
+      volumeChanged: this.stateTrackingConfig.trackVolumeChanges && prev.volume !== curr.volume,
       muteChanged: prev.muted !== curr.muted,
-      dimensionsChanged: this.stateTrackingConfig.trackDimensionChanges && 
-                        (prev.videoWidth !== curr.videoWidth || prev.videoHeight !== curr.videoHeight),
-      readyStateChanged: prev.readyState !== curr.readyState
+      dimensionsChanged:
+        this.stateTrackingConfig.trackDimensionChanges &&
+        (prev.videoWidth !== curr.videoWidth || prev.videoHeight !== curr.videoHeight),
+      readyStateChanged: prev.readyState !== curr.readyState,
     };
   }
 
@@ -2601,18 +2750,18 @@ export class PlayerInteractionService {
    * Add entry to state history
    */
   private addToStateHistory(
-    state: PlayerStateInfo, 
-    changes: PlayerStateChanges, 
-    transition: PlayerStateTransition
+    state: PlayerStateInfo,
+    changes: PlayerStateChanges,
+    transition: PlayerStateTransition,
   ): void {
     const historyEntry: PlayerStateHistoryEntry = {
       state,
       changes,
-      transition
+      transition,
     };
-    
+
     this.stateHistory.push(historyEntry);
-    
+
     // Limit history size
     if (this.stateHistory.length > this.stateTrackingConfig.maxHistoryEntries) {
       this.stateHistory.shift(); // Remove oldest entry
@@ -2623,15 +2772,20 @@ export class PlayerInteractionService {
    * Notify state change listeners
    */
   private notifyStateChange(
-    newState: PlayerStateInfo, 
-    previousState: PlayerStateInfo | null, 
-    changes: PlayerStateChanges
+    newState: PlayerStateInfo,
+    previousState: PlayerStateInfo | null,
+    changes: PlayerStateChanges,
   ): void {
-    this.stateChangeListeners.forEach(callback => {
+    this.stateChangeListeners.forEach((callback) => {
       try {
         callback(newState, previousState, changes);
       } catch (error) {
-        console.error('[PlayerInteractionService] Error in state change callback:', error);
+        logger?.error('Error in state change callback', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        });
       }
     });
   }
@@ -2641,16 +2795,22 @@ export class PlayerInteractionService {
    */
   private determinePlayerState(): PlayerState {
     if (!this.videoElement) return PlayerState.UNKNOWN;
-    
+
     const endedResult = this.mediaProxy.getProperty('ended');
     const pausedResult = this.mediaProxy.getProperty('paused');
     const readyStateResult = this.mediaProxy.getProperty('readyState');
-    
+
     if (endedResult.success && endedResult.value) return PlayerState.ENDED;
     if (pausedResult.success && pausedResult.value) return PlayerState.PAUSED;
-    if (readyStateResult.success && readyStateResult.value !== undefined && readyStateResult.value < 3) return PlayerState.BUFFERING;
-    if (pausedResult.success && !pausedResult.value && endedResult.success && !endedResult.value) return PlayerState.PLAYING;
-    
+    if (
+      readyStateResult.success &&
+      readyStateResult.value !== undefined &&
+      readyStateResult.value < 3
+    )
+      return PlayerState.BUFFERING;
+    if (pausedResult.success && !pausedResult.value && endedResult.success && !endedResult.value)
+      return PlayerState.PLAYING;
+
     return PlayerState.UNKNOWN;
   }
 
@@ -2661,7 +2821,7 @@ export class PlayerInteractionService {
     if (!this.videoElement) {
       throw new Error('Video element not available');
     }
-    
+
     const currentTimeResult = this.mediaProxy.getProperty('currentTime');
     const durationResult = this.mediaProxy.getProperty('duration');
     const playbackRateResult = this.mediaProxy.getProperty('playbackRate');
@@ -2672,7 +2832,7 @@ export class PlayerInteractionService {
     const readyStateResult = this.mediaProxy.getProperty('readyState');
     const videoWidthResult = this.mediaProxy.getProperty('videoWidth');
     const videoHeightResult = this.mediaProxy.getProperty('videoHeight');
-    
+
     return {
       currentTime: currentTimeResult.success ? (currentTimeResult.value ?? 0) : 0,
       duration: durationResult.success ? (durationResult.value ?? 0) : 0,
@@ -2685,7 +2845,7 @@ export class PlayerInteractionService {
       buffered: this.videoElement.buffered,
       seekable: this.videoElement.seekable,
       videoWidth: videoWidthResult.success ? (videoWidthResult.value ?? 0) : 0,
-      videoHeight: videoHeightResult.success ? (videoHeightResult.value ?? 0) : 0
+      videoHeight: videoHeightResult.success ? (videoHeightResult.value ?? 0) : 0,
     };
   }
 
@@ -2697,11 +2857,16 @@ export class PlayerInteractionService {
    * Notify listeners of player changes
    */
   private notifyPlayerChange(videoElement: HTMLVideoElement | null): void {
-    this.playerChangeListeners.forEach(callback => {
+    this.playerChangeListeners.forEach((callback) => {
       try {
         callback(videoElement);
       } catch (error) {
-        console.error('[PlayerInteractionService] Error in player change callback:', error);
+        logger?.error('Error in player change callback', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        });
       }
     });
   }
@@ -2709,7 +2874,11 @@ export class PlayerInteractionService {
   /**
    * Notify listeners of errors
    */
-  private notifyError(code: PlayerErrorCode, message: string, details?: Record<string, unknown>): void {
+  private notifyError(
+    code: PlayerErrorCode,
+    message: string,
+    details?: Record<string, unknown>,
+  ): void {
     const error: PlayerError = {
       code,
       message,
@@ -2718,16 +2887,26 @@ export class PlayerInteractionService {
       severity: 'medium',
       recoverable: true,
       retryable: true,
-      context: 'unknown'
+      context: 'unknown',
     };
-    
-    console.error('[PlayerInteractionService]', error);
-    
-    this.playerChangeListeners.forEach(callback => {
+
+    logger?.error('Error in player change callback', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+      metadata: {
+        error: error instanceof Error ? error.message : String(error),
+      },
+    });
+
+    this.playerChangeListeners.forEach((callback) => {
       try {
         callback(null, error);
       } catch (callbackError) {
-        console.error('[PlayerInteractionService] Error in error callback:', callbackError);
+        logger?.error('Error in error callback', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: {
+            error: callbackError instanceof Error ? callbackError.message : String(callbackError),
+          },
+        });
       }
     });
   }
@@ -2777,7 +2956,9 @@ export class PlayerInteractionService {
    */
   public addStateChangeListener(callback: PlayerStateChangeCallback): void {
     this.stateChangeListeners.add(callback);
-    console.log('[PlayerInteractionService] State change listener added');
+    logger?.info('State change listener added', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+    });
   }
 
   /**
@@ -2785,7 +2966,9 @@ export class PlayerInteractionService {
    */
   public removeStateChangeListener(callback: PlayerStateChangeCallback): void {
     this.stateChangeListeners.delete(callback);
-    console.log('[PlayerInteractionService] State change listener removed');
+    logger?.info('State change listener removed', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+    });
   }
 
   /**
@@ -2793,7 +2976,9 @@ export class PlayerInteractionService {
    */
   public removeAllStateChangeListeners(): void {
     this.stateChangeListeners.clear();
-    console.log('[PlayerInteractionService] All state change listeners removed');
+    logger?.info('All state change listeners removed', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+    });
   }
 
   /**
@@ -2815,7 +3000,9 @@ export class PlayerInteractionService {
    */
   public clearStateHistory(): void {
     this.stateHistory = [];
-    console.log('[PlayerInteractionService] State history cleared');
+    logger?.info('State history cleared', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+    });
   }
 
   /**
@@ -2823,15 +3010,15 @@ export class PlayerInteractionService {
    */
   public getStateTransitions(startTime?: number, endTime?: number): PlayerStateHistoryEntry[] {
     let filtered = this.stateHistory;
-    
+
     if (startTime !== undefined) {
-      filtered = filtered.filter(entry => entry.state.timestamp >= startTime);
+      filtered = filtered.filter((entry) => entry.state.timestamp >= startTime);
     }
-    
+
     if (endTime !== undefined) {
-      filtered = filtered.filter(entry => entry.state.timestamp <= endTime);
+      filtered = filtered.filter((entry) => entry.state.timestamp <= endTime);
     }
-    
+
     return filtered;
   }
 
@@ -2847,24 +3034,25 @@ export class PlayerInteractionService {
     const stateDistribution: Record<string, number> = {};
     let totalDuration = 0;
     let totalTimeTracked = 0;
-    
-    this.stateHistory.forEach(entry => {
+
+    this.stateHistory.forEach((entry) => {
       const stateName = PlayerState[entry.transition.to];
       stateDistribution[stateName] = (stateDistribution[stateName] || 0) + 1;
       totalDuration += entry.transition.duration;
     });
-    
+
     if (this.stateHistory.length > 0) {
       const firstEntry = this.stateHistory[0];
       const lastEntry = this.stateHistory[this.stateHistory.length - 1];
       totalTimeTracked = lastEntry.state.timestamp - firstEntry.state.timestamp;
     }
-    
+
     return {
       totalTransitions: this.stateHistory.length,
       stateDistribution,
-      averageStateDuration: this.stateHistory.length > 0 ? totalDuration / this.stateHistory.length : 0,
-      totalTimeTracked
+      averageStateDuration:
+        this.stateHistory.length > 0 ? totalDuration / this.stateHistory.length : 0,
+      totalTimeTracked,
     };
   }
 
@@ -2875,9 +3063,11 @@ export class PlayerInteractionService {
     if (!this.isReady()) {
       throw new Error('Player not ready for state update');
     }
-    
+
     this.updatePlayerState('manual_trigger');
-    console.log('[PlayerInteractionService] Manual state update triggered');
+    logger?.info('Manual state update triggered', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+    });
   }
 
   // ========================================
@@ -2891,47 +3081,53 @@ export class PlayerInteractionService {
     this.currentSubtitleTrack = track;
     this.activeCues = [];
     this.lastSyncTime = 0;
-    
+
     // Start synchronization if enabled
     if (this.subtitleSyncConfig.enabled) {
       this.startSubtitleSync();
     }
-    
+
     // Notify listeners of track change
     this.notifySubtitleSync({
       type: 'track_change',
       track,
       currentTime: this.getCurrentTime(),
       activeCues: [],
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
-    
-    console.log(`[PlayerInteractionService] Subtitle track loaded: ${track.language} (${track.cues.length} cues)`);
+
+    logger?.info('Subtitle track loaded', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+      metadata: {
+        track,
+        cues: track.cues.length,
+      },
+    });
   }
 
   /**
    * Parse YouTube subtitle data into our subtitle format
    */
   public parseYouTubeSubtitleData(
-    data: YouTubeSubtitleData, 
-    language: string, 
+    data: YouTubeSubtitleData,
+    language: string,
     label: string,
-    isAutoGenerated: boolean = false
+    isAutoGenerated: boolean = false,
   ): SubtitleTrack {
     const cues: SubtitleCue[] = [];
     let cueIndex = 0;
-    
+
     for (const event of data.events) {
       const startTime = event.tStartMs / 1000; // Convert to seconds
-      const endTime = startTime + (event.dDurationMs / 1000);
-      
+      const endTime = startTime + event.dDurationMs / 1000;
+
       if (event.segs && event.segs.length > 0) {
         // Combine segments into single cue text
         const text = event.segs
-          .map(seg => seg.utf8)
+          .map((seg) => seg.utf8)
           .join('')
           .trim();
-        
+
         if (text) {
           cues.push({
             id: `cue_${cueIndex++}`,
@@ -2939,12 +3135,12 @@ export class PlayerInteractionService {
             endTime,
             text,
             language,
-            confidence: isAutoGenerated ? 0.85 : 1.0 // Auto-generated has lower confidence
+            confidence: isAutoGenerated ? 0.85 : 1.0, // Auto-generated has lower confidence
           });
         }
       }
     }
-    
+
     return {
       id: `track_${language}_${Date.now()}`,
       language,
@@ -2953,7 +3149,7 @@ export class PlayerInteractionService {
       isDefault: false,
       isAutoGenerated,
       cues,
-      source: 'youtube'
+      source: 'youtube',
     };
   }
 
@@ -2964,7 +3160,7 @@ export class PlayerInteractionService {
     cues: SubtitleCue[],
     language: string,
     label: string,
-    kind: 'subtitles' | 'captions' | 'descriptions' = 'subtitles'
+    kind: 'subtitles' | 'captions' | 'descriptions' = 'subtitles',
   ): SubtitleTrack {
     return {
       id: `manual_track_${language}_${Date.now()}`,
@@ -2974,7 +3170,7 @@ export class PlayerInteractionService {
       isDefault: false,
       isAutoGenerated: false,
       cues: [...cues], // Defensive copy
-      source: 'manual'
+      source: 'manual',
     };
   }
 
@@ -2985,17 +3181,19 @@ export class PlayerInteractionService {
     if (!this.currentSubtitleTrack) {
       throw new Error('No subtitle track loaded');
     }
-    
+
     if (this.syncUpdateIntervalId !== null) {
       this.stopSubtitleSync(); // Stop existing sync
     }
-    
+
     // Start sync update loop
     this.syncUpdateIntervalId = window.setInterval(() => {
       this.updateSubtitleSync();
-    }, 50); // 20 FPS update rate
-    
-    console.log('[PlayerInteractionService] Subtitle synchronization started');
+    }, 100); // 20 FPS update rate
+
+    logger?.info('Subtitle synchronization started', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+    });
   }
 
   /**
@@ -3006,11 +3204,13 @@ export class PlayerInteractionService {
       window.clearInterval(this.syncUpdateIntervalId);
       this.syncUpdateIntervalId = null;
     }
-    
+
     // Clear active cues
     this.activeCues = [];
-    
-    console.log('[PlayerInteractionService] Subtitle synchronization stopped');
+
+    logger?.info('Subtitle synchronization stopped', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+    });
   }
 
   /**
@@ -3020,64 +3220,67 @@ export class PlayerInteractionService {
     if (!this.currentSubtitleTrack || !this.isReady()) {
       return;
     }
-    
+
     const currentTime = this.getCurrentTime();
     const adjustedTime = currentTime + this.subtitleSyncConfig.timeOffset;
-    
+
     // Skip if time hasn't changed significantly
-    if (Math.abs(currentTime - this.lastSyncTime) < 0.02) { // 20ms threshold
+    if (Math.abs(currentTime - this.lastSyncTime) < 0.02) {
+      // 20ms threshold
       return;
     }
-    
+
     this.lastSyncTime = currentTime;
-    
+
     // Find cues that should be active
     const newActiveCues: ActiveSubtitleCue[] = [];
-    
+
     for (const cue of this.currentSubtitleTrack.cues) {
       const adjustedStartTime = cue.startTime + this.getTimingAdjustment(cue.startTime);
       const adjustedEndTime = cue.endTime + this.getTimingAdjustment(cue.endTime);
-      
+
       // Check if cue should be active
-      const isInTimeRange = adjustedTime >= adjustedStartTime - this.subtitleSyncConfig.lookBehindTime &&
-                           adjustedTime <= adjustedEndTime + this.subtitleSyncConfig.lookAheadTime;
-      
+      const isInTimeRange =
+        adjustedTime >= adjustedStartTime - this.subtitleSyncConfig.lookBehindTime &&
+        adjustedTime <= adjustedEndTime + this.subtitleSyncConfig.lookAheadTime;
+
       if (isInTimeRange) {
-        const isCurrentlyActive = adjustedTime >= adjustedStartTime && adjustedTime <= adjustedEndTime;
-        
+        const isCurrentlyActive =
+          adjustedTime >= adjustedStartTime && adjustedTime <= adjustedEndTime;
+
         newActiveCues.push({
           ...cue,
           isActive: isCurrentlyActive,
           timeRemaining: Math.max(0, adjustedEndTime - adjustedTime),
           displayOrder: newActiveCues.length,
           adjustedStartTime,
-          adjustedEndTime
+          adjustedEndTime,
         });
       }
     }
-    
+
     // Limit concurrent cues
     if (newActiveCues.length > this.subtitleSyncConfig.maxConcurrentCues) {
       newActiveCues.sort((a, b) => a.adjustedStartTime - b.adjustedStartTime);
       newActiveCues.splice(this.subtitleSyncConfig.maxConcurrentCues);
     }
-    
+
     // Detect changes and notify
     const changes = this.detectCueChanges(this.activeCues, newActiveCues);
     this.activeCues = newActiveCues;
-    
+
     // Notify listeners of changes
     for (const change of changes) {
       this.notifySubtitleSync(change);
     }
-    
+
     // Notify general update if there are active cues
     if (this.activeCues.length > 0) {
       this.notifySubtitleSync({
         type: 'cue_update',
         currentTime,
         activeCues: this.activeCues,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       });
     }
   }
@@ -3086,39 +3289,39 @@ export class PlayerInteractionService {
    * Detect changes between old and new active cues
    */
   private detectCueChanges(
-    oldCues: ActiveSubtitleCue[], 
-    newCues: ActiveSubtitleCue[]
+    oldCues: ActiveSubtitleCue[],
+    newCues: ActiveSubtitleCue[],
   ): SubtitleSyncEvent[] {
     const events: SubtitleSyncEvent[] = [];
     const currentTime = this.getCurrentTime();
     const timestamp = Date.now();
-    
+
     // Find cues that ended
     for (const oldCue of oldCues) {
-      if (!newCues.find(c => c.id === oldCue.id)) {
+      if (!newCues.find((c) => c.id === oldCue.id)) {
         events.push({
           type: 'cue_end',
           cue: oldCue,
           currentTime,
           activeCues: newCues,
-          timestamp
+          timestamp,
         });
       }
     }
-    
+
     // Find cues that started
     for (const newCue of newCues) {
-      if (!oldCues.find(c => c.id === newCue.id)) {
+      if (!oldCues.find((c) => c.id === newCue.id)) {
         events.push({
           type: 'cue_start',
           cue: newCue,
           currentTime,
           activeCues: newCues,
-          timestamp
+          timestamp,
         });
       }
     }
-    
+
     return events;
   }
 
@@ -3129,11 +3332,11 @@ export class PlayerInteractionService {
     if (!this.subtitleSyncConfig.autoCorrectTiming || this.timingAdjustmentHistory.length === 0) {
       return 0;
     }
-    
+
     // Find the closest timing adjustment in history
     let closestAdjustment = 0;
     let minDistance = Infinity;
-    
+
     for (const entry of this.timingAdjustmentHistory) {
       const distance = Math.abs(entry.time - time);
       if (distance < minDistance) {
@@ -3141,12 +3344,12 @@ export class PlayerInteractionService {
         closestAdjustment = entry.adjustment;
       }
     }
-    
+
     // Apply smoothing if enabled
     if (this.subtitleSyncConfig.enableSmoothing) {
       return closestAdjustment * 0.8; // Dampen adjustment
     }
-    
+
     return closestAdjustment;
   }
 
@@ -3155,24 +3358,31 @@ export class PlayerInteractionService {
    */
   public adjustSubtitleTiming(time: number, adjustment: number): void {
     this.timingAdjustmentHistory.push({ time, adjustment });
-    
+
     // Limit history size
     if (this.timingAdjustmentHistory.length > 100) {
       this.timingAdjustmentHistory.shift();
     }
-    
-    console.log(`[PlayerInteractionService] Timing adjustment added: ${adjustment}s at ${time}s`);
+
+    logger?.info(`Timing adjustment added: ${adjustment}s at ${time}s`, {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+    });
   }
 
   /**
    * Notify subtitle sync listeners
    */
   private notifySubtitleSync(event: SubtitleSyncEvent): void {
-    this.subtitleSyncListeners.forEach(callback => {
+    this.subtitleSyncListeners.forEach((callback) => {
       try {
         callback(event);
       } catch (error) {
-        console.error('[PlayerInteractionService] Error in subtitle sync callback:', error);
+        logger?.error('Error in subtitle sync callback', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        });
       }
     });
   }
@@ -3182,7 +3392,12 @@ export class PlayerInteractionService {
    */
   public updateConfig(newConfig: Partial<PlayerInteractionConfig>): void {
     this.config = { ...this.config, ...newConfig };
-    console.log('[PlayerInteractionService] Configuration updated:', this.config);
+    logger?.info('Configuration updated', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+      metadata: {
+        config: this.config,
+      },
+    });
   }
 
   /**
@@ -3204,7 +3419,12 @@ export class PlayerInteractionService {
    */
   public updateStateTrackingConfig(newConfig: Partial<StateTrackingConfig>): void {
     this.stateTrackingConfig = { ...this.stateTrackingConfig, ...newConfig };
-    console.log('[PlayerInteractionService] State tracking configuration updated:', this.stateTrackingConfig);
+    logger?.info('State tracking configuration updated', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+      metadata: {
+        config: this.stateTrackingConfig,
+      },
+    });
   }
 
   /**
@@ -3220,15 +3440,20 @@ export class PlayerInteractionService {
   public updateSubtitleSyncConfig(newConfig: Partial<SubtitleSyncConfig>): void {
     const wasEnabled = this.subtitleSyncConfig.enabled;
     this.subtitleSyncConfig = { ...this.subtitleSyncConfig, ...newConfig };
-    
+
     // Handle enable/disable changes
     if (this.subtitleSyncConfig.enabled && !wasEnabled && this.currentSubtitleTrack) {
       this.startSubtitleSync();
     } else if (!this.subtitleSyncConfig.enabled && wasEnabled) {
       this.stopSubtitleSync();
     }
-    
-    console.log('[PlayerInteractionService] Subtitle sync configuration updated:', this.subtitleSyncConfig);
+
+    logger?.info('Subtitle sync configuration updated', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+      metadata: {
+        config: this.subtitleSyncConfig,
+      },
+    });
   }
 
   /**
@@ -3236,7 +3461,9 @@ export class PlayerInteractionService {
    */
   public addSubtitleSyncListener(callback: SubtitleSyncCallback): void {
     this.subtitleSyncListeners.add(callback);
-    console.log('[PlayerInteractionService] Subtitle sync listener added');
+    logger?.info('Subtitle sync listener added', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+    });
   }
 
   /**
@@ -3244,7 +3471,9 @@ export class PlayerInteractionService {
    */
   public removeSubtitleSyncListener(callback: SubtitleSyncCallback): void {
     this.subtitleSyncListeners.delete(callback);
-    console.log('[PlayerInteractionService] Subtitle sync listener removed');
+    logger?.info('Subtitle sync listener removed', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+    });
   }
 
   /**
@@ -3252,7 +3481,9 @@ export class PlayerInteractionService {
    */
   public removeAllSubtitleSyncListeners(): void {
     this.subtitleSyncListeners.clear();
-    console.log('[PlayerInteractionService] All subtitle sync listeners removed');
+    logger?.info('All subtitle sync listeners removed', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+    });
   }
 
   /**
@@ -3277,8 +3508,10 @@ export class PlayerInteractionService {
     this.currentSubtitleTrack = null;
     this.activeCues = [];
     this.timingAdjustmentHistory = [];
-    
-    console.log('[PlayerInteractionService] Subtitle track cleared');
+
+    logger?.info('Subtitle track cleared', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+    });
   }
 
   /**
@@ -3288,9 +3521,9 @@ export class PlayerInteractionService {
     if (!this.currentSubtitleTrack) {
       return [];
     }
-    
-    return this.currentSubtitleTrack.cues.filter(cue => 
-      cue.startTime < endTime && cue.endTime > startTime
+
+    return this.currentSubtitleTrack.cues.filter(
+      (cue) => cue.startTime < endTime && cue.endTime > startTime,
     );
   }
 
@@ -3301,20 +3534,20 @@ export class PlayerInteractionService {
     if (!this.currentSubtitleTrack || this.currentSubtitleTrack.cues.length === 0) {
       return null;
     }
-    
+
     let closestCue: SubtitleCue | null = null;
     let minDistance = Infinity;
-    
+
     for (const cue of this.currentSubtitleTrack.cues) {
       // Calculate distance to the start of the cue
       const distance = Math.abs(cue.startTime - time);
-      
+
       if (distance < minDistance) {
         minDistance = distance;
         closestCue = cue;
       }
     }
-    
+
     return closestCue;
   }
 
@@ -3328,29 +3561,34 @@ export class PlayerInteractionService {
     averageAdjustment: number;
     syncStatus: 'active' | 'inactive' | 'no_track';
   } {
-    const trackInfo = this.currentSubtitleTrack ? {
-      language: this.currentSubtitleTrack.language,
-      cueCount: this.currentSubtitleTrack.cues.length,
-      totalDuration: this.currentSubtitleTrack.cues.reduce((total, cue) => 
-        total + (cue.endTime - cue.startTime), 0
-      )
-    } : null;
-    
-    const averageAdjustment = this.timingAdjustmentHistory.length > 0 ?
-      this.timingAdjustmentHistory.reduce((sum, entry) => sum + entry.adjustment, 0) / 
-      this.timingAdjustmentHistory.length : 0;
-    
+    const trackInfo = this.currentSubtitleTrack
+      ? {
+          language: this.currentSubtitleTrack.language,
+          cueCount: this.currentSubtitleTrack.cues.length,
+          totalDuration: this.currentSubtitleTrack.cues.reduce(
+            (total, cue) => total + (cue.endTime - cue.startTime),
+            0,
+          ),
+        }
+      : null;
+
+    const averageAdjustment =
+      this.timingAdjustmentHistory.length > 0
+        ? this.timingAdjustmentHistory.reduce((sum, entry) => sum + entry.adjustment, 0) /
+          this.timingAdjustmentHistory.length
+        : 0;
+
     let syncStatus: 'active' | 'inactive' | 'no_track' = 'no_track';
     if (this.currentSubtitleTrack) {
       syncStatus = this.syncUpdateIntervalId !== null ? 'active' : 'inactive';
     }
-    
+
     return {
       trackInfo,
       activeCueCount: this.activeCues.length,
       timingAdjustments: this.timingAdjustmentHistory.length,
       averageAdjustment,
-      syncStatus
+      syncStatus,
     };
   }
 
@@ -3370,7 +3608,7 @@ export class PlayerInteractionService {
       loopCount?: number;
       metadata?: Record<string, unknown>;
       enabled?: boolean;
-    } = {}
+    } = {},
   ): ActiveSegmentLoop {
     // Validate input parameters
     if (startTime < 0) {
@@ -3380,14 +3618,20 @@ export class PlayerInteractionService {
       throw new Error('Loop end time must be greater than start time');
     }
     if (this.getDuration() > 0 && endTime > this.getDuration()) {
-      console.warn(`[PlayerInteractionService] Loop end time (${endTime}s) exceeds video duration (${this.getDuration()}s)`);
+      logger?.warn('Loop end time exceeds video duration', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          endTime,
+          duration: this.getDuration(),
+        },
+      });
     }
-    
+
     // Stop any existing loop
     if (this.activeLoop) {
       this.stopSegmentLoop();
     }
-    
+
     // Create loop configuration
     const loopId = options.id || `loop_${Date.now()}`;
     const baseLoop: SegmentLoop = {
@@ -3397,9 +3641,9 @@ export class PlayerInteractionService {
       enabled: options.enabled !== false, // Default to enabled
       loopCount: options.loopCount,
       title: options.title,
-      metadata: options.metadata
+      metadata: options.metadata,
     };
-    
+
     // Create active loop with runtime state
     this.activeLoop = {
       ...baseLoop,
@@ -3409,23 +3653,30 @@ export class PlayerInteractionService {
       timeInLoop: 0,
       timeRemaining: endTime - startTime,
       createdAt: Date.now(),
-      lastTriggeredAt: 0
+      lastTriggeredAt: 0,
     };
-    
+
     // Start monitoring if enabled
     if (this.segmentLoopConfig.enabled && this.activeLoop.enabled) {
       this.startLoopMonitoring();
     }
-    
+
     // Notify listeners
     this.notifySegmentLoop({
       type: 'loop_start',
       loop: this.activeLoop,
       currentTime: this.getCurrentTime(),
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
-    
-    console.log(`[PlayerInteractionService] Segment loop created: ${startTime}s - ${endTime}s (${loopId})`);
+
+    logger?.info('Segment loop created', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+      metadata: {
+        startTime,
+        endTime,
+        loopId,
+      },
+    });
     return this.activeLoop;
   }
 
@@ -3443,18 +3694,18 @@ export class PlayerInteractionService {
     if (!this.activeLoop) {
       throw new Error('No active segment loop to update');
     }
-    
+
     // Validate updates
     const newStartTime = updates.startTime ?? this.activeLoop.startTime;
     const newEndTime = updates.endTime ?? this.activeLoop.endTime;
-    
+
     if (newStartTime < 0) {
       throw new Error('Loop start time cannot be negative');
     }
     if (newEndTime <= newStartTime) {
       throw new Error('Loop end time must be greater than start time');
     }
-    
+
     // Update loop
     this.activeLoop = {
       ...this.activeLoop,
@@ -3464,17 +3715,22 @@ export class PlayerInteractionService {
       loopCount: updates.loopCount ?? this.activeLoop.loopCount,
       title: updates.title ?? this.activeLoop.title,
       metadata: updates.metadata ?? this.activeLoop.metadata,
-      timeRemaining: newEndTime - newStartTime
+      timeRemaining: newEndTime - newStartTime,
     };
-    
+
     // Handle enabled/disabled state changes
     if (this.segmentLoopConfig.enabled && this.activeLoop.enabled && !this.loopMonitorIntervalId) {
       this.startLoopMonitoring();
     } else if (!this.activeLoop.enabled && this.loopMonitorIntervalId) {
       this.stopLoopMonitoring();
     }
-    
-    console.log(`[PlayerInteractionService] Segment loop updated: ${this.activeLoop.id}`);
+
+    logger?.info('Segment loop updated', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+      metadata: {
+        id: this.activeLoop.id,
+      },
+    });
     return this.activeLoop;
   }
 
@@ -3485,17 +3741,19 @@ export class PlayerInteractionService {
     if (this.loopMonitorIntervalId !== null) {
       this.stopLoopMonitoring();
     }
-    
+
     if (!this.activeLoop) {
       return;
     }
-    
+
     // Monitor loop at 30 FPS
     this.loopMonitorIntervalId = window.setInterval(() => {
       this.updateLoopState();
     }, 33); // ~30 FPS
-    
-    console.log('[PlayerInteractionService] Segment loop monitoring started');
+
+    logger?.info('Segment loop monitoring started', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+    });
   }
 
   /**
@@ -3506,8 +3764,10 @@ export class PlayerInteractionService {
       window.clearInterval(this.loopMonitorIntervalId);
       this.loopMonitorIntervalId = null;
     }
-    
-    console.log('[PlayerInteractionService] Segment loop monitoring stopped');
+
+    logger?.info('Segment loop monitoring stopped', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+    });
   }
 
   /**
@@ -3517,40 +3777,45 @@ export class PlayerInteractionService {
     if (!this.activeLoop || !this.isReady()) {
       return;
     }
-    
+
     const currentTime = this.getCurrentTime();
     const { startTime, endTime } = this.activeLoop;
-    
+
     // Check if we're within the loop bounds
     const isInBounds = currentTime >= startTime && currentTime <= endTime;
     const wasActive = this.activeLoop.isActive;
-    
+
     // Update loop runtime state
     const timeInLoop = isInBounds ? currentTime - startTime : 0;
     const timeRemaining = isInBounds ? endTime - currentTime : endTime - startTime;
-    
+
     this.activeLoop = {
       ...this.activeLoop,
       isActive: isInBounds,
       timeInLoop,
-      timeRemaining: Math.max(0, timeRemaining)
+      timeRemaining: Math.max(0, timeRemaining),
     };
-    
+
     // Handle entering the loop
     if (isInBounds && !wasActive) {
-      console.log(`[PlayerInteractionService] Entered loop bounds: ${this.activeLoop.id}`);
+      logger?.info('Entered loop bounds', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          id: this.activeLoop.id,
+        },
+      });
     }
-    
+
     // Handle loop iteration (reached end)
     if (wasActive && currentTime >= endTime && !this.userSeekDetected) {
       this.handleLoopIteration();
     }
-    
+
     // Handle seeking outside loop bounds
     if (wasActive && !isInBounds && this.userSeekDetected) {
       this.handleSeekOutsideLoop(currentTime);
     }
-    
+
     // Reset user seek detection flag after processing
     if (this.userSeekDetected && Math.abs(currentTime - this.lastLoopSeekTime) > 1.0) {
       this.userSeekDetected = false;
@@ -3564,10 +3829,10 @@ export class PlayerInteractionService {
     if (!this.activeLoop) {
       return;
     }
-    
+
     const newIteration = this.activeLoop.currentIteration + 1;
     const newTotalIterations = this.activeLoop.totalIterations + 1;
-    
+
     // Check if we've exceeded the loop count limit
     if (this.activeLoop.loopCount && newTotalIterations >= this.activeLoop.loopCount) {
       this.notifySegmentLoop({
@@ -3575,37 +3840,42 @@ export class PlayerInteractionService {
         loop: this.activeLoop,
         currentTime: this.getCurrentTime(),
         iteration: newTotalIterations,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       });
-      
+
       this.stopSegmentLoop();
       return;
     }
-    
+
     // Check if we've exceeded max consecutive loops
     if (newIteration >= this.segmentLoopConfig.maxConsecutiveLoops) {
-      console.warn(`[PlayerInteractionService] Reached max consecutive loops (${this.segmentLoopConfig.maxConsecutiveLoops}), disabling loop`);
+      logger?.warn('Reached max consecutive loops, disabling loop', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          maxConsecutiveLoops: this.segmentLoopConfig.maxConsecutiveLoops,
+        },
+      });
       this.disableSegmentLoop();
       return;
     }
-    
+
     // Update loop state
     this.activeLoop = {
       ...this.activeLoop,
       currentIteration: newIteration,
       totalIterations: newTotalIterations,
-      lastTriggeredAt: Date.now()
+      lastTriggeredAt: Date.now(),
     };
-    
+
     // Notify iteration event
     this.notifySegmentLoop({
       type: 'loop_iteration',
       loop: this.activeLoop,
       currentTime: this.getCurrentTime(),
       iteration: newIteration,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
-    
+
     // Perform the actual loop (seek back to start)
     this.performLoopSeek();
   }
@@ -3617,9 +3887,12 @@ export class PlayerInteractionService {
     if (!this.activeLoop) {
       return;
     }
-    
-    const seekTarget = Math.max(0, this.activeLoop.startTime - this.segmentLoopConfig.seekBackOffset);
-    
+
+    const seekTarget = Math.max(
+      0,
+      this.activeLoop.startTime - this.segmentLoopConfig.seekBackOffset,
+    );
+
     if (this.segmentLoopConfig.delayBeforeLoop > 0) {
       // Delayed seek
       this.loopSeekTimeoutId = window.setTimeout(() => {
@@ -3639,16 +3912,25 @@ export class PlayerInteractionService {
     try {
       this.lastLoopSeekTime = seekTarget;
       this.seek(seekTarget);
-      
-      console.log(`[PlayerInteractionService] Loop seek executed to ${seekTarget}s`);
-      
+
+      logger?.info('Loop seek executed', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          seekTarget,
+        },
+      });
+
       // Handle fade effects if configured
       if (this.segmentLoopConfig.fadeInDuration > 0) {
         this.handleLoopFadeIn();
       }
-      
     } catch (error) {
-      console.error('[PlayerInteractionService] Failed to execute loop seek:', error);
+      logger?.error('Failed to execute loop seek', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
     }
   }
 
@@ -3660,17 +3942,17 @@ export class PlayerInteractionService {
     const fadeSteps = 20;
     const stepDuration = (this.segmentLoopConfig.fadeInDuration * 1000) / fadeSteps;
     let currentStep = 0;
-    
+
     // Start with low volume
     this.setVolume(originalVolume * 0.1);
-    
+
     const fadeInterval = window.setInterval(() => {
       currentStep++;
       const progress = currentStep / fadeSteps;
       const newVolume = originalVolume * (0.1 + 0.9 * progress);
-      
+
       this.setVolume(newVolume);
-      
+
       if (currentStep >= fadeSteps) {
         window.clearInterval(fadeInterval);
         this.setVolume(originalVolume); // Ensure exact original volume
@@ -3685,26 +3967,34 @@ export class PlayerInteractionService {
     if (!this.activeLoop) {
       return;
     }
-    
+
     this.notifySegmentLoop({
       type: 'loop_seek_outside',
       loop: this.activeLoop,
       currentTime,
       seekTarget: currentTime,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
-    
+
     if (!this.segmentLoopConfig.allowUserSeekOutside) {
       // Force seek back to loop bounds
-      const seekTarget = currentTime < this.activeLoop.startTime ? 
-        this.activeLoop.startTime : 
-        this.activeLoop.endTime - 0.1;
-      
-      console.log(`[PlayerInteractionService] User seek outside loop not allowed, seeking back to ${seekTarget}s`);
+      const seekTarget =
+        currentTime < this.activeLoop.startTime
+          ? this.activeLoop.startTime
+          : this.activeLoop.endTime - 0.1;
+
+      logger?.warn('User seek outside loop not allowed, seeking back to', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          seekTarget,
+        },
+      });
       this.seek(seekTarget);
     } else if (!this.segmentLoopConfig.resumeAfterSeekOutside) {
       // Disable loop when user seeks outside
-      console.log('[PlayerInteractionService] User seeked outside loop, disabling loop');
+      logger?.warn('User seeked outside loop, disabling loop', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+      });
       this.disableSegmentLoop();
     }
   }
@@ -3716,28 +4006,33 @@ export class PlayerInteractionService {
     if (!this.activeLoop) {
       return;
     }
-    
+
     this.stopLoopMonitoring();
-    
+
     // Clear timeouts
     if (this.loopSeekTimeoutId !== null) {
       window.clearTimeout(this.loopSeekTimeoutId);
       this.loopSeekTimeoutId = null;
     }
-    
+
     const loop = this.activeLoop;
     this.activeLoop = null;
     this.userSeekDetected = false;
     this.lastLoopSeekTime = 0;
-    
+
     this.notifySegmentLoop({
       type: 'loop_end',
       loop: { ...loop, isActive: false },
       currentTime: this.getCurrentTime(),
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
-    
-    console.log(`[PlayerInteractionService] Segment loop stopped: ${loop.id}`);
+
+    logger?.info('Segment loop stopped', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+      metadata: {
+        id: loop.id,
+      },
+    });
   }
 
   /**
@@ -3747,21 +4042,26 @@ export class PlayerInteractionService {
     if (!this.activeLoop) {
       return;
     }
-    
+
     this.activeLoop = {
       ...this.activeLoop,
       enabled: false,
-      isActive: false
+      isActive: false,
     };
-    
+
     this.notifySegmentLoop({
       type: 'loop_disabled',
       loop: this.activeLoop,
       currentTime: this.getCurrentTime(),
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
-    
-    console.log(`[PlayerInteractionService] Segment loop disabled: ${this.activeLoop.id}`);
+
+    logger?.info('Segment loop disabled', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+      metadata: {
+        id: this.activeLoop.id,
+      },
+    });
   }
 
   /**
@@ -3771,28 +4071,38 @@ export class PlayerInteractionService {
     if (!this.activeLoop) {
       throw new Error('No segment loop to enable');
     }
-    
+
     this.activeLoop = {
       ...this.activeLoop,
-      enabled: true
+      enabled: true,
     };
-    
+
     if (this.segmentLoopConfig.enabled && !this.loopMonitorIntervalId) {
       this.startLoopMonitoring();
     }
-    
-    console.log(`[PlayerInteractionService] Segment loop enabled: ${this.activeLoop.id}`);
+
+    logger?.info('Segment loop enabled', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+      metadata: {
+        id: this.activeLoop.id,
+      },
+    });
   }
 
   /**
    * Notify segment loop listeners
    */
   private notifySegmentLoop(event: SegmentLoopEvent): void {
-    this.segmentLoopListeners.forEach(callback => {
+    this.segmentLoopListeners.forEach((callback) => {
       try {
         callback(event);
       } catch (error) {
-        console.error('[PlayerInteractionService] Error in segment loop callback:', error);
+        logger?.error('Error in segment loop callback', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        });
       }
     });
   }
@@ -3804,8 +4114,10 @@ export class PlayerInteractionService {
     if (!this.isInitialized) {
       throw new Error('Service not initialized');
     }
-    
-    console.log('[PlayerInteractionService] Manually refreshing video element detection');
+
+    logger?.info('Manually refreshing video element detection', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+    });
     await this.recheckVideoElement();
     return this.isReady();
   }
@@ -3819,13 +4131,20 @@ export class PlayerInteractionService {
    */
   public async play(): Promise<void> {
     this.ensureVideoElementReady();
-    
+
     try {
       await this.videoElement!.play();
-      console.log('[PlayerInteractionService] Video play initiated');
+      logger?.info('Video play initiated', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+      });
     } catch (error) {
       const message = `Failed to play video: ${error}`;
-      console.error('[PlayerInteractionService]', message);
+      logger?.error('Failed to play video', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
       this.notifyError(PlayerErrorCode.PLAYBACK_FAILED, message, { error });
       throw new Error(message);
     }
@@ -3836,13 +4155,20 @@ export class PlayerInteractionService {
    */
   public pause(): void {
     this.ensureVideoElementReady();
-    
+
     try {
       this.videoElement!.pause();
-      console.log('[PlayerInteractionService] Video paused');
+      logger?.info('Video paused', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+      });
     } catch (error) {
       const message = `Failed to pause video: ${error}`;
-      console.error('[PlayerInteractionService]', message);
+      logger?.error('Failed to pause video', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
       this.notifyError(PlayerErrorCode.PLAYBACK_FAILED, message, { error });
       throw new Error(message);
     }
@@ -3854,13 +4180,23 @@ export class PlayerInteractionService {
   public seek(timeInSeconds: number): void {
     this.ensureVideoElementReady();
     this.validateTimeValue(timeInSeconds);
-    
+
     try {
       this.videoElement!.currentTime = timeInSeconds;
-      console.log(`[PlayerInteractionService] Seeked to ${timeInSeconds}s`);
+      logger?.info('Seeked to', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          timeInSeconds,
+        },
+      });
     } catch (error) {
       const message = `Failed to seek to ${timeInSeconds}s: ${error}`;
-      console.error('[PlayerInteractionService]', message);
+      logger?.error('Failed to seek', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          timeInSeconds,
+        },
+      });
       this.notifyError(PlayerErrorCode.SEEK_FAILED, message, { timeInSeconds, error });
       throw new Error(message);
     }
@@ -3888,13 +4224,23 @@ export class PlayerInteractionService {
   public setPlaybackRate(rate: number): void {
     this.ensureVideoElementReady();
     this.validatePlaybackRate(rate);
-    
+
     try {
       this.videoElement!.playbackRate = rate;
-      console.log(`[PlayerInteractionService] Playback rate set to ${rate}x`);
+      logger?.info('Playback rate set to', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          rate,
+        },
+      });
     } catch (error) {
       const message = `Failed to set playback rate to ${rate}x: ${error}`;
-      console.error('[PlayerInteractionService]', message);
+      logger?.error('Failed to set playback rate', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          rate,
+        },
+      });
       this.notifyError(PlayerErrorCode.INVALID_RATE_VALUE, message, { rate, error });
       throw new Error(message);
     }
@@ -3914,13 +4260,23 @@ export class PlayerInteractionService {
   public setVolume(volume: number): void {
     this.ensureVideoElementReady();
     this.validateVolumeValue(volume);
-    
+
     try {
       this.videoElement!.volume = volume;
-      console.log(`[PlayerInteractionService] Volume set to ${Math.round(volume * 100)}%`);
+      logger?.info('Volume set to', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          volume: Math.round(volume * 100),
+        },
+      });
     } catch (error) {
       const message = `Failed to set volume to ${volume}: ${error}`;
-      console.error('[PlayerInteractionService]', message);
+      logger?.error('Failed to set volume', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          volume: Math.round(volume * 100),
+        },
+      });
       this.notifyError(PlayerErrorCode.PLAYBACK_FAILED, message, { volume, error });
       throw new Error(message);
     }
@@ -3939,13 +4295,23 @@ export class PlayerInteractionService {
    */
   public setMuted(muted: boolean): void {
     this.ensureVideoElementReady();
-    
+
     try {
       this.videoElement!.muted = muted;
-      console.log(`[PlayerInteractionService] Video ${muted ? 'muted' : 'unmuted'}`);
+      logger?.info('Video muted', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          muted,
+        },
+      });
     } catch (error) {
       const message = `Failed to ${muted ? 'mute' : 'unmute'} video: ${error}`;
-      console.error('[PlayerInteractionService]', message);
+      logger?.error('Failed to mute video', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          muted,
+        },
+      });
       this.notifyError(PlayerErrorCode.PLAYBACK_FAILED, message, { muted, error });
       throw new Error(message);
     }
@@ -4008,7 +4374,7 @@ export class PlayerInteractionService {
     const heightResult = this.mediaProxy.getProperty('videoHeight');
     return {
       width: widthResult.success ? (widthResult.value ?? 0) : 0,
-      height: heightResult.success ? (heightResult.value ?? 0) : 0
+      height: heightResult.success ? (heightResult.value ?? 0) : 0,
     };
   }
 
@@ -4023,21 +4389,41 @@ export class PlayerInteractionService {
     if (!this.eventListeners.has(eventType)) {
       this.eventListeners.set(eventType, new Set());
     }
-    
+
     this.eventListeners.get(eventType)!.add(callback);
-    
+
     // If video element exists, add listener immediately via proxy
     if (this.videoElement && this.mediaProxy.isElementReady()) {
-      this.mediaProxy.addEventListener(eventType, this.createEventHandler(eventType)).then(result => {
-        if (!result.success && result.error) {
-          console.warn(`[PlayerInteractionService] Failed to add direct listener for ${eventType}:`, result.error.message);
-        }
-      }).catch(error => {
-        console.warn(`[PlayerInteractionService] Error adding direct listener for ${eventType}:`, error);
-      });
+      this.mediaProxy
+        .addEventListener(eventType, this.createEventHandler(eventType))
+        .then((result) => {
+          if (!result.success && result.error) {
+            logger?.warn('Failed to add direct listener for', {
+              component: ComponentType.YOUTUBE_INTEGRATION,
+              metadata: {
+                eventType,
+                error: result.error.message,
+              },
+            });
+          }
+        })
+        .catch((error) => {
+          logger?.warn('Error adding direct listener for', {
+            component: ComponentType.YOUTUBE_INTEGRATION,
+            metadata: {
+              eventType,
+              error: error instanceof Error ? error.message : String(error),
+            },
+          });
+        });
     }
-    
-    console.log(`[PlayerInteractionService] Event listener added for '${eventType}'`);
+
+    logger?.info('Event listener added for', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+      metadata: {
+        eventType,
+      },
+    });
   }
 
   /**
@@ -4046,26 +4432,46 @@ export class PlayerInteractionService {
   public removeEventListener(eventType: PlayerEvent | string, callback: PlayerEventCallback): void {
     const callbacks = this.eventListeners.get(eventType);
     if (!callbacks) return;
-    
+
     callbacks.delete(callback);
-    
+
     // If no more callbacks for this event, remove the set
     if (callbacks.size === 0) {
       this.eventListeners.delete(eventType);
-      
+
       // Remove listener from video element if it exists via proxy
       if (this.videoElement && this.mediaProxy.isElementReady()) {
-        this.mediaProxy.removeEventListener(eventType, this.createEventHandler(eventType)).then(result => {
-          if (!result.success && result.error) {
-            console.warn(`[PlayerInteractionService] Failed to remove direct listener for ${eventType}:`, result.error.message);
-          }
-        }).catch(error => {
-          console.warn(`[PlayerInteractionService] Error removing direct listener for ${eventType}:`, error);
-        });
+        this.mediaProxy
+          .removeEventListener(eventType, this.createEventHandler(eventType))
+          .then((result) => {
+            if (!result.success && result.error) {
+              logger?.warn('Failed to remove direct listener for', {
+                component: ComponentType.YOUTUBE_INTEGRATION,
+                metadata: {
+                  eventType,
+                  error: result.error.message,
+                },
+              });
+            }
+          })
+          .catch((error) => {
+            logger?.error('Error removing direct listener for', {
+              component: ComponentType.YOUTUBE_INTEGRATION,
+              metadata: {
+                eventType,
+                error: error instanceof Error ? error.message : String(error),
+              },
+            });
+          });
       }
     }
-    
-    console.log(`[PlayerInteractionService] Event listener removed for '${eventType}'`);
+
+    logger?.info('Event listener removed for', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+      metadata: {
+        eventType,
+      },
+    });
   }
 
   /**
@@ -4074,19 +4480,39 @@ export class PlayerInteractionService {
   public removeAllEventListenersForType(eventType: PlayerEvent | string): void {
     if (this.eventListeners.has(eventType)) {
       this.eventListeners.delete(eventType);
-      
+
       // Remove listener from video element if it exists via proxy
       if (this.videoElement && this.mediaProxy.isElementReady()) {
-        this.mediaProxy.removeEventListener(eventType, this.createEventHandler(eventType)).then(result => {
-          if (!result.success && result.error) {
-            console.warn(`[PlayerInteractionService] Failed to remove all listeners for ${eventType}:`, result.error.message);
-          }
-        }).catch(error => {
-          console.warn(`[PlayerInteractionService] Error removing all listeners for ${eventType}:`, error);
-        });
+        this.mediaProxy
+          .removeEventListener(eventType, this.createEventHandler(eventType))
+          .then((result) => {
+            if (!result.success && result.error) {
+              logger?.warn('Failed to remove all listeners for', {
+                component: ComponentType.YOUTUBE_INTEGRATION,
+                metadata: {
+                  eventType,
+                  error: result.error.message,
+                },
+              });
+            }
+          })
+          .catch((error) => {
+            logger?.error('Error removing all listeners for', {
+              component: ComponentType.YOUTUBE_INTEGRATION,
+              metadata: {
+                eventType,
+                error: error instanceof Error ? error.message : String(error),
+              },
+            });
+          });
       }
-      
-      console.log(`[PlayerInteractionService] All event listeners removed for '${eventType}'`);
+
+      logger?.info('All event listeners removed for', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          eventType,
+        },
+      });
     }
   }
 
@@ -4101,7 +4527,7 @@ export class PlayerInteractionService {
     if (!this.isInitialized) {
       throw new Error('PlayerInteractionService not initialized');
     }
-    
+
     if (!this.videoElement) {
       const message = 'Video element not available';
       this.notifyError(PlayerErrorCode.VIDEO_ELEMENT_UNAVAILABLE, message);
@@ -4118,10 +4544,16 @@ export class PlayerInteractionService {
       this.notifyError(PlayerErrorCode.INVALID_TIME_VALUE, message, { timeInSeconds });
       throw new Error(message);
     }
-    
+
     const duration = this.getDuration();
     if (duration > 0 && timeInSeconds > duration) {
-      console.warn(`[PlayerInteractionService] Seek time ${timeInSeconds}s exceeds duration ${duration}s`);
+      logger?.warn('Seek time exceeds duration', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          timeInSeconds,
+          duration,
+        },
+      });
     }
   }
 
@@ -4134,10 +4566,15 @@ export class PlayerInteractionService {
       this.notifyError(PlayerErrorCode.INVALID_RATE_VALUE, message, { rate });
       throw new Error(message);
     }
-    
+
     // YouTube typically supports rates between 0.25x and 2x
     if (rate < 0.25 || rate > 2) {
-      console.warn(`[PlayerInteractionService] Playback rate ${rate}x may not be supported by YouTube`);
+      logger?.warn('Playback rate may not be supported by YouTube', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          rate,
+        },
+      });
     }
   }
 
@@ -4164,12 +4601,12 @@ export class PlayerInteractionService {
       mutationObserver: typeof MutationObserver !== 'undefined',
       webkitFullscreen: 'webkitRequestFullscreen' in document.documentElement,
       requestVideoFrameCallback: 'requestVideoFrameCallback' in HTMLVideoElement.prototype,
-      mediasession: 'mediaSession' in navigator
+      mediasession: 'mediaSession' in navigator,
     };
 
     const supportCount = Object.values(features).filter(Boolean).length;
     const totalFeatures = Object.keys(features).length;
-    
+
     let compatibility: 'full' | 'partial' | 'limited' | 'unsupported';
     if (supportCount === totalFeatures) {
       compatibility = 'full';
@@ -4193,7 +4630,9 @@ export class PlayerInteractionService {
       recommendations.push('Consider updating browser for better performance');
     }
     if (!features.requestVideoFrameCallback) {
-      warnings.push('requestVideoFrameCallback not supported - frame-accurate operations unavailable');
+      warnings.push(
+        'requestVideoFrameCallback not supported - frame-accurate operations unavailable',
+      );
     }
 
     return {
@@ -4201,7 +4640,7 @@ export class PlayerInteractionService {
       features,
       compatibility,
       warnings,
-      recommendations
+      recommendations,
     };
   }
 
@@ -4210,32 +4649,36 @@ export class PlayerInteractionService {
    */
   private notifyEnhancedError(error: PlayerOperationError, context: string = 'unknown'): void {
     const playerError = error.toPlayerError();
-    
+
     // Update error metrics
     this.updateErrorMetrics(playerError);
-    
+
     // Add to error collector
     this.errorCollector.addError(playerError, context);
-    
+
     // Handle circuit breaker
     if (this.errorRecoveryConfig.enableCircuitBreaker) {
       this.handleCircuitBreaker(playerError);
     }
-    
+
     // Log error with enhanced context
-    console.error(`[PlayerInteractionService] Enhanced Error [${playerError.code}]:`, {
-      message: playerError.message,
-      severity: playerError.severity,
-      recoverable: playerError.recoverable,
-      retryable: playerError.retryable,
-      context: playerError.context,
-      details: playerError.details,
-      timestamp: new Date(playerError.timestamp).toISOString()
+    logger?.error('Enhanced Error', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+      metadata: {
+        code: playerError.code,
+        message: playerError.message,
+        severity: playerError.severity,
+        recoverable: playerError.recoverable,
+        retryable: playerError.retryable,
+        context: playerError.context,
+        details: playerError.details,
+        timestamp: new Date(playerError.timestamp).toISOString(),
+      },
     });
-    
+
     // Notify standard error system
     this.notifyError(playerError.code, playerError.message, playerError.details);
-    
+
     // Attempt recovery if applicable
     if (error.retryable && this.errorRecoveryConfig.enableRetry) {
       this.scheduleRetry(error, context);
@@ -4251,15 +4694,15 @@ export class PlayerInteractionService {
       totalErrors: this.errorMetrics.totalErrors + 1,
       errorsByCode: {
         ...this.errorMetrics.errorsByCode,
-        [error.code]: (this.errorMetrics.errorsByCode[error.code] || 0) + 1
+        [error.code]: (this.errorMetrics.errorsByCode[error.code] || 0) + 1,
       },
       errorsBySeverity: {
         ...this.errorMetrics.errorsBySeverity,
-        [error.severity]: this.errorMetrics.errorsBySeverity[error.severity] + 1
+        [error.severity]: this.errorMetrics.errorsBySeverity[error.severity] + 1,
       },
       averageErrorsPerMinute: this.calculateAverageErrorsPerMinute(),
       lastErrorTime: now,
-      uptime: now - this.startTime
+      uptime: now - this.startTime,
     };
   }
 
@@ -4278,16 +4721,26 @@ export class PlayerInteractionService {
     if (error.severity === 'critical' || error.severity === 'high') {
       this.circuitBreakerFailureCount++;
       this.circuitBreakerLastFailureTime = Date.now();
-      
+
       if (this.circuitBreakerFailureCount >= this.errorRecoveryConfig.circuitBreakerThreshold) {
         this.circuitBreakerState = 'open';
-        console.warn(`[PlayerInteractionService] Circuit breaker opened after ${this.circuitBreakerFailureCount} failures`);
-        
+        logger?.warn('Circuit breaker opened after failures', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: {
+            failures: this.circuitBreakerFailureCount,
+          },
+        });
+
         // Schedule circuit breaker reset
         setTimeout(() => {
           this.circuitBreakerState = 'half-open';
           this.circuitBreakerFailureCount = 0;
-          console.log('[PlayerInteractionService] Circuit breaker reset to half-open');
+          logger?.info('Circuit breaker reset to half-open', {
+            component: ComponentType.YOUTUBE_INTEGRATION,
+            metadata: {
+              timeoutMs: this.errorRecoveryConfig.circuitBreakerTimeoutMs,
+            },
+          });
         }, this.errorRecoveryConfig.circuitBreakerTimeoutMs);
       }
     }
@@ -4298,17 +4751,31 @@ export class PlayerInteractionService {
    */
   private scheduleRetry(error: PlayerOperationError, context: string): void {
     if (!error.retryable) return;
-    
+
     const retryCount = (error.details?.retryCount as number) || 0;
     if (retryCount >= this.errorRecoveryConfig.maxRetries) {
-      console.warn(`[PlayerInteractionService] Max retries exceeded for operation: ${context}`);
+      logger?.warn('Max retries exceeded for operation', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          context,
+          retryCount,
+        },
+      });
       return;
     }
-    
-    const delay = this.errorRecoveryConfig.retryDelayMs * Math.pow(this.errorRecoveryConfig.retryBackoffFactor, retryCount);
-    
+
+    const delay =
+      this.errorRecoveryConfig.retryDelayMs *
+      Math.pow(this.errorRecoveryConfig.retryBackoffFactor, retryCount);
+
     setTimeout(() => {
-      console.log(`[PlayerInteractionService] Retrying operation: ${context} (attempt ${retryCount + 1})`);
+      logger?.info('Retrying operation', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          context,
+          retryCount: retryCount + 1,
+        },
+      });
       // Note: Actual retry logic would depend on the specific operation
       // This provides the framework for retry implementation
     }, delay);
@@ -4336,7 +4803,7 @@ export class PlayerInteractionService {
       aggregatedErrors: this.errorCollector.getAggregatedErrors(),
       collectorStats: this.errorCollector.getErrorStatistics(),
       circuitBreakerState: this.circuitBreakerState,
-      browserCompatibility: this.browserCompatibility
+      browserCompatibility: this.browserCompatibility,
     };
   }
 
@@ -4350,14 +4817,19 @@ export class PlayerInteractionService {
       errorsBySeverity: { low: 0, medium: 0, high: 0, critical: 0 },
       averageErrorsPerMinute: 0,
       lastErrorTime: 0,
-      uptime: Date.now() - this.startTime
+      uptime: Date.now() - this.startTime,
     };
     this.errorCollector.clearErrors();
     this.circuitBreakerState = 'closed';
     this.circuitBreakerFailureCount = 0;
     this.retryQueues.clear();
     this.operationTimeouts.clear();
-    console.log('[PlayerInteractionService] Error tracking reset');
+    logger?.info('Error tracking reset', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+      metadata: {
+        uptime: Date.now() - this.startTime,
+      },
+    });
   }
 
   /**
@@ -4372,7 +4844,12 @@ export class PlayerInteractionService {
    */
   public updateErrorRecoveryConfig(newConfig: Partial<ErrorRecoveryConfig>): void {
     this.errorRecoveryConfig = { ...this.errorRecoveryConfig, ...newConfig };
-    console.log('[PlayerInteractionService] Error recovery configuration updated');
+    logger?.info('Error recovery configuration updated', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+      metadata: {
+        newConfig,
+      },
+    });
   }
 
   /**
@@ -4387,4 +4864,4 @@ export class PlayerInteractionService {
 // Export Default Instance
 // ========================================
 
-export default PlayerInteractionService; 
+export default PlayerInteractionService;

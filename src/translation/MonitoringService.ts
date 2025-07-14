@@ -1,10 +1,7 @@
 // Comprehensive usage tracking and monitoring service for Microsoft Translator API
 // Provides metrics collection, performance monitoring, error tracking, and analytics
 
-import {
-  TranslationErrorCode,
-  ServiceMetrics
-} from './types';
+import { TranslationErrorCode, ServiceMetrics } from './types';
 import { configService } from './ConfigService';
 import { translationCacheService } from './TranslationCacheService';
 import { rateLimitService } from './RateLimitService';
@@ -163,7 +160,7 @@ export class MonitoringService {
     SERVICE_HEALTH: 'translation_service_health',
     USAGE_ANALYTICS: 'translation_usage_analytics',
     ALERT_RULES: 'translation_alert_rules',
-    ALERT_HISTORY: 'translation_alert_history'
+    ALERT_HISTORY: 'translation_alert_history',
   };
 
   // --------------------------------------------------------------------------
@@ -184,7 +181,7 @@ export class MonitoringService {
       this.setupDefaultAlertRules();
       this.startPeriodicUpdates();
       this.isInitialized = true;
-      
+
       console.log('Monitoring service initialized successfully');
     } catch (error) {
       console.error('Failed to initialize monitoring service:', error);
@@ -203,7 +200,7 @@ export class MonitoringService {
         this.STORAGE_KEYS.SERVICE_HEALTH,
         this.STORAGE_KEYS.USAGE_ANALYTICS,
         this.STORAGE_KEYS.ALERT_RULES,
-        this.STORAGE_KEYS.ALERT_HISTORY
+        this.STORAGE_KEYS.ALERT_HISTORY,
       ]);
 
       // Load request history
@@ -220,7 +217,9 @@ export class MonitoringService {
 
       // Load service health
       if (result[this.STORAGE_KEYS.SERVICE_HEALTH]) {
-        this.serviceHealthMetrics = new Map(Object.entries(result[this.STORAGE_KEYS.SERVICE_HEALTH]));
+        this.serviceHealthMetrics = new Map(
+          Object.entries(result[this.STORAGE_KEYS.SERVICE_HEALTH]),
+        );
       }
 
       // Load usage analytics
@@ -239,7 +238,6 @@ export class MonitoringService {
         // Clean old alerts
         this.cleanOldAlertHistory();
       }
-
     } catch (error) {
       console.warn('Failed to load stored monitoring data:', error);
       // Continue with empty state
@@ -251,7 +249,7 @@ export class MonitoringService {
    */
   private initializeServiceHealth(): void {
     const services = ['translation', 'rateLimit', 'cache', 'batch', 'errorHandling'];
-    
+
     for (const service of services) {
       if (!this.serviceHealthMetrics.has(service)) {
         this.serviceHealthMetrics.set(service, {
@@ -263,8 +261,8 @@ export class MonitoringService {
             requestCount: 0,
             errorCount: 0,
             averageResponseTime: 0,
-            lastRequestTime: 0
-          }
+            lastRequestTime: 0,
+          },
         });
       }
     }
@@ -283,7 +281,7 @@ export class MonitoringService {
         threshold: 0.1, // 10%
         timeWindow: 300, // 5 minutes
         enabled: true,
-        notificationMethods: ['console', 'storage']
+        notificationMethods: ['console', 'storage'],
       },
       {
         id: 'slow_response_time',
@@ -293,7 +291,7 @@ export class MonitoringService {
         threshold: 5000, // 5 seconds
         timeWindow: 600, // 10 minutes
         enabled: true,
-        notificationMethods: ['console', 'storage']
+        notificationMethods: ['console', 'storage'],
       },
       {
         id: 'quota_threshold',
@@ -303,7 +301,7 @@ export class MonitoringService {
         threshold: 0.8, // 80%
         timeWindow: 3600, // 1 hour
         enabled: true,
-        notificationMethods: ['console', 'storage']
+        notificationMethods: ['console', 'storage'],
       },
       {
         id: 'cache_miss_rate',
@@ -313,8 +311,8 @@ export class MonitoringService {
         threshold: 0.7, // 70%
         timeWindow: 1800, // 30 minutes
         enabled: true,
-        notificationMethods: ['console']
-      }
+        notificationMethods: ['console'],
+      },
     ];
 
     for (const rule of defaultRules) {
@@ -360,7 +358,7 @@ export class MonitoringService {
     const requestMetrics: RequestMetrics = {
       id: requestId,
       timestamp: Date.now(),
-      ...metrics
+      ...metrics,
     };
 
     // Add to history
@@ -389,7 +387,7 @@ export class MonitoringService {
   async recordCacheOperation(
     operation: 'hit' | 'miss' | 'set' | 'eviction',
     key: string,
-    size?: number
+    size?: number,
   ): Promise<void> {
     await this.ensureInitialized();
 
@@ -401,7 +399,7 @@ export class MonitoringService {
       responseTime: 1, // Cache operations are typically very fast
       characterCount: size || 0,
       cacheHit: operation === 'hit',
-      retryCount: 0
+      retryCount: 0,
     };
 
     await this.recordRequest(metrics);
@@ -422,14 +420,14 @@ export class MonitoringService {
       serviceHealth.lastError = {
         timestamp: request.timestamp,
         message: request.errorMessage || 'Unknown error',
-        code: request.errorCode || TranslationErrorCode.UNKNOWN_ERROR
+        code: request.errorCode || TranslationErrorCode.UNKNOWN_ERROR,
       };
     }
 
     // Update response time (running average)
     const totalRequests = serviceHealth.metrics.requestCount;
     const currentAvg = serviceHealth.metrics.averageResponseTime;
-    serviceHealth.metrics.averageResponseTime = 
+    serviceHealth.metrics.averageResponseTime =
       (currentAvg * (totalRequests - 1) + request.responseTime) / totalRequests;
   }
 
@@ -446,7 +444,7 @@ export class MonitoringService {
 
     // Filter requests within the calculation window
     const recentRequests = this.requestHistory.filter(
-      r => r.timestamp >= windowStart && r.operation.startsWith('translate')
+      (r) => r.timestamp >= windowStart && r.operation.startsWith('translate'),
     );
 
     if (recentRequests.length === 0) {
@@ -454,10 +452,10 @@ export class MonitoringService {
     }
 
     // Calculate response time statistics
-    const responseTimes = recentRequests.map(r => r.responseTime).sort((a, b) => a - b);
-    const successfulRequests = recentRequests.filter(r => r.status === 'success');
-    const failedRequests = recentRequests.filter(r => r.status === 'error');
-    const timeoutRequests = recentRequests.filter(r => r.status === 'timeout');
+    const responseTimes = recentRequests.map((r) => r.responseTime).sort((a, b) => a - b);
+    const successfulRequests = recentRequests.filter((r) => r.status === 'success');
+    const failedRequests = recentRequests.filter((r) => r.status === 'error');
+    const timeoutRequests = recentRequests.filter((r) => r.status === 'timeout');
 
     const totalCharacters = recentRequests.reduce((sum, r) => sum + r.characterCount, 0);
     const windowDurationSeconds = this.PERFORMANCE_CALCULATION_WINDOW / 1000;
@@ -474,7 +472,7 @@ export class MonitoringService {
       charactersPerSecond: totalCharacters / windowDurationSeconds,
       errorRate: failedRequests.length / recentRequests.length,
       timeoutRate: timeoutRequests.length / recentRequests.length,
-      lastUpdated: now
+      lastUpdated: now,
     };
   }
 
@@ -483,7 +481,7 @@ export class MonitoringService {
    */
   private calculatePercentile(sortedArray: number[], percentile: number): number {
     if (sortedArray.length === 0) return 0;
-    
+
     const index = Math.ceil(sortedArray.length * percentile) - 1;
     return sortedArray[Math.max(0, Math.min(index, sortedArray.length - 1))];
   }
@@ -501,12 +499,12 @@ export class MonitoringService {
 
     for (const [serviceName, health] of this.serviceHealthMetrics.entries()) {
       const recentRequests = this.requestHistory.filter(
-        r => r.service === serviceName && r.timestamp >= fiveMinutesAgo
+        (r) => r.service === serviceName && r.timestamp >= fiveMinutesAgo,
       );
 
       if (recentRequests.length === 0) continue;
 
-      const errorRequests = recentRequests.filter(r => r.status === 'error');
+      const errorRequests = recentRequests.filter((r) => r.status === 'error');
       const errorRate = errorRequests.length / recentRequests.length;
 
       // Determine health status
@@ -536,7 +534,7 @@ export class MonitoringService {
    */
   private updateUsageAnalytics(): void {
     const periods: Array<'hour' | 'day' | 'week' | 'month'> = ['hour', 'day', 'week', 'month'];
-    
+
     for (const period of periods) {
       const analytics = this.calculateUsageAnalytics(period);
       this.usageAnalytics.set(period, analytics);
@@ -566,7 +564,7 @@ export class MonitoringService {
     }
 
     const periodRequests = this.requestHistory.filter(
-      r => r.timestamp >= startTime && r.operation.startsWith('translate')
+      (r) => r.timestamp >= startTime && r.operation.startsWith('translate'),
     );
 
     // Calculate language statistics
@@ -588,11 +586,10 @@ export class MonitoringService {
       hourlyRequests.set(hour, (hourlyRequests.get(hour) || 0) + 1);
     }
 
-    const peakHour = Array.from(hourlyRequests.entries())
-      .sort((a, b) => b[1] - a[1])[0] || [0, 0];
+    const peakHour = Array.from(hourlyRequests.entries()).sort((a, b) => b[1] - a[1])[0] || [0, 0];
 
     // Calculate error statistics
-    const errorRequests = periodRequests.filter(r => r.status === 'error');
+    const errorRequests = periodRequests.filter((r) => r.status === 'error');
     const errorsByType = new Map<TranslationErrorCode, number>();
 
     for (const request of errorRequests) {
@@ -601,8 +598,7 @@ export class MonitoringService {
       }
     }
 
-    const mostCommonErrorEntry = Array.from(errorsByType.entries())
-      .sort((a, b) => b[1] - a[1])[0];
+    const mostCommonErrorEntry = Array.from(errorsByType.entries()).sort((a, b) => b[1] - a[1])[0];
 
     const totalCharacters = periodRequests.reduce((sum, r) => sum + r.characterCount, 0);
     const periodDurationHours = (now - startTime) / (60 * 60 * 1000);
@@ -621,29 +617,31 @@ export class MonitoringService {
           .map(([language, count]) => ({
             language,
             count,
-            percentage: (count / periodRequests.length) * 100
+            percentage: (count / periodRequests.length) * 100,
           })),
         peakUsageHour: {
           hour: peakHour[0],
-          requestCount: peakHour[1]
+          requestCount: peakHour[1],
         },
         averageRequestsPerHour: periodRequests.length / periodDurationHours,
-        averageCharactersPerRequest: totalCharacters / Math.max(1, periodRequests.length)
+        averageCharactersPerRequest: totalCharacters / Math.max(1, periodRequests.length),
       },
       performance: this.performanceMetrics || this.getEmptyPerformanceMetrics(),
       errors: {
         totalErrors: errorRequests.length,
         errorsByType: Object.fromEntries(errorsByType.entries()),
-        mostCommonError: mostCommonErrorEntry ? {
-          code: mostCommonErrorEntry[0],
-          count: mostCommonErrorEntry[1],
-          percentage: (mostCommonErrorEntry[1] / errorRequests.length) * 100
-        } : {
-          code: TranslationErrorCode.UNKNOWN_ERROR,
-          count: 0,
-          percentage: 0
-        }
-      }
+        mostCommonError: mostCommonErrorEntry
+          ? {
+              code: mostCommonErrorEntry[0],
+              count: mostCommonErrorEntry[1],
+              percentage: (mostCommonErrorEntry[1] / errorRequests.length) * 100,
+            }
+          : {
+              code: TranslationErrorCode.UNKNOWN_ERROR,
+              count: 0,
+              percentage: 0,
+            },
+      },
     };
   }
 
@@ -720,7 +718,7 @@ export class MonitoringService {
       currentValue,
       threshold: rule.threshold,
       message: `${rule.name}: ${rule.metric} (${currentValue.toFixed(3)}) ${rule.condition.replace('_', ' ')} ${rule.threshold}`,
-      severity: this.determineSeverity(rule.metric, currentValue, rule.threshold)
+      severity: this.determineSeverity(rule.metric, currentValue, rule.threshold),
     };
 
     // Add to history
@@ -741,7 +739,11 @@ export class MonitoringService {
   /**
    * Determine alert severity
    */
-  private determineSeverity(metric: string, value: number, threshold: number): AlertEvent['severity'] {
+  private determineSeverity(
+    metric: string,
+    value: number,
+    threshold: number,
+  ): AlertEvent['severity'] {
     const ratio = value / threshold;
 
     switch (metric) {
@@ -750,13 +752,13 @@ export class MonitoringService {
         if (ratio > 2) return 'high';
         if (ratio > 1.5) return 'medium';
         return 'low';
-      
+
       case 'averageResponseTime':
         if (ratio > 4) return 'critical';
         if (ratio > 2.5) return 'high';
         if (ratio > 1.5) return 'medium';
         return 'low';
-      
+
       default:
         if (ratio > 2) return 'high';
         if (ratio > 1.5) return 'medium';
@@ -772,12 +774,12 @@ export class MonitoringService {
       case 'console':
         console.warn(`[ALERT ${alert.severity.toUpperCase()}] ${alert.message}`);
         break;
-      
+
       case 'storage':
         // Save alert to storage for dashboard display
         await this.saveDataToStorage();
         break;
-      
+
       case 'callback':
         // Could integrate with external monitoring systems
         // this.notificationCallback?.(alert);
@@ -795,10 +797,11 @@ export class MonitoringService {
   async getCacheMetrics(): Promise<CacheMetrics> {
     try {
       const cacheStats = await translationCacheService.getStats();
-      
+
       const totalRequests = cacheStats.hits + cacheStats.misses;
-      const averageEntrySize = cacheStats.totalEntries > 0 ? cacheStats.totalSize / cacheStats.totalEntries : 0;
-      
+      const averageEntrySize =
+        cacheStats.totalEntries > 0 ? cacheStats.totalSize / cacheStats.totalEntries : 0;
+
       return {
         totalRequests,
         hits: cacheStats.hits || 0,
@@ -809,7 +812,7 @@ export class MonitoringService {
         averageEntrySize,
         compressionRatio: cacheStats.compressionSavings || 0,
         evictions: cacheStats.evictions || 0,
-        lastCleanup: 0 // Not available in cache stats, would need separate call
+        lastCleanup: 0, // Not available in cache stats, would need separate call
       };
     } catch (error) {
       console.error('Failed to get cache metrics:', error);
@@ -823,7 +826,7 @@ export class MonitoringService {
         averageEntrySize: 0,
         compressionRatio: 0,
         evictions: 0,
-        lastCleanup: 0
+        lastCleanup: 0,
       };
     }
   }
@@ -849,7 +852,9 @@ export class MonitoringService {
   /**
    * Get usage analytics
    */
-  getUsageAnalytics(period?: 'hour' | 'day' | 'week' | 'month'): UsageAnalytics | Map<string, UsageAnalytics> {
+  getUsageAnalytics(
+    period?: 'hour' | 'day' | 'week' | 'month',
+  ): UsageAnalytics | Map<string, UsageAnalytics> {
     if (period) {
       return this.usageAnalytics.get(period) || this.getEmptyUsageAnalytics(period);
     }
@@ -861,11 +866,11 @@ export class MonitoringService {
    */
   getRequestHistory(limit?: number, service?: string): RequestMetrics[] {
     let history = this.requestHistory;
-    
+
     if (service) {
-      history = history.filter(r => r.service === service);
+      history = history.filter((r) => r.service === service);
     }
-    
+
     return history.slice(0, limit || 100);
   }
 
@@ -893,7 +898,7 @@ export class MonitoringService {
       serviceHealth: Object.fromEntries(this.serviceHealthMetrics.entries()),
       cacheMetrics: await this.getCacheMetrics(),
       recentAlerts: this.alertHistory.slice(0, 10),
-      dailyAnalytics: this.usageAnalytics.get('day') || this.getEmptyUsageAnalytics('day')
+      dailyAnalytics: this.usageAnalytics.get('day') || this.getEmptyUsageAnalytics('day'),
     };
   }
 
@@ -906,8 +911,8 @@ export class MonitoringService {
    */
   private async getQuotaUsage(): Promise<number> {
     try {
-      const stats = await rateLimitService.getUsageStats();
-      return stats.monthly.percentage / 100;
+      const stats = await rateLimitService?.getUsageStats();
+      return stats?.monthly?.percentage ? stats.monthly.percentage / 100 : 0;
     } catch (error) {
       return 0;
     }
@@ -944,7 +949,7 @@ export class MonitoringService {
    */
   private cleanOldRequestHistory(): void {
     const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000; // 7 days
-    this.requestHistory = this.requestHistory.filter(r => r.timestamp >= cutoff);
+    this.requestHistory = this.requestHistory.filter((r) => r.timestamp >= cutoff);
   }
 
   /**
@@ -952,7 +957,7 @@ export class MonitoringService {
    */
   private cleanOldAlertHistory(): void {
     const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000; // 30 days
-    this.alertHistory = this.alertHistory.filter(a => a.timestamp >= cutoff);
+    this.alertHistory = this.alertHistory.filter((a) => a.timestamp >= cutoff);
   }
 
   /**
@@ -971,7 +976,7 @@ export class MonitoringService {
       charactersPerSecond: 0,
       errorRate: 0,
       timeoutRate: 0,
-      lastUpdated: Date.now()
+      lastUpdated: Date.now(),
     };
   }
 
@@ -991,7 +996,7 @@ export class MonitoringService {
         mostTranslatedLanguages: [],
         peakUsageHour: { hour: 0, requestCount: 0 },
         averageRequestsPerHour: 0,
-        averageCharactersPerRequest: 0
+        averageCharactersPerRequest: 0,
       },
       performance: this.getEmptyPerformanceMetrics(),
       errors: {
@@ -1000,9 +1005,9 @@ export class MonitoringService {
         mostCommonError: {
           code: TranslationErrorCode.UNKNOWN_ERROR,
           count: 0,
-          percentage: 0
-        }
-      }
+          percentage: 0,
+        },
+      },
     };
   }
 
@@ -1017,7 +1022,7 @@ export class MonitoringService {
         [this.STORAGE_KEYS.SERVICE_HEALTH]: Object.fromEntries(this.serviceHealthMetrics.entries()),
         [this.STORAGE_KEYS.USAGE_ANALYTICS]: Object.fromEntries(this.usageAnalytics.entries()),
         [this.STORAGE_KEYS.ALERT_RULES]: Object.fromEntries(this.alertRules.entries()),
-        [this.STORAGE_KEYS.ALERT_HISTORY]: this.alertHistory.slice(0, 100) // Limit storage size
+        [this.STORAGE_KEYS.ALERT_HISTORY]: this.alertHistory.slice(0, 100), // Limit storage size
       };
 
       await chrome.storage.local.set(data);
@@ -1044,7 +1049,7 @@ export class MonitoringService {
     this.serviceHealthMetrics.clear();
     this.usageAnalytics.clear();
     this.alertHistory = [];
-    
+
     // Keep alert rules but reset their state
     for (const rule of this.alertRules.values()) {
       delete rule.lastTriggered;
@@ -1079,4 +1084,4 @@ export class MonitoringService {
 // ============================================================================
 
 // Export a singleton instance for use throughout the application
-export const monitoringService = new MonitoringService(); 
+export const monitoringService = new MonitoringService();

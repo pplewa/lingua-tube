@@ -3,12 +3,7 @@
  * Enhanced vocabulary management with search, filtering, and batch operations
  */
 
-import {
-  VocabularyItem,
-  StorageResult,
-  StorageEventType,
-  storageService,
-} from '../storage';
+import { VocabularyItem, StorageResult, StorageEventType, storageService } from '../storage';
 
 /**
  * Vocabulary search and filter options
@@ -39,7 +34,16 @@ export interface VocabularyFilters {
  * Vocabulary sorting options
  */
 export interface VocabularySortOptions {
-  field: 'word' | 'translation' | 'createdAt' | 'lastReviewed' | 'reviewCount' | 'difficulty' | 'learningStatus' | 'frequency' | 'lastModified';
+  field:
+    | 'word'
+    | 'translation'
+    | 'createdAt'
+    | 'lastReviewed'
+    | 'reviewCount'
+    | 'difficulty'
+    | 'learningStatus'
+    | 'frequency'
+    | 'lastModified';
   direction: 'asc' | 'desc';
 }
 
@@ -103,7 +107,7 @@ export class VocabularyManager {
       videoTitle?: string;
       timestamp?: number;
       difficulty?: VocabularyItem['difficulty'];
-    }
+    },
   ): Promise<StorageResult<VocabularyItem>> {
     const vocabularyItem: Omit<VocabularyItem, 'id' | 'createdAt'> = {
       word: word.trim(),
@@ -127,9 +131,8 @@ export class VocabularyManager {
   async isWordSaved(word: string, sourceLanguage: string): Promise<boolean> {
     const vocabulary = await this.getVocabularyCached();
     return vocabulary.some(
-      item => 
-        item.word.toLowerCase() === word.toLowerCase() && 
-        item.sourceLanguage === sourceLanguage
+      (item) =>
+        item.word.toLowerCase() === word.toLowerCase() && item.sourceLanguage === sourceLanguage,
     );
   }
 
@@ -138,12 +141,12 @@ export class VocabularyManager {
    */
   async getVocabulary(
     filters?: VocabularyFilters,
-    sort?: VocabularySortOptions
+    sort?: VocabularySortOptions,
   ): Promise<StorageResult<VocabularyItem[]>> {
     try {
       const vocabulary = await this.getVocabularyCached();
       let filteredVocabulary = this.applyFilters(vocabulary, filters);
-      
+
       if (sort) {
         filteredVocabulary = this.applySorting(filteredVocabulary, sort);
       }
@@ -176,24 +179,26 @@ export class VocabularyManager {
       fuzzy?: boolean;
       fields?: Array<keyof VocabularyItem>;
       limit?: number;
-    } = {}
+    } = {},
   ): Promise<StorageResult<VocabularyItem[]>> {
     try {
       const vocabulary = await this.getVocabularyCached();
       const { fuzzy = false, fields = ['word', 'translation', 'context'], limit = 50 } = options;
-      
-      const searchResults = vocabulary.filter(item => {
-        return fields.some(field => {
-          const fieldValue = item[field];
-          if (typeof fieldValue !== 'string') return false;
-          
-          if (fuzzy) {
-            return this.fuzzyMatch(searchTerm.toLowerCase(), fieldValue.toLowerCase());
-          } else {
-            return fieldValue.toLowerCase().includes(searchTerm.toLowerCase());
-          }
-        });
-      }).slice(0, limit);
+
+      const searchResults = vocabulary
+        .filter((item) => {
+          return fields.some((field) => {
+            const fieldValue = item[field];
+            if (typeof fieldValue !== 'string') return false;
+
+            if (fuzzy) {
+              return this.fuzzyMatch(searchTerm.toLowerCase(), fieldValue.toLowerCase());
+            } else {
+              return fieldValue.toLowerCase().includes(searchTerm.toLowerCase());
+            }
+          });
+        })
+        .slice(0, limit);
 
       return {
         success: true,
@@ -255,7 +260,7 @@ export class VocabularyManager {
    */
   async updateWords(
     ids: string[],
-    updates: Partial<VocabularyItem>
+    updates: Partial<VocabularyItem>,
   ): Promise<BatchOperationResult> {
     const result: BatchOperationResult = {
       successful: [],
@@ -290,7 +295,7 @@ export class VocabularyManager {
    */
   async importVocabulary(
     data: string,
-    format: 'json' | 'csv' | 'anki'
+    format: 'json' | 'csv' | 'anki',
   ): Promise<BatchOperationResult> {
     try {
       let vocabularyItems: Omit<VocabularyItem, 'id' | 'createdAt'>[];
@@ -349,7 +354,7 @@ export class VocabularyManager {
    */
   async exportVocabulary(
     format: 'json' | 'csv' | 'anki',
-    filters?: VocabularyFilters
+    filters?: VocabularyFilters,
   ): Promise<StorageResult<string>> {
     try {
       const vocabularyResult = await this.getVocabulary(filters);
@@ -410,14 +415,14 @@ export class VocabularyManager {
    */
   async highlightVocabularyInText(
     text: string,
-    config: HighlightConfig = { color: '#ffeb3b' }
+    config: HighlightConfig = { color: '#ffeb3b' },
   ): Promise<string> {
     const vocabulary = await this.getVocabularyCached();
     if (vocabulary.length === 0) return text;
 
     // Create a map for fast lookup
     const wordMap = new Map<string, VocabularyItem>();
-    vocabulary.forEach(item => {
+    vocabulary.forEach((item) => {
       const key = config.caseSensitive ? item.word : item.word.toLowerCase();
       wordMap.set(key, item);
     });
@@ -425,7 +430,7 @@ export class VocabularyManager {
     // Use regex to find and replace words
     const wordPattern = Array.from(wordMap.keys())
       .sort((a, b) => b.length - a.length) // Sort by length to match longer words first
-      .map(word => this.escapeRegExp(word))
+      .map((word) => this.escapeRegExp(word))
       .join('|');
 
     if (!wordPattern) return text;
@@ -435,12 +440,12 @@ export class VocabularyManager {
     return text.replace(regex, (match) => {
       const lookupKey = config.caseSensitive ? match : match.toLowerCase();
       const vocabularyItem = wordMap.get(lookupKey);
-      
+
       if (!vocabularyItem) return match;
 
       const className = config.className || 'lingua-vocabulary-highlight';
       const style = this.buildHighlightStyle(config);
-      
+
       return `<span class="${className}" style="${style}" data-word-id="${vocabularyItem.id}" title="${vocabularyItem.translation}">${match}</span>`;
     });
   }
@@ -451,10 +456,8 @@ export class VocabularyManager {
   async getVocabularyInText(text: string): Promise<VocabularyItem[]> {
     const vocabulary = await this.getVocabularyCached();
     const textLower = text.toLowerCase();
-    
-    return vocabulary.filter(item => 
-      textLower.includes(item.word.toLowerCase())
-    );
+
+    return vocabulary.filter((item) => textLower.includes(item.word.toLowerCase()));
   }
 
   // ========================================
@@ -476,7 +479,7 @@ export class VocabularyManager {
       notes?: string;
       difficulty?: VocabularyItem['difficulty'];
       frequency?: number;
-    }
+    },
   ): Promise<StorageResult<VocabularyItem>> {
     try {
       const updates: Partial<VocabularyItem> = {
@@ -509,8 +512,8 @@ export class VocabularyManager {
   async addTags(id: string, newTags: string[]): Promise<StorageResult<VocabularyItem>> {
     try {
       const vocabulary = await this.getVocabularyCached();
-      const item = vocabulary.find(v => v.id === id);
-      
+      const item = vocabulary.find((v) => v.id === id);
+
       if (!item) {
         return {
           success: false,
@@ -525,7 +528,7 @@ export class VocabularyManager {
 
       const existingTags = item.tags || [];
       const uniqueTags = [...new Set([...existingTags, ...newTags])];
-      
+
       return this.updateMetadata(id, { tags: uniqueTags });
     } catch (error) {
       return {
@@ -547,8 +550,8 @@ export class VocabularyManager {
   async removeTags(id: string, tagsToRemove: string[]): Promise<StorageResult<VocabularyItem>> {
     try {
       const vocabulary = await this.getVocabularyCached();
-      const item = vocabulary.find(v => v.id === id);
-      
+      const item = vocabulary.find((v) => v.id === id);
+
       if (!item) {
         return {
           success: false,
@@ -562,8 +565,8 @@ export class VocabularyManager {
       }
 
       const existingTags = item.tags || [];
-      const filteredTags = existingTags.filter(tag => !tagsToRemove.includes(tag));
-      
+      const filteredTags = existingTags.filter((tag) => !tagsToRemove.includes(tag));
+
       return this.updateMetadata(id, { tags: filteredTags });
     } catch (error) {
       return {
@@ -584,7 +587,7 @@ export class VocabularyManager {
    */
   async getAllTags(): Promise<string[]> {
     const vocabulary = await this.getVocabularyCached();
-    const allTags = vocabulary.flatMap(item => item.tags || []);
+    const allTags = vocabulary.flatMap((item) => item.tags || []);
     return [...new Set(allTags)].sort();
   }
 
@@ -593,7 +596,7 @@ export class VocabularyManager {
    */
   async updateLearningStatus(
     id: string,
-    status: VocabularyItem['learningStatus']
+    status: VocabularyItem['learningStatus'],
   ): Promise<StorageResult<VocabularyItem>> {
     return this.updateMetadata(id, { learningStatus: status });
   }
@@ -611,8 +614,8 @@ export class VocabularyManager {
   async incrementFrequency(id: string): Promise<StorageResult<VocabularyItem>> {
     try {
       const vocabulary = await this.getVocabularyCached();
-      const item = vocabulary.find(v => v.id === id);
-      
+      const item = vocabulary.find((v) => v.id === id);
+
       if (!item) {
         return {
           success: false,
@@ -659,7 +662,7 @@ export class VocabularyManager {
   }> {
     const vocabulary = await this.getVocabularyCached();
     const now = Date.now();
-    const sevenDaysAgo = now - (7 * 24 * 60 * 60 * 1000);
+    const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
 
     const stats = {
       total: vocabulary.length,
@@ -706,7 +709,7 @@ export class VocabularyManager {
 
       // Tags statistics
       if (item.tags) {
-        item.tags.forEach(tag => {
+        item.tags.forEach((tag) => {
           tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
         });
       }
@@ -770,10 +773,13 @@ export class VocabularyManager {
     this.lastCacheUpdate = 0;
   }
 
-  private applyFilters(vocabulary: VocabularyItem[], filters?: VocabularyFilters): VocabularyItem[] {
+  private applyFilters(
+    vocabulary: VocabularyItem[],
+    filters?: VocabularyFilters,
+  ): VocabularyItem[] {
     if (!filters) return vocabulary;
 
-    return vocabulary.filter(item => {
+    return vocabulary.filter((item) => {
       // Search term filter
       if (filters.searchTerm) {
         const searchTerm = filters.searchTerm.toLowerCase();
@@ -794,7 +800,7 @@ export class VocabularyManager {
       // Tags filter
       if (filters.tags && filters.tags.length > 0) {
         const itemTags = item.tags || [];
-        const hasAllTags = filters.tags.every(tag => itemTags.includes(tag));
+        const hasAllTags = filters.tags.every((tag) => itemTags.includes(tag));
         if (!hasAllTags) return false;
       }
 
@@ -810,8 +816,10 @@ export class VocabularyManager {
 
       // Review count filter
       if (filters.reviewCountRange) {
-        if (item.reviewCount < filters.reviewCountRange.min || 
-            item.reviewCount > filters.reviewCountRange.max) {
+        if (
+          item.reviewCount < filters.reviewCountRange.min ||
+          item.reviewCount > filters.reviewCountRange.max
+        ) {
           return false;
         }
       }
@@ -819,8 +827,7 @@ export class VocabularyManager {
       // Frequency filter
       if (filters.frequencyRange) {
         const frequency = item.frequency || 0;
-        if (frequency < filters.frequencyRange.min || 
-            frequency > filters.frequencyRange.max) {
+        if (frequency < filters.frequencyRange.min || frequency > filters.frequencyRange.max) {
           return false;
         }
       }
@@ -829,7 +836,10 @@ export class VocabularyManager {
     });
   }
 
-  private applySorting(vocabulary: VocabularyItem[], sort: VocabularySortOptions): VocabularyItem[] {
+  private applySorting(
+    vocabulary: VocabularyItem[],
+    sort: VocabularySortOptions,
+  ): VocabularyItem[] {
     return [...vocabulary].sort((a, b) => {
       let aValue: any = a[sort.field];
       let bValue: any = b[sort.field];
@@ -855,17 +865,17 @@ export class VocabularyManager {
   private fuzzyMatch(search: string, target: string): boolean {
     const searchLen = search.length;
     const targetLen = target.length;
-    
+
     if (searchLen > targetLen) return false;
     if (searchLen === targetLen) return search === target;
-    
+
     let searchIndex = 0;
     for (let targetIndex = 0; targetIndex < targetLen && searchIndex < searchLen; targetIndex++) {
       if (search[searchIndex] === target[targetIndex]) {
         searchIndex++;
       }
     }
-    
+
     return searchIndex === searchLen;
   }
 
@@ -875,11 +885,11 @@ export class VocabularyManager {
 
   private buildHighlightStyle(config: HighlightConfig): string {
     const styles = [`color: ${config.color}`];
-    
+
     if (config.backgroundColor) {
       styles.push(`background-color: ${config.backgroundColor}`);
     }
-    
+
     return styles.join('; ');
   }
 
@@ -893,17 +903,17 @@ export class VocabularyManager {
   }
 
   private parseCsvImport(data: string): Omit<VocabularyItem, 'id' | 'createdAt'>[] {
-    const lines = data.split('\n').filter(line => line.trim());
-    const headers = lines[0].split(',').map(h => h.trim());
-    
-    return lines.slice(1).map(line => {
-      const values = line.split(',').map(v => v.trim());
+    const lines = data.split('\n').filter((line) => line.trim());
+    const headers = lines[0].split(',').map((h) => h.trim());
+
+    return lines.slice(1).map((line) => {
+      const values = line.split(',').map((v) => v.trim());
       const item: any = {};
-      
+
       headers.forEach((header, index) => {
         item[header] = values[index] || '';
       });
-      
+
       return {
         word: item.word || '',
         translation: item.translation || '',
@@ -918,9 +928,9 @@ export class VocabularyManager {
 
   private parseAnkiImport(data: string): Omit<VocabularyItem, 'id' | 'createdAt'>[] {
     // Anki format: front\tback\ttags
-    const lines = data.split('\n').filter(line => line.trim());
-    
-    return lines.map(line => {
+    const lines = data.split('\n').filter((line) => line.trim());
+
+    return lines.map((line) => {
       const parts = line.split('\t');
       return {
         word: parts[0] || '',
@@ -939,24 +949,32 @@ export class VocabularyManager {
   }
 
   private formatCsvExport(vocabulary: VocabularyItem[]): string {
-    const headers = ['word', 'translation', 'context', 'sourceLanguage', 'targetLanguage', 'createdAt', 'reviewCount'];
+    const headers = [
+      'word',
+      'translation',
+      'context',
+      'sourceLanguage',
+      'targetLanguage',
+      'createdAt',
+      'reviewCount',
+    ];
     const csvLines = [headers.join(',')];
-    
-    vocabulary.forEach(item => {
-      const values = headers.map(header => {
+
+    vocabulary.forEach((item) => {
+      const values = headers.map((header) => {
         const value = item[header as keyof VocabularyItem];
         return typeof value === 'string' ? `"${value.replace(/"/g, '""')}"` : value;
       });
       csvLines.push(values.join(','));
     });
-    
+
     return csvLines.join('\n');
   }
 
   private formatAnkiExport(vocabulary: VocabularyItem[]): string {
-    return vocabulary.map(item => 
-      `${item.word}\t${item.translation}\t${item.context}`
-    ).join('\n');
+    return vocabulary
+      .map((item) => `${item.word}\t${item.translation}\t${item.context}`)
+      .join('\n');
   }
 
   /**
@@ -970,4 +988,4 @@ export class VocabularyManager {
 }
 
 // Export singleton instance
-export const vocabularyManager = VocabularyManager.getInstance(); 
+export const vocabularyManager = VocabularyManager.getInstance();

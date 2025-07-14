@@ -1,13 +1,11 @@
 // Rate limiting service for Microsoft Translator API integration
 // Implements token bucket algorithm with persistent storage and quota tracking
 
-import {
-  RateLimitConfig,
-  TranslationErrorCode,
-  TranslationError
-} from './types';
+import { RateLimitConfig, TranslationErrorCode, TranslationError } from './types';
 import { configService } from './ConfigService';
 import { TranslationErrorImpl } from './TranslationApiService';
+import { Logger } from '../logging/Logger';
+import { ComponentType } from '../logging/types';
 
 // ============================================================================
 // Rate Limiting Storage Keys
@@ -18,7 +16,7 @@ const RATE_LIMIT_STORAGE_KEYS = {
   DAILY_USAGE: 'translator_daily_usage',
   MINUTE_USAGE: 'translator_minute_usage',
   REQUEST_TOKENS: 'translator_request_tokens',
-  LAST_RESET: 'translator_last_reset'
+  LAST_RESET: 'translator_last_reset',
 } as const;
 
 // ============================================================================
@@ -79,7 +77,7 @@ export class RateLimitService {
       throw new TranslationErrorImpl(
         'Failed to initialize rate limiting service',
         TranslationErrorCode.INVALID_CONFIG,
-        { originalError: error }
+        { originalError: error },
       );
     }
   }
@@ -100,7 +98,7 @@ export class RateLimitService {
     if (!this.config) {
       throw new TranslationErrorImpl(
         'Rate limit configuration not loaded',
-        TranslationErrorCode.INVALID_CONFIG
+        TranslationErrorCode.INVALID_CONFIG,
       );
     }
 
@@ -110,7 +108,7 @@ export class RateLimitService {
         RATE_LIMIT_STORAGE_KEYS.DAILY_USAGE,
         RATE_LIMIT_STORAGE_KEYS.MINUTE_USAGE,
         RATE_LIMIT_STORAGE_KEYS.REQUEST_TOKENS,
-        RATE_LIMIT_STORAGE_KEYS.LAST_RESET
+        RATE_LIMIT_STORAGE_KEYS.LAST_RESET,
       ]);
 
       const now = Date.now();
@@ -123,32 +121,27 @@ export class RateLimitService {
         monthly: this.initializeUsageData(
           result[RATE_LIMIT_STORAGE_KEYS.MONTHLY_USAGE],
           monthStart,
-          now
+          now,
         ),
-        daily: this.initializeUsageData(
-          result[RATE_LIMIT_STORAGE_KEYS.DAILY_USAGE],
-          dayStart,
-          now
-        ),
+        daily: this.initializeUsageData(result[RATE_LIMIT_STORAGE_KEYS.DAILY_USAGE], dayStart, now),
         minute: this.initializeUsageData(
           result[RATE_LIMIT_STORAGE_KEYS.MINUTE_USAGE],
           minuteStart,
-          now
+          now,
         ),
         requestBucket: this.initializeTokenBucket(
           result[RATE_LIMIT_STORAGE_KEYS.REQUEST_TOKENS],
-          this.config.maxRequestsPerSecond
-        )
+          this.config.maxRequestsPerSecond,
+        ),
       };
 
       // Reset windows that have expired
       await this.resetExpiredWindows();
-
     } catch (error) {
       throw new TranslationErrorImpl(
         'Failed to load usage statistics',
         TranslationErrorCode.INVALID_CONFIG,
-        { originalError: error }
+        { originalError: error },
       );
     }
   }
@@ -162,7 +155,7 @@ export class RateLimitService {
         characters: stored.characters || 0,
         requests: stored.requests || 0,
         timestamp: stored.timestamp || now,
-        windowStart
+        windowStart,
       };
     }
 
@@ -170,7 +163,7 @@ export class RateLimitService {
       characters: 0,
       requests: 0,
       timestamp: now,
-      windowStart
+      windowStart,
     };
   }
 
@@ -179,17 +172,17 @@ export class RateLimitService {
    */
   private initializeTokenBucket(stored: any, capacity: number): TokenBucket {
     const now = Date.now();
-    
+
     if (stored && stored.capacity === capacity) {
       // Refill tokens based on time elapsed
       const secondsElapsed = (now - stored.lastRefill) / 1000;
       const tokensToAdd = Math.floor(secondsElapsed * stored.refillRate);
-      
+
       return {
         tokens: Math.min(capacity, stored.tokens + tokensToAdd),
         lastRefill: now,
         capacity,
-        refillRate: capacity // Refill at rate of capacity per second
+        refillRate: capacity, // Refill at rate of capacity per second
       };
     }
 
@@ -197,7 +190,7 @@ export class RateLimitService {
       tokens: capacity,
       lastRefill: now,
       capacity,
-      refillRate: capacity
+      refillRate: capacity,
     };
   }
 
@@ -223,34 +216,36 @@ export class RateLimitService {
         remainingCharacters: Math.max(0, config.maxCharactersPerMonth - stats.monthly.characters),
         remainingRequests: 0,
         quotaExceeded: true,
-        resetTime: this.getMonthStart(now) + (30 * 24 * 60 * 60 * 1000) // Next month
+        resetTime: this.getMonthStart(now) + 30 * 24 * 60 * 60 * 1000, // Next month
       };
     }
 
     // Check minute quota
     if (stats.minute.characters + characterCount > config.maxCharactersPerMinute) {
-      const minuteResetTime = stats.minute.windowStart + (60 * 1000);
+      const minuteResetTime = stats.minute.windowStart + 60 * 1000;
       return {
         allowed: false,
         remainingCharacters: Math.max(0, config.maxCharactersPerMinute - stats.minute.characters),
         remainingRequests: Math.max(0, config.maxRequestsPerSecond * 60 - stats.minute.requests),
         quotaExceeded: false,
         resetTime: minuteResetTime,
-        retryAfter: Math.ceil((minuteResetTime - now) / 1000)
+        retryAfter: Math.ceil((minuteResetTime - now) / 1000),
       };
     }
 
     // Check request rate limit (token bucket)
     const tokensNeeded = 1; // One token per request
     if (stats.requestBucket.tokens < tokensNeeded) {
-      const timeToRefill = Math.ceil((tokensNeeded - stats.requestBucket.tokens) / stats.requestBucket.refillRate);
-      
+      const timeToRefill = Math.ceil(
+        (tokensNeeded - stats.requestBucket.tokens) / stats.requestBucket.refillRate,
+      );
+
       return {
         allowed: false,
         remainingCharacters: Math.max(0, config.maxCharactersPerMinute - stats.minute.characters),
         remainingRequests: Math.floor(stats.requestBucket.tokens),
         quotaExceeded: false,
-        retryAfter: timeToRefill
+        retryAfter: timeToRefill,
       };
     }
 
@@ -259,10 +254,10 @@ export class RateLimitService {
       allowed: true,
       remainingCharacters: Math.min(
         config.maxCharactersPerMonth - stats.monthly.characters,
-        config.maxCharactersPerMinute - stats.minute.characters
+        config.maxCharactersPerMinute - stats.minute.characters,
       ),
       remainingRequests: Math.floor(stats.requestBucket.tokens),
-      quotaExceeded: false
+      quotaExceeded: false,
     };
   }
 
@@ -314,22 +309,24 @@ export class RateLimitService {
       monthly: {
         used: stats.monthly.characters,
         limit: config.maxCharactersPerMonth,
-        percentage: Math.round((stats.monthly.characters / config.maxCharactersPerMonth) * 100)
+        percentage: Math.round((stats.monthly.characters / config.maxCharactersPerMonth) * 100),
       },
       daily: {
         used: stats.daily.characters,
         limit: config.maxCharactersPerMinute * 1440, // Minutes in a day
-        percentage: Math.round((stats.daily.characters / (config.maxCharactersPerMinute * 1440)) * 100)
+        percentage: Math.round(
+          (stats.daily.characters / (config.maxCharactersPerMinute * 1440)) * 100,
+        ),
       },
       minute: {
         used: stats.minute.characters,
         limit: config.maxCharactersPerMinute,
-        percentage: Math.round((stats.minute.characters / config.maxCharactersPerMinute) * 100)
+        percentage: Math.round((stats.minute.characters / config.maxCharactersPerMinute) * 100),
       },
       requestTokens: {
         available: Math.floor(stats.requestBucket.tokens),
-        capacity: stats.requestBucket.capacity
-      }
+        capacity: stats.requestBucket.capacity,
+      },
     };
   }
 
@@ -374,7 +371,7 @@ export class RateLimitService {
       if (tokensToAdd > 0) {
         this.usageStats.requestBucket.tokens = Math.min(
           this.usageStats.requestBucket.capacity,
-          this.usageStats.requestBucket.tokens + tokensToAdd
+          this.usageStats.requestBucket.tokens + tokensToAdd,
         );
         this.usageStats.requestBucket.lastRefill = now;
         needsSave = true;
@@ -407,8 +404,15 @@ export class RateLimitService {
    */
   private getMinuteStart(timestamp: number): number {
     const date = new Date(timestamp);
-    return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 
-                   date.getHours(), date.getMinutes(), 0, 0).getTime();
+    return new Date(
+      date.getFullYear(),
+      date.getMonth(),
+      date.getDate(),
+      date.getHours(),
+      date.getMinutes(),
+      0,
+      0,
+    ).getTime();
   }
 
   // --------------------------------------------------------------------------
@@ -427,10 +431,16 @@ export class RateLimitService {
         [RATE_LIMIT_STORAGE_KEYS.DAILY_USAGE]: this.usageStats.daily,
         [RATE_LIMIT_STORAGE_KEYS.MINUTE_USAGE]: this.usageStats.minute,
         [RATE_LIMIT_STORAGE_KEYS.REQUEST_TOKENS]: this.usageStats.requestBucket,
-        [RATE_LIMIT_STORAGE_KEYS.LAST_RESET]: Date.now()
+        [RATE_LIMIT_STORAGE_KEYS.LAST_RESET]: Date.now(),
       });
     } catch (error) {
-      console.warn('Failed to save rate limit usage stats:', error);
+      const logger = Logger.getInstance();
+      logger?.warn('Failed to save rate limit usage stats', {
+        component: ComponentType.TRANSLATION_SERVICE,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
     }
   }
 
@@ -444,7 +454,7 @@ export class RateLimitService {
         RATE_LIMIT_STORAGE_KEYS.DAILY_USAGE,
         RATE_LIMIT_STORAGE_KEYS.MINUTE_USAGE,
         RATE_LIMIT_STORAGE_KEYS.REQUEST_TOKENS,
-        RATE_LIMIT_STORAGE_KEYS.LAST_RESET
+        RATE_LIMIT_STORAGE_KEYS.LAST_RESET,
       ]);
 
       // Reinitialize stats
@@ -453,7 +463,7 @@ export class RateLimitService {
       throw new TranslationErrorImpl(
         'Failed to clear usage statistics',
         TranslationErrorCode.INVALID_CONFIG,
-        { originalError: error }
+        { originalError: error },
       );
     }
   }
@@ -503,8 +513,8 @@ export class RateLimitService {
         TranslationErrorCode.QUOTA_EXCEEDED,
         {
           remainingCharacters: status.remainingCharacters,
-          resetTime: status.resetTime
-        }
+          resetTime: status.resetTime,
+        },
       );
     }
 
@@ -515,8 +525,8 @@ export class RateLimitService {
         remainingCharacters: status.remainingCharacters,
         remainingRequests: status.remainingRequests,
         retryAfter: status.retryAfter,
-        resetTime: status.resetTime
-      }
+        resetTime: status.resetTime,
+      },
     );
   }
 }
@@ -526,4 +536,4 @@ export class RateLimitService {
 // ============================================================================
 
 // Export a singleton instance for use throughout the application
-export const rateLimitService = new RateLimitService(); 
+export const rateLimitService = typeof window !== 'undefined' ? new RateLimitService() : null;

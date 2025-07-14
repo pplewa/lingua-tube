@@ -23,7 +23,7 @@ export interface SubtitleTime {
 export interface SubtitleSegment {
   readonly id: string;
   readonly startTime: number; // seconds with millisecond precision
-  readonly endTime: number;   // seconds with millisecond precision
+  readonly endTime: number; // seconds with millisecond precision
   readonly text: string;
   readonly originalText?: string; // for translations
   readonly styling?: SubtitleStyling;
@@ -146,7 +146,7 @@ export enum SubtitleFormat {
   YOUTUBE_SRV2 = 'youtube_srv2',
   YOUTUBE_SRV3 = 'youtube_srv3',
   JSON = 'json',
-  PLAIN_TEXT = 'plain_text'
+  PLAIN_TEXT = 'plain_text',
 }
 
 /**
@@ -193,7 +193,7 @@ export interface FetchConfig {
 export interface RetryConfig {
   readonly maxAttempts: number;
   readonly baseDelay: number; // milliseconds
-  readonly maxDelay: number;  // milliseconds
+  readonly maxDelay: number; // milliseconds
   readonly exponentialBackoff: boolean;
   readonly retryOn?: number[]; // HTTP status codes to retry
 }
@@ -206,7 +206,7 @@ export const DEFAULT_RETRY_CONFIG: RetryConfig = {
   baseDelay: 1000,
   maxDelay: 10000,
   exponentialBackoff: true,
-  retryOn: [408, 429, 500, 502, 503, 504]
+  retryOn: [408, 429, 500, 502, 503, 504],
 };
 
 /**
@@ -242,28 +242,28 @@ export enum SubtitleErrorCode {
   TIMEOUT = 'TIMEOUT',
   RATE_LIMITED = 'RATE_LIMITED',
   HTTP_ERROR = 'HTTP_ERROR',
-  
+
   // CORS and permission errors
   CORS_ERROR = 'CORS_ERROR',
   UNAUTHORIZED = 'UNAUTHORIZED',
   FORBIDDEN = 'FORBIDDEN',
-  
+
   // Content errors
   NOT_FOUND = 'NOT_FOUND',
   INVALID_URL = 'INVALID_URL',
   INVALID_FORMAT = 'INVALID_FORMAT',
   PARSE_ERROR = 'PARSE_ERROR',
   EMPTY_CONTENT = 'EMPTY_CONTENT',
-  
+
   // Cache errors
   CACHE_ERROR = 'CACHE_ERROR',
   CACHE_FULL = 'CACHE_FULL',
-  
+
   // Processing errors
   CONVERSION_ERROR = 'CONVERSION_ERROR',
   MERGE_ERROR = 'MERGE_ERROR',
   VALIDATION_ERROR = 'VALIDATION_ERROR',
-  
+
   // Extension and system errors
   EXTENSION_ERROR = 'EXTENSION_ERROR',
   CONTENT_SCRIPT_ERROR = 'CONTENT_SCRIPT_ERROR',
@@ -271,7 +271,7 @@ export enum SubtitleErrorCode {
   PROXY_ERROR = 'PROXY_ERROR',
   QUOTA_EXCEEDED = 'QUOTA_EXCEEDED',
   SERVICE_UNAVAILABLE = 'SERVICE_UNAVAILABLE',
-  UNKNOWN_ERROR = 'UNKNOWN_ERROR'
+  UNKNOWN_ERROR = 'UNKNOWN_ERROR',
 }
 
 // ========================================
@@ -459,7 +459,7 @@ export const DEFAULT_CACHE_CONFIG: CacheConfig = {
   defaultTTL: 3600, // 1 hour
   cleanupInterval: 300, // 5 minutes
   storageType: 'hybrid',
-  compressionEnabled: true
+  compressionEnabled: true,
 };
 
 /**
@@ -469,7 +469,7 @@ export const DEFAULT_PARSER_CONFIG: Partial<ParserConfig> = {
   strict: false,
   mergeSegments: false,
   maxSegmentGap: 2.0,
-  preserveFormatting: true
+  preserveFormatting: true,
 };
 
 /**
@@ -493,5 +493,5 @@ export const SUBTITLE_MIME_TYPES: Record<SubtitleFormat, string> = {
   [SubtitleFormat.YOUTUBE_SRV2]: 'application/xml',
   [SubtitleFormat.YOUTUBE_SRV3]: 'application/xml',
   [SubtitleFormat.JSON]: 'application/json',
-  [SubtitleFormat.PLAIN_TEXT]: 'text/plain'
-}; 
+  [SubtitleFormat.PLAIN_TEXT]: 'text/plain',
+};

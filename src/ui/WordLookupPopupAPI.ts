@@ -1,6 +1,6 @@
 /**
  * WordLookupPopup Component API Design
- * 
+ *
  * This file defines the public API for the WordLookupPopup component,
  * including configuration options, methods, events, and integration patterns.
  */
@@ -28,7 +28,7 @@ export interface WordLookupPopupConfig {
     readonly padding: number; // pixels, default: 20
     readonly zIndex: number; // default: 2147483647
   };
-  
+
   // Animation Configuration
   readonly animations: {
     readonly enabled: boolean; // default: true
@@ -36,7 +36,7 @@ export interface WordLookupPopupConfig {
     readonly easing: string; // default: 'cubic-bezier(0.4, 0, 0.2, 1)'
     readonly respectsReducedMotion: boolean; // default: true
   };
-  
+
   // Behavior Configuration
   readonly behavior: {
     readonly autoHideDelay: number; // ms, 0 = no auto-hide, default: 0
@@ -45,7 +45,7 @@ export interface WordLookupPopupConfig {
     readonly focusTrapping: boolean; // default: true
     readonly loadingTimeout: number; // ms, default: 15000
   };
-  
+
   // Content Configuration
   readonly content: {
     readonly showPhonetics: boolean; // default: true
@@ -54,7 +54,7 @@ export interface WordLookupPopupConfig {
     readonly maxExamples: number; // default: 3
     readonly contextWindow: number; // words around target for context, default: 3
   };
-  
+
   // Feature Configuration
   readonly features: {
     readonly enableTTS: boolean; // default: true
@@ -63,7 +63,7 @@ export interface WordLookupPopupConfig {
     readonly enableDefinitions: boolean; // default: true
     readonly enableProgressiveLoading: boolean; // default: true
   };
-  
+
   // Accessibility Configuration
   readonly accessibility: {
     readonly announceContent: boolean; // default: true
@@ -226,203 +226,194 @@ export interface WordLookupPopupAPI {
   // ========================================
   // Core Methods
   // ========================================
-  
+
   /**
    * Display the popup with word lookup data
    * @param data - Word and position information
    * @returns Promise that resolves when popup is shown
    */
   show(data: WordLookupData): Promise<void>;
-  
+
   /**
    * Hide the popup
    * @param reason - Reason for hiding (default: 'programmatic')
    * @returns Promise that resolves when popup is hidden
    */
   hide(reason?: 'user' | 'timeout' | 'escape' | 'clickOutside' | 'programmatic'): Promise<void>;
-  
+
   /**
    * Update popup content without re-showing
    * @param content - New content to display
    */
   updateContent(content: PopupContent): void;
-  
+
   /**
    * Update popup position
    * @param position - New position
    */
   updatePosition(position: PopupPosition): void;
-  
+
   /**
    * Destroy the popup and clean up resources
    */
   destroy(): void;
-  
+
   // ========================================
   // State Management
   // ========================================
-  
+
   /**
    * Get current popup state
    */
   getState(): PopupState;
-  
+
   /**
    * Check if popup is currently visible
    */
   isVisible(): boolean;
-  
+
   /**
    * Check if popup is currently loading
    */
   isLoading(): boolean;
-  
+
   /**
    * Get current word being looked up
    */
   getCurrentWord(): string | null;
-  
+
   /**
    * Get current content
    */
   getCurrentContent(): PopupContent | null;
-  
+
   // ========================================
   // Configuration Management
   // ========================================
-  
+
   /**
    * Update popup configuration
    * @param config - Partial configuration to merge
    */
   updateConfig(config: Partial<WordLookupPopupConfig>): void;
-  
+
   /**
    * Get current configuration
    */
   getConfig(): WordLookupPopupConfig;
-  
+
   /**
    * Reset configuration to defaults
    */
   resetConfig(): void;
-  
+
   // ========================================
   // Event Management
   // ========================================
-  
+
   /**
    * Add event listener
    * @param event - Event name
    * @param handler - Event handler function
    */
-  on<K extends keyof PopupEventHandlers>(
-    event: K,
-    handler: PopupEventHandlers[K]
-  ): void;
-  
+  on<K extends keyof PopupEventHandlers>(event: K, handler: PopupEventHandlers[K]): void;
+
   /**
    * Remove event listener
    * @param event - Event name
    * @param handler - Event handler function (optional, removes all if not provided)
    */
-  off<K extends keyof PopupEventHandlers>(
-    event: K,
-    handler?: PopupEventHandlers[K]
-  ): void;
-  
+  off<K extends keyof PopupEventHandlers>(event: K, handler?: PopupEventHandlers[K]): void;
+
   /**
    * Add one-time event listener
    * @param event - Event name
    * @param handler - Event handler function
    */
-  once<K extends keyof PopupEventHandlers>(
-    event: K,
-    handler: PopupEventHandlers[K]
-  ): void;
-  
+  once<K extends keyof PopupEventHandlers>(event: K, handler: PopupEventHandlers[K]): void;
+
   /**
    * Emit custom event
    * @param event - Event name
    * @param data - Event data
    */
   emit(event: string, data: any): void;
-  
+
   // ========================================
   // Action Methods
   // ========================================
-  
+
   /**
    * Trigger text-to-speech for current word
    * @param options - TTS options
    */
   playTTS(options?: TTSOptions): Promise<void>;
-  
+
   /**
    * Save current word to vocabulary
    * @param options - Save options
    */
   saveToVocabulary(options?: VocabularySaveOptions): Promise<void>;
-  
+
   /**
    * Copy content to clipboard
    * @param content - Content to copy ('word', 'translation', 'definition', 'all')
    */
   copyToClipboard(content: 'word' | 'translation' | 'definition' | 'all'): Promise<void>;
-  
+
   /**
    * Refresh content (re-fetch from services)
    */
   refreshContent(): Promise<void>;
-  
+
   // ========================================
   // Accessibility Methods
   // ========================================
-  
+
   /**
    * Set focus to popup
    */
   focus(): void;
-  
+
   /**
    * Enable/disable click-outside detection
    * @param enabled - Whether to enable click-outside
    */
   setClickOutsideEnabled(enabled: boolean): void;
-  
+
   /**
    * Enable/disable keyboard navigation
    * @param enabled - Whether to enable keyboard navigation
    */
   setKeyboardNavigationEnabled(enabled: boolean): void;
-  
+
   /**
    * Announce content to screen readers
    * @param message - Message to announce
    */
   announce(message: string): void;
-  
+
   // ========================================
   // Advanced Methods
   // ========================================
-  
+
   /**
    * Preload content for a word (for performance)
    * @param word - Word to preload
    * @param languages - Source and target languages
    */
   preloadWord(word: string, languages: { source: string; target: string }): Promise<void>;
-  
+
   /**
    * Clear content cache
    */
   clearCache(): void;
-  
+
   /**
    * Get performance metrics
    */
   getMetrics(): PopupMetrics;
-  
+
   /**
    * Export current state for debugging
    */
@@ -612,4 +603,4 @@ integration.attach(document.body, {
   wordDetectionPattern: /\b\w+\b/g,
   autoAttach: true
 });
-*/ 
+*/

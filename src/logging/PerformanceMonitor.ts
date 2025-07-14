@@ -10,15 +10,15 @@ import { Logger } from './Logger';
  */
 export interface PerformanceThresholds {
   readonly storage: {
-    readonly read: number;    // ms
-    readonly write: number;   // ms
+    readonly read: number; // ms
+    readonly write: number; // ms
   };
   readonly network: {
-    readonly fetch: number;   // ms
-    readonly retry: number;   // ms
+    readonly fetch: number; // ms
+    readonly retry: number; // ms
   };
   readonly ui: {
-    readonly render: number;  // ms
+    readonly render: number; // ms
     readonly interaction: number; // ms
   };
   readonly youtube: {
@@ -27,7 +27,7 @@ export interface PerformanceThresholds {
   };
   readonly translation: {
     readonly translate: number; // ms
-    readonly cache: number;   // ms
+    readonly cache: number; // ms
   };
 }
 
@@ -71,11 +71,14 @@ export interface PerformanceAnalytics {
   readonly averageDuration: number;
   readonly p95Duration: number;
   readonly p99Duration: number;
-  readonly operationsByType: Record<string, {
-    readonly count: number;
-    readonly avgDuration: number;
-    readonly slowCount: number;
-  }>;
+  readonly operationsByType: Record<
+    string,
+    {
+      readonly count: number;
+      readonly avgDuration: number;
+      readonly slowCount: number;
+    }
+  >;
   readonly memoryStats: {
     readonly averageUsage: number;
     readonly peakUsage: number;
@@ -92,25 +95,25 @@ export interface PerformanceAnalytics {
  */
 export const DEFAULT_THRESHOLDS: PerformanceThresholds = {
   storage: {
-    read: 50,    // Chrome storage should be fast
-    write: 100
+    read: 50, // Chrome storage should be fast
+    write: 100,
   },
   network: {
-    fetch: 2000,  // Network operations can be slower
-    retry: 5000
+    fetch: 2000, // Network operations can be slower
+    retry: 5000,
   },
   ui: {
-    render: 16,   // 60fps = 16.67ms per frame
-    interaction: 100
+    render: 16, // 60fps = 16.67ms per frame
+    interaction: 100,
   },
   youtube: {
     playerQuery: 200,
-    subtitleParse: 500
+    subtitleParse: 500,
   },
   translation: {
     translate: 1000,
-    cache: 10
-  }
+    cache: 10,
+  },
 };
 
 /**
@@ -119,13 +122,16 @@ export const DEFAULT_THRESHOLDS: PerformanceThresholds = {
  */
 export class PerformanceMonitor {
   private static instance: PerformanceMonitor | null = null;
-  private logger: Logger;
+  private logger: Logger | null = null;
   private thresholds: PerformanceThresholds;
-  private activeOperations: Map<string, {
-    startTime: number;
-    metadata: OperationMetadata;
-    memoryBefore?: number;
-  }> = new Map();
+  private activeOperations: Map<
+    string,
+    {
+      startTime: number;
+      metadata: OperationMetadata;
+      memoryBefore?: number;
+    }
+  > = new Map();
   private measurements: PerformanceMeasurement[] = [];
   private memoryObserver: PerformanceObserver | null = null;
   private isEnabled: boolean = true;
@@ -163,19 +169,23 @@ export class PerformanceMonitor {
       this.setupFlushTimer();
 
       // Log initialization
-      this.logger.info('PerformanceMonitor initialized', {
+      this.logger?.info('PerformanceMonitor initialized', {
         component: ComponentType.ERROR_HANDLER,
         action: 'performance_monitor_init',
         metadata: {
           thresholds: this.thresholds,
-          maxMeasurements: this.maxMeasurements
-        }
+          maxMeasurements: this.maxMeasurements,
+        },
       });
     } catch (error) {
-      this.logger.error('Failed to initialize PerformanceMonitor', {
-        component: ComponentType.ERROR_HANDLER,
-        action: 'performance_monitor_init_error'
-      }, error as Error);
+      this.logger?.error(
+        'Failed to initialize PerformanceMonitor',
+        {
+          component: ComponentType.ERROR_HANDLER,
+          action: 'performance_monitor_init_error',
+        },
+        error as Error,
+      );
     }
   }
 
@@ -188,16 +198,16 @@ export class PerformanceMonitor {
         const entries = list.getEntries();
         for (const entry of entries) {
           if (entry.entryType === 'measure') {
-            this.logger.debug('Memory measurement detected', {
+            this.logger?.debug('Memory measurement detected', {
               component: ComponentType.ERROR_HANDLER,
               action: 'memory_measure',
               performance: {
                 duration: entry.duration,
                 timing: {
                   start: entry.startTime,
-                  end: entry.startTime + entry.duration
-                }
-              }
+                  end: entry.startTime + entry.duration,
+                },
+              },
             });
           }
         }
@@ -205,9 +215,9 @@ export class PerformanceMonitor {
 
       this.memoryObserver.observe({ entryTypes: ['measure', 'mark'] });
     } catch (error) {
-      this.logger.warn('Memory observer setup failed', {
+      this.logger?.warn('Memory observer setup failed', {
         component: ComponentType.ERROR_HANDLER,
-        action: 'memory_observer_setup_error'
+        action: 'memory_observer_setup_error',
       });
     }
   }
@@ -235,7 +245,7 @@ export class PerformanceMonitor {
       this.activeOperations.set(name, {
         startTime,
         metadata,
-        memoryBefore
+        memoryBefore,
       });
 
       // Create performance mark
@@ -243,35 +253,42 @@ export class PerformanceMonitor {
         performance.mark(`${name}-start`);
       }
 
-      this.logger.debug(`Started operation: ${name}`, {
+      this.logger?.debug(`Started operation: ${name}`, {
         component: metadata.component,
         action: 'performance_start',
         metadata: {
           operationType: metadata.operationType,
           inputSize: metadata.inputSize,
-          memoryBefore
-        }
+          memoryBefore,
+        },
       });
     } catch (error) {
-      this.logger.error(`Failed to start operation: ${name}`, {
-        component: metadata.component,
-        action: 'performance_start_error'
-      }, error as Error);
+      this.logger?.error(
+        `Failed to start operation: ${name}`,
+        {
+          component: metadata.component,
+          action: 'performance_start_error',
+        },
+        error as Error,
+      );
     }
   }
 
   /**
    * End measuring an operation
    */
-  public endOperation(name: string, additionalMetadata?: Partial<OperationMetadata>): PerformanceMeasurement | null {
+  public endOperation(
+    name: string,
+    additionalMetadata?: Partial<OperationMetadata>,
+  ): PerformanceMeasurement | null {
     if (!this.isEnabled) return null;
 
     try {
       const operation = this.activeOperations.get(name);
       if (!operation) {
-        this.logger.warn(`Operation not found: ${name}`, {
+        this.logger?.warn(`Operation not found: ${name}`, {
           component: ComponentType.ERROR_HANDLER,
-          action: 'performance_end_not_found'
+          action: 'performance_end_not_found',
         });
         return null;
       }
@@ -279,9 +296,10 @@ export class PerformanceMonitor {
       const endTime = performance.now();
       const duration = endTime - operation.startTime;
       const memoryAfter = this.getMemoryUsage();
-      const memoryDelta = operation.memoryBefore !== undefined && memoryAfter !== undefined
-        ? memoryAfter - operation.memoryBefore
-        : undefined;
+      const memoryDelta =
+        operation.memoryBefore !== undefined && memoryAfter !== undefined
+          ? memoryAfter - operation.memoryBefore
+          : undefined;
 
       // Create performance mark and measure
       if (typeof performance.mark === 'function' && typeof performance.measure === 'function') {
@@ -294,7 +312,7 @@ export class PerformanceMonitor {
         ...operation.metadata,
         ...additionalMetadata,
         memoryBefore: operation.memoryBefore,
-        memoryAfter
+        memoryAfter,
       };
 
       // Determine if operation is slow
@@ -311,7 +329,7 @@ export class PerformanceMonitor {
         isSlowOperation,
         threshold,
         memoryDelta,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       };
 
       // Store measurement
@@ -325,13 +343,13 @@ export class PerformanceMonitor {
         memoryUsage: memoryAfter,
         timing: {
           start: operation.startTime,
-          end: endTime
+          end: endTime,
         },
         marks: [`${name}-start`, `${name}-end`],
-        measures: [{ name, duration }]
+        measures: [{ name, duration }],
       };
 
-      this.logger.log(logLevel, `Operation completed: ${name}`, {
+      this.logger?.log(logLevel, `Operation completed: ${name}`, {
         component: finalMetadata.component,
         action: isSlowOperation ? 'performance_slow' : 'performance_complete',
         performance: performanceData,
@@ -340,8 +358,8 @@ export class PerformanceMonitor {
           isSlowOperation,
           threshold,
           memoryDelta,
-          ...finalMetadata.customData
-        }
+          ...finalMetadata.customData,
+        },
       });
 
       // Handle slow operations
@@ -354,10 +372,14 @@ export class PerformanceMonitor {
 
       return measurement;
     } catch (error) {
-      this.logger.error(`Failed to end operation: ${name}`, {
-        component: ComponentType.ERROR_HANDLER,
-        action: 'performance_end_error'
-      }, error as Error);
+      this.logger?.error(
+        `Failed to end operation: ${name}`,
+        {
+          component: ComponentType.ERROR_HANDLER,
+          action: 'performance_end_error',
+        },
+        error as Error,
+      );
       return null;
     }
   }
@@ -368,24 +390,24 @@ export class PerformanceMonitor {
   public async measureAsync<T>(
     name: string,
     operation: () => Promise<T>,
-    metadata: OperationMetadata
+    metadata: OperationMetadata,
   ): Promise<T> {
     this.startOperation(name, metadata);
-    
+
     try {
       const result = await operation();
-      
+
       // Add result metadata if possible
       const resultSize = this.estimateSize(result);
       this.endOperation(name, {
         outputSize: resultSize,
-        customData: { success: true }
+        customData: { success: true },
       });
-      
+
       return result;
     } catch (error) {
       this.endOperation(name, {
-        customData: { success: false, error: (error as Error).message }
+        customData: { success: false, error: (error as Error).message },
       });
       throw error;
     }
@@ -394,27 +416,23 @@ export class PerformanceMonitor {
   /**
    * Measure a synchronous operation with automatic timing
    */
-  public measureSync<T>(
-    name: string,
-    operation: () => T,
-    metadata: OperationMetadata
-  ): T {
+  public measureSync<T>(name: string, operation: () => T, metadata: OperationMetadata): T {
     this.startOperation(name, metadata);
-    
+
     try {
       const result = operation();
-      
+
       // Add result metadata if possible
       const resultSize = this.estimateSize(result);
       this.endOperation(name, {
         outputSize: resultSize,
-        customData: { success: true }
+        customData: { success: true },
       });
-      
+
       return result;
     } catch (error) {
       this.endOperation(name, {
-        customData: { success: false, error: (error as Error).message }
+        customData: { success: false, error: (error as Error).message },
       });
       throw error;
     }
@@ -430,7 +448,7 @@ export class PerformanceMonitor {
         const memory = (performance as any).memory;
         return memory.usedJSHeapSize;
       }
-      
+
       // Fallback: estimate based on active operations and measurements
       return this.activeOperations.size * 1024 + this.measurements.length * 512;
     } catch {
@@ -467,25 +485,43 @@ export class PerformanceMonitor {
   private getThreshold(operationType: string, component: ComponentType): number {
     // Map operation types to threshold categories
     if (operationType.includes('storage') || operationType.includes('cache')) {
-      return operationType.includes('write') ? this.thresholds.storage.write : this.thresholds.storage.read;
+      return operationType.includes('write')
+        ? this.thresholds.storage.write
+        : this.thresholds.storage.read;
     }
-    
-    if (operationType.includes('fetch') || operationType.includes('network') || operationType.includes('api')) {
-      return operationType.includes('retry') ? this.thresholds.network.retry : this.thresholds.network.fetch;
+
+    if (
+      operationType.includes('fetch') ||
+      operationType.includes('network') ||
+      operationType.includes('api')
+    ) {
+      return operationType.includes('retry')
+        ? this.thresholds.network.retry
+        : this.thresholds.network.fetch;
     }
-    
-    if (operationType.includes('render') || operationType.includes('ui') || operationType.includes('dom')) {
-      return operationType.includes('interaction') ? this.thresholds.ui.interaction : this.thresholds.ui.render;
+
+    if (
+      operationType.includes('render') ||
+      operationType.includes('ui') ||
+      operationType.includes('dom')
+    ) {
+      return operationType.includes('interaction')
+        ? this.thresholds.ui.interaction
+        : this.thresholds.ui.render;
     }
-    
+
     if (operationType.includes('youtube') || operationType.includes('player')) {
-      return operationType.includes('subtitle') ? this.thresholds.youtube.subtitleParse : this.thresholds.youtube.playerQuery;
+      return operationType.includes('subtitle')
+        ? this.thresholds.youtube.subtitleParse
+        : this.thresholds.youtube.playerQuery;
     }
-    
+
     if (operationType.includes('translation') || operationType.includes('translate')) {
-      return operationType.includes('cache') ? this.thresholds.translation.cache : this.thresholds.translation.translate;
+      return operationType.includes('cache')
+        ? this.thresholds.translation.cache
+        : this.thresholds.translation.translate;
     }
-    
+
     // Default threshold based on component
     switch (component) {
       case ComponentType.STORAGE_SERVICE:
@@ -503,15 +539,15 @@ export class PerformanceMonitor {
    * Handle slow operations with additional logging and analysis
    */
   private handleSlowOperation(measurement: PerformanceMeasurement): void {
-    this.logger.warn(`Slow operation detected: ${measurement.name}`, {
+    this.logger?.warn(`Slow operation detected: ${measurement.name}`, {
       component: measurement.metadata.component,
       action: 'slow_operation_detected',
       performance: {
         duration: measurement.duration,
         timing: {
           start: measurement.startTime,
-          end: measurement.endTime
-        }
+          end: measurement.endTime,
+        },
       },
       metadata: {
         operationType: measurement.metadata.operationType,
@@ -521,20 +557,20 @@ export class PerformanceMonitor {
         inputSize: measurement.metadata.inputSize,
         outputSize: measurement.metadata.outputSize,
         retryCount: measurement.metadata.retryCount,
-        networkState: measurement.metadata.networkState
-      }
+        networkState: measurement.metadata.networkState,
+      },
     });
 
     // Additional analysis for critical slow operations
     if (measurement.duration > measurement.threshold * 3) {
-      this.logger.error(`Critical slow operation: ${measurement.name}`, {
+      this.logger?.error(`Critical slow operation: ${measurement.name}`, {
         component: measurement.metadata.component,
         action: 'critical_slow_operation',
         metadata: {
           duration: measurement.duration,
           threshold: measurement.threshold,
-          severity: 'critical'
-        }
+          severity: 'critical',
+        },
       });
     }
   }
@@ -547,14 +583,14 @@ export class PerformanceMonitor {
       // Keep only the most recent measurements
       const excess = this.measurements.length - this.maxMeasurements;
       this.measurements.splice(0, excess);
-      
-      this.logger.debug('Performance measurement limit enforced', {
+
+      this.logger?.debug('Performance measurement limit enforced', {
         component: ComponentType.ERROR_HANDLER,
         action: 'performance_limit_enforced',
         metadata: {
           removed: excess,
-          remaining: this.measurements.length
-        }
+          remaining: this.measurements.length,
+        },
       });
     }
   }
@@ -568,9 +604,9 @@ export class PerformanceMonitor {
     try {
       // Prepare analytics data
       const analytics = this.generateAnalytics();
-      
+
       // Log analytics summary
-      this.logger.info('Performance analytics', {
+      this.logger?.info('Performance analytics', {
         component: ComponentType.ERROR_HANDLER,
         action: 'performance_analytics',
         metadata: {
@@ -578,8 +614,8 @@ export class PerformanceMonitor {
           slowOperations: analytics.slowOperations,
           averageDuration: analytics.averageDuration,
           p95Duration: analytics.p95Duration,
-          memoryStats: analytics.memoryStats
-        }
+          memoryStats: analytics.memoryStats,
+        },
       });
 
       // Store in Chrome storage for persistence
@@ -589,23 +625,27 @@ export class PerformanceMonitor {
           [storageKey]: {
             analytics,
             measurements: this.measurements.slice(-100), // Keep last 100 measurements
-            timestamp: new Date().toISOString()
-          }
+            timestamp: new Date().toISOString(),
+          },
         });
       } catch (storageError) {
-        this.logger.warn('Failed to store performance data', {
+        this.logger?.warn('Failed to store performance data', {
           component: ComponentType.ERROR_HANDLER,
-          action: 'performance_storage_error'
+          action: 'performance_storage_error',
         });
       }
 
       // Clear measurements after flush
       this.measurements = [];
     } catch (error) {
-      this.logger.error('Failed to flush performance measurements', {
-        component: ComponentType.ERROR_HANDLER,
-        action: 'performance_flush_error'
-      }, error as Error);
+      this.logger?.error(
+        'Failed to flush performance measurements',
+        {
+          component: ComponentType.ERROR_HANDLER,
+          action: 'performance_flush_error',
+        },
+        error as Error,
+      );
     }
   }
 
@@ -624,36 +664,40 @@ export class PerformanceMonitor {
         memoryStats: {
           averageUsage: 0,
           peakUsage: 0,
-          totalAllocated: 0
+          totalAllocated: 0,
         },
         timeRange: {
           start: new Date().toISOString(),
-          end: new Date().toISOString()
-        }
+          end: new Date().toISOString(),
+        },
       };
     }
 
-    const durations = this.measurements.map(m => m.duration).sort((a, b) => a - b);
-    const slowOperations = this.measurements.filter(m => m.isSlowOperation).length;
-    
+    const durations = this.measurements.map((m) => m.duration).sort((a, b) => a - b);
+    const slowOperations = this.measurements.filter((m) => m.isSlowOperation).length;
+
     // Calculate percentiles
     const p95Index = Math.floor(durations.length * 0.95);
     const p99Index = Math.floor(durations.length * 0.99);
-    
+
     // Group by operation type
-    const operationsByType: Record<string, { count: number; avgDuration: number; slowCount: number }> = {};
-    
+    const operationsByType: Record<
+      string,
+      { count: number; avgDuration: number; slowCount: number }
+    > = {};
+
     for (const measurement of this.measurements) {
       const type = measurement.metadata.operationType;
       if (!operationsByType[type]) {
         operationsByType[type] = { count: 0, avgDuration: 0, slowCount: 0 };
       }
-      
+
       operationsByType[type].count++;
-      operationsByType[type].avgDuration = 
-        (operationsByType[type].avgDuration * (operationsByType[type].count - 1) + measurement.duration) / 
+      operationsByType[type].avgDuration =
+        (operationsByType[type].avgDuration * (operationsByType[type].count - 1) +
+          measurement.duration) /
         operationsByType[type].count;
-      
+
       if (measurement.isSlowOperation) {
         operationsByType[type].slowCount++;
       }
@@ -661,16 +705,17 @@ export class PerformanceMonitor {
 
     // Memory statistics
     const memoryUsages = this.measurements
-      .map(m => m.metadata.memoryAfter)
+      .map((m) => m.metadata.memoryAfter)
       .filter((usage): usage is number => usage !== undefined);
-    
+
     const memoryStats = {
-      averageUsage: memoryUsages.length > 0 ? memoryUsages.reduce((a, b) => a + b, 0) / memoryUsages.length : 0,
+      averageUsage:
+        memoryUsages.length > 0 ? memoryUsages.reduce((a, b) => a + b, 0) / memoryUsages.length : 0,
       peakUsage: memoryUsages.length > 0 ? Math.max(...memoryUsages) : 0,
       totalAllocated: this.measurements
-        .map(m => m.memoryDelta)
+        .map((m) => m.memoryDelta)
         .filter((delta): delta is number => delta !== undefined && delta > 0)
-        .reduce((total, delta) => total + delta, 0)
+        .reduce((total, delta) => total + delta, 0),
     };
 
     return {
@@ -683,8 +728,8 @@ export class PerformanceMonitor {
       memoryStats,
       timeRange: {
         start: this.measurements[0].timestamp,
-        end: this.measurements[this.measurements.length - 1].timestamp
-      }
+        end: this.measurements[this.measurements.length - 1].timestamp,
+      },
     };
   }
 
@@ -693,11 +738,11 @@ export class PerformanceMonitor {
    */
   public updateThresholds(newThresholds: Partial<PerformanceThresholds>): void {
     this.thresholds = { ...this.thresholds, ...newThresholds };
-    
-    this.logger.info('Performance thresholds updated', {
+
+    this.logger?.info('Performance thresholds updated', {
       component: ComponentType.ERROR_HANDLER,
       action: 'performance_thresholds_updated',
-      metadata: { thresholds: this.thresholds }
+      metadata: { thresholds: this.thresholds },
     });
   }
 
@@ -706,11 +751,11 @@ export class PerformanceMonitor {
    */
   public setEnabled(enabled: boolean): void {
     this.isEnabled = enabled;
-    
-    this.logger.info(`Performance monitoring ${enabled ? 'enabled' : 'disabled'}`, {
+
+    this.logger?.info(`Performance monitoring ${enabled ? 'enabled' : 'disabled'}`, {
       component: ComponentType.ERROR_HANDLER,
       action: 'performance_monitoring_toggle',
-      metadata: { enabled }
+      metadata: { enabled },
     });
   }
 
@@ -727,7 +772,7 @@ export class PerformanceMonitor {
       activeOperations: this.activeOperations.size,
       totalMeasurements: this.measurements.length,
       isEnabled: this.isEnabled,
-      thresholds: this.thresholds
+      thresholds: this.thresholds,
     };
   }
 
@@ -754,9 +799,9 @@ export class PerformanceMonitor {
     this.activeOperations.clear();
     this.measurements = [];
 
-    this.logger.info('PerformanceMonitor destroyed', {
+    this.logger?.info('PerformanceMonitor destroyed', {
       component: ComponentType.ERROR_HANDLER,
-      action: 'performance_monitor_destroy'
+      action: 'performance_monitor_destroy',
     });
 
     PerformanceMonitor.instance = null;
@@ -769,33 +814,41 @@ export class PerformanceMonitor {
 export function measurePerformance(
   operationType: string,
   component: ComponentType,
-  metadata?: Partial<OperationMetadata>
+  metadata?: Partial<OperationMetadata>,
 ) {
   return function <T extends (...args: any[]) => any>(
     target: any,
     propertyName: string,
-    descriptor: TypedPropertyDescriptor<T>
+    descriptor: TypedPropertyDescriptor<T>,
   ) {
     const method = descriptor.value!;
-    
-    descriptor.value = (async function (this: any, ...args: any[]) {
+
+    descriptor.value = async function (this: any, ...args: any[]) {
       const monitor = PerformanceMonitor.getInstance();
       const operationName = `${target.constructor.name}.${propertyName}`;
-      
+
       const operationMetadata: OperationMetadata = {
         operationType,
         component,
         inputSize: monitor['estimateSize'](args),
-        ...metadata
+        ...metadata,
       };
-      
+
       if (method.constructor.name === 'AsyncFunction') {
-        return monitor.measureAsync(operationName, () => method.apply(this, args), operationMetadata);
+        return monitor.measureAsync(
+          operationName,
+          () => method.apply(this, args),
+          operationMetadata,
+        );
       } else {
-        return monitor.measureSync(operationName, () => method.apply(this, args), operationMetadata);
+        return monitor.measureSync(
+          operationName,
+          () => method.apply(this, args),
+          operationMetadata,
+        );
       }
-    }) as any;
-    
+    } as any;
+
     return descriptor;
   };
-} 
+}

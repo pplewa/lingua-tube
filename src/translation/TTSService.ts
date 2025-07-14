@@ -10,9 +10,11 @@ import {
   TTSError,
   TTSErrorCode,
   ITTSService,
-  LanguageCode
+  LanguageCode,
 } from './types';
 import { dictionaryApiService } from './DictionaryApiService';
+import { Logger } from '../logging/Logger';
+import { ComponentType } from '../logging/types';
 
 // ============================================================================
 // TTS Error Implementation
@@ -33,14 +35,14 @@ export class TTSErrorImpl extends Error implements TTSError {
     this.timestamp = Date.now();
   }
 
+  // Determine if error type allows retries
   private isRetryableError(code: TTSErrorCode): boolean {
-    const retryableCodes = [
+    return [
       TTSErrorCode.SYNTHESIS_FAILED,
       TTSErrorCode.AUDIO_INTERRUPTED,
-      TTSErrorCode.BROWSER_LIMITATION
-    ];
-    
-    return retryableCodes.includes(code);
+      TTSErrorCode.BROWSER_LIMITATION,
+      TTSErrorCode.QUEUE_TIMEOUT,
+    ].includes(code);
   }
 }
 
@@ -58,6 +60,7 @@ export class TTSService implements ITTSService {
   private preferredVoices: Map<string, SpeechSynthesisVoice> = new Map();
   private stats: TTSStats;
   private queueTimeouts: Map<string, NodeJS.Timeout> = new Map();
+  private readonly logger = Logger.getInstance();
 
   constructor() {
     this.config = {
@@ -67,17 +70,17 @@ export class TTSService implements ITTSService {
       queueTimeout: 30000, // 30 seconds
       fallbackToAudio: true,
       preferredVoiceNames: {
-        'en': ['Google US English', 'Microsoft Mark', 'Alex', 'Daniel'],
-        'es': ['Google español', 'Microsoft Helena', 'Monica', 'Jorge'],
-        'fr': ['Google français', 'Microsoft Hortense', 'Thomas', 'Amelie'],
-        'de': ['Google Deutsch', 'Microsoft Hedda', 'Anna', 'Stefan'],
-        'it': ['Google italiano', 'Microsoft Elsa', 'Alice', 'Luca'],
-        'pt': ['Google português do Brasil', 'Microsoft Maria', 'Joana', 'Ricardo'],
-        'ru': ['Google русский', 'Microsoft Irina', 'Milena', 'Yuri'],
-        'ja': ['Google 日本語', 'Microsoft Haruka', 'Kyoko', 'Otoya'],
-        'ko': ['Google 한국의', 'Microsoft Heami', 'Yuna', 'Hyuna'],
-        'zh': ['Google 中文（普通话）', 'Microsoft Huihui', 'Ting-Ting', 'Sin-ji']
-      }
+        en: ['Google US English', 'Microsoft Mark', 'Alex', 'Daniel'],
+        es: ['Google español', 'Microsoft Helena', 'Monica', 'Jorge'],
+        fr: ['Google français', 'Microsoft Hortense', 'Thomas', 'Amelie'],
+        de: ['Google Deutsch', 'Microsoft Hedda', 'Anna', 'Stefan'],
+        it: ['Google italiano', 'Microsoft Elsa', 'Alice', 'Luca'],
+        pt: ['Google português do Brasil', 'Microsoft Maria', 'Joana', 'Ricardo'],
+        ru: ['Google русский', 'Microsoft Irina', 'Milena', 'Yuri'],
+        ja: ['Google 日本語', 'Microsoft Haruka', 'Kyoko', 'Otoya'],
+        ko: ['Google 한국의', 'Microsoft Heami', 'Yuna', 'Hyuna'],
+        zh: ['Google 中文（普通话）', 'Microsoft Huihui', 'Ting-Ting', 'Sin-ji'],
+      },
     };
 
     this.stats = {
@@ -88,7 +91,7 @@ export class TTSService implements ITTSService {
       averageDuration: 0,
       queueLength: 0,
       voicesAvailable: 0,
-      lastRequestTime: 0
+      lastRequestTime: 0,
     };
 
     this.initializeVoices();
@@ -103,7 +106,9 @@ export class TTSService implements ITTSService {
    */
   private async initializeVoices(): Promise<void> {
     if (!this.isSupported()) {
-      console.warn('Speech synthesis not supported in this browser');
+      this.logger?.warn('Speech synthesis not supported in this browser', {
+        component: ComponentType.TTS_SERVICE,
+      });
       return;
     }
 
@@ -128,11 +133,16 @@ export class TTSService implements ITTSService {
     this.voices = speechSynthesis.getVoices();
     this.voicesLoaded = true;
     this.stats.voicesAvailable = this.voices.length;
-    
+
     // Auto-select preferred voices for each language
     this.selectPreferredVoices();
-    
-    console.log(`TTS Service: Loaded ${this.voices.length} voices`);
+
+    this.logger?.info(`TTS Service: Loaded ${this.voices.length} voices`, {
+      component: ComponentType.TTS_SERVICE,
+      metadata: {
+        voiceCount: this.voices.length,
+      },
+    });
   }
 
   /**
@@ -141,20 +151,20 @@ export class TTSService implements ITTSService {
   private selectPreferredVoices(): void {
     for (const [lang, preferredNames] of Object.entries(this.config.preferredVoiceNames)) {
       const langVoices = this.getVoicesForLanguage(lang as LanguageCode);
-      
+
       // Try to find a preferred voice
       let selectedVoice: SpeechSynthesisVoice | undefined;
-      
+
       for (const preferredName of preferredNames) {
-        selectedVoice = langVoices.find(v => v.name.includes(preferredName));
+        selectedVoice = langVoices.find((v) => v.name.includes(preferredName));
         if (selectedVoice) break;
       }
-      
+
       // Fall back to first available voice for the language
       if (!selectedVoice && langVoices.length > 0) {
         selectedVoice = langVoices[0];
       }
-      
+
       if (selectedVoice) {
         this.preferredVoices.set(lang, selectedVoice);
       }
@@ -168,13 +178,13 @@ export class TTSService implements ITTSService {
   /**
    * Speak text using default settings
    */
-  async speak(text: string, language: LanguageCode = 'en'): Promise<void> {
+  async speak(text: string, language: LanguageCode = 'th'): Promise<void> {
     return this.speakWithOptions({
       text,
       language,
       rate: this.config.defaultRate,
       pitch: this.config.defaultPitch,
-      volume: this.config.defaultVolume
+      volume: this.config.defaultVolume,
     });
   }
 
@@ -195,7 +205,7 @@ export class TTSService implements ITTSService {
         id: this.generateId(),
         timestamp: Date.now(),
         resolve,
-        reject
+        reject,
       };
 
       this.enqueueItem(queueItem);
@@ -214,7 +224,7 @@ export class TTSService implements ITTSService {
    * Get voices for a specific language
    */
   getVoicesForLanguage(language: LanguageCode): SpeechSynthesisVoice[] {
-    return this.voices.filter(voice => {
+    return this.voices.filter((voice) => {
       const voiceLang = voice.lang.toLowerCase();
       const targetLang = language.toLowerCase();
       return voiceLang.startsWith(targetLang) || voiceLang.includes(targetLang);
@@ -273,20 +283,20 @@ export class TTSService implements ITTSService {
   cancel(): void {
     // Cancel current synthesis
     speechSynthesis.cancel();
-    
+
     // Clear queue
-    this.queue.forEach(item => {
+    this.queue.forEach((item) => {
       if (this.queueTimeouts.has(item.id)) {
         clearTimeout(this.queueTimeouts.get(item.id)!);
         this.queueTimeouts.delete(item.id);
       }
-      item.reject(this.createTTSError(
-        'Speech cancelled',
-        TTSErrorCode.AUDIO_INTERRUPTED,
-        { itemId: item.id }
-      ));
+      item.reject(
+        this.createTTSError('Speech cancelled', TTSErrorCode.AUDIO_INTERRUPTED, {
+          itemId: item.id,
+        }),
+      );
     });
-    
+
     this.queue = [];
     this.processing = false;
     this.currentUtterance = null;
@@ -312,7 +322,7 @@ export class TTSService implements ITTSService {
   getStats(): TTSStats {
     return {
       ...this.stats,
-      queueLength: this.queue.length
+      queueLength: this.queue.length,
     };
   }
 
@@ -326,12 +336,12 @@ export class TTSService implements ITTSService {
   private enqueueItem(item: TTSQueueItem): void {
     this.queue.push(item);
     this.stats.totalRequests++;
-    
+
     // Set timeout for queue item
     const timeoutId = setTimeout(() => {
       this.handleQueueTimeout(item.id);
     }, this.config.queueTimeout);
-    
+
     this.queueTimeouts.set(item.id, timeoutId);
   }
 
@@ -345,7 +355,7 @@ export class TTSService implements ITTSService {
 
     this.processing = true;
     const item = this.queue.shift()!;
-    
+
     // Clear timeout
     if (this.queueTimeouts.has(item.id)) {
       clearTimeout(this.queueTimeouts.get(item.id)!);
@@ -360,7 +370,7 @@ export class TTSService implements ITTSService {
    */
   private async speakItem(item: TTSQueueItem): Promise<void> {
     const startTime = Date.now();
-    
+
     try {
       const utterance = this.createUtterance(item);
       item.utterance = utterance;
@@ -381,10 +391,9 @@ export class TTSService implements ITTSService {
 
       // Start speaking
       speechSynthesis.speak(utterance);
-
-         } catch (error: unknown) {
-       this.handleSpeechError(item, error, startTime);
-     }
+    } catch (error: unknown) {
+      this.handleSpeechError(item, error, startTime);
+    }
   }
 
   /**
@@ -393,10 +402,10 @@ export class TTSService implements ITTSService {
   private handleSpeechEnd(item: TTSQueueItem, startTime: number): void {
     const duration = Date.now() - startTime;
     this.updateStats(true, duration);
-    
+
     this.processing = false;
     this.currentUtterance = null;
-    
+
     item.resolve();
     this.processQueue();
   }
@@ -404,13 +413,25 @@ export class TTSService implements ITTSService {
   /**
    * Handle speech errors with fallback
    */
-  private async handleSpeechError(item: TTSQueueItem, error: unknown, startTime: number): Promise<void> {
+  private async handleSpeechError(
+    item: TTSQueueItem,
+    error: unknown,
+    startTime: number,
+  ): Promise<void> {
     // Handle the unknown error type properly
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-    const errorForLog = error instanceof Error ? error : new Error(String(error || 'Unknown error'));
-    
-    console.error('TTS Error:', errorForLog);
-    
+    const errorForLog =
+      error instanceof Error ? error : new Error(String(error || 'Unknown error'));
+
+    this.logger?.error('TTS Error', {
+      component: ComponentType.TTS_SERVICE,
+      metadata: {
+        error: errorForLog.message,
+        errorType: errorForLog.name,
+        stack: errorForLog.stack,
+      },
+    });
+
     // Try fallback to audio URL if enabled
     if (this.config.fallbackToAudio && item.text.split(' ').length === 1) {
       try {
@@ -419,22 +440,27 @@ export class TTSService implements ITTSService {
         this.handleSpeechEnd(item, startTime);
         return;
       } catch (fallbackError) {
-        console.error('Audio fallback failed:', fallbackError);
+        this.logger?.error('Audio fallback failed', {
+          component: ComponentType.TTS_SERVICE,
+          metadata: {
+            error: fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
+            errorType: fallbackError instanceof Error ? fallbackError.name : 'Unknown',
+          },
+        });
       }
     }
 
     // No fallback available or fallback failed
     this.updateStats(false, Date.now() - startTime);
-    
+
     this.processing = false;
     this.currentUtterance = null;
-    
-    const ttsError = this.createTTSError(
-      'Speech synthesis failed',
-      TTSErrorCode.SYNTHESIS_FAILED,
-      { originalError: errorMessage, item }
-    );
-    
+
+    const ttsError = this.createTTSError('Speech synthesis failed', TTSErrorCode.SYNTHESIS_FAILED, {
+      originalError: errorMessage,
+      item,
+    });
+
     item.reject(ttsError);
     this.processQueue();
   }
@@ -443,16 +469,17 @@ export class TTSService implements ITTSService {
    * Handle queue timeout
    */
   private handleQueueTimeout(itemId: string): void {
-    const itemIndex = this.queue.findIndex(item => item.id === itemId);
+    const itemIndex = this.queue.findIndex((item) => item.id === itemId);
     if (itemIndex !== -1) {
       const item = this.queue[itemIndex];
       this.queue.splice(itemIndex, 1);
-      
-      item.reject(this.createTTSError(
-        'Queue timeout exceeded',
-        TTSErrorCode.QUEUE_TIMEOUT,
-        { itemId, timeout: this.config.queueTimeout }
-      ));
+
+      item.reject(
+        this.createTTSError('Queue timeout exceeded', TTSErrorCode.QUEUE_TIMEOUT, {
+          itemId,
+          timeout: this.config.queueTimeout,
+        }),
+      );
     }
   }
 
@@ -465,18 +492,18 @@ export class TTSService implements ITTSService {
    */
   private createUtterance(item: TTSQueueItem): SpeechSynthesisUtterance {
     const utterance = new SpeechSynthesisUtterance(item.text);
-    
+
     // Set language
     utterance.lang = this.getLanguageCode(item.language);
-    
+
     // Set voice
     utterance.voice = item.voice || this.selectBestVoice(item.language);
-    
+
     // Set speech parameters
     utterance.rate = item.rate || this.config.defaultRate;
     utterance.pitch = item.pitch || this.config.defaultPitch;
     utterance.volume = item.volume || this.config.defaultVolume;
-    
+
     return utterance;
   }
 
@@ -497,7 +524,7 @@ export class TTSService implements ITTSService {
     }
 
     // Prefer local voices over network voices
-    const localVoices = availableVoices.filter(v => v.localService);
+    const localVoices = availableVoices.filter((v) => v.localService);
     if (localVoices.length > 0) {
       return localVoices[0];
     }
@@ -529,11 +556,11 @@ export class TTSService implements ITTSService {
   private playAudioUrl(url: string): Promise<void> {
     return new Promise((resolve, reject) => {
       const audio = new Audio(url);
-      
+
       audio.onended = () => resolve();
       audio.onerror = () => reject(new Error('Audio playback failed'));
       audio.oncanplaythrough = () => audio.play();
-      
+
       audio.load();
     });
   }
@@ -572,15 +599,16 @@ export class TTSService implements ITTSService {
       throw this.createTTSError(
         'Text is required and must be a non-empty string',
         TTSErrorCode.INVALID_TEXT,
-        { request }
+        { request },
       );
     }
 
-    if (request.text.length > 32767) { // Chrome limit
+    if (request.text.length > 32767) {
+      // Chrome limit
       throw this.createTTSError(
         'Text is too long (maximum 32767 characters)',
         TTSErrorCode.INVALID_TEXT,
-        { request, length: request.text.length }
+        { request, length: request.text.length },
       );
     }
 
@@ -588,7 +616,7 @@ export class TTSService implements ITTSService {
       throw this.createTTSError(
         'Speech synthesis not supported in this browser',
         TTSErrorCode.NOT_SUPPORTED,
-        { request }
+        { request },
       );
     }
   }
@@ -606,16 +634,16 @@ export class TTSService implements ITTSService {
   private getLanguageCode(language: LanguageCode): string {
     // Map common language codes to speech synthesis format
     const languageMap: Record<string, string> = {
-      'en': 'en-US',
-      'es': 'es-ES',
-      'fr': 'fr-FR',
-      'de': 'de-DE',
-      'it': 'it-IT',
-      'pt': 'pt-BR',
-      'ru': 'ru-RU',
-      'ja': 'ja-JP',
-      'ko': 'ko-KR',
-      'zh': 'zh-CN'
+      en: 'en-US',
+      es: 'es-ES',
+      fr: 'fr-FR',
+      de: 'de-DE',
+      it: 'it-IT',
+      pt: 'pt-BR',
+      ru: 'ru-RU',
+      ja: 'ja-JP',
+      ko: 'ko-KR',
+      zh: 'zh-CN',
     };
 
     return languageMap[language] || language;
@@ -634,9 +662,8 @@ export class TTSService implements ITTSService {
     // Update average duration
     const totalSuccessful = this.stats.successfulRequests;
     if (totalSuccessful > 0) {
-      this.stats.averageDuration = (
-        (this.stats.averageDuration * (totalSuccessful - 1)) + duration
-      ) / totalSuccessful;
+      this.stats.averageDuration =
+        (this.stats.averageDuration * (totalSuccessful - 1) + duration) / totalSuccessful;
     }
   }
 
@@ -674,4 +701,4 @@ export class TTSService implements ITTSService {
 export const ttsService = new TTSService();
 
 // Export default for easy importing
-export default ttsService; 
+export default ttsService;

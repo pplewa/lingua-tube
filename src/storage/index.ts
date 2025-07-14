@@ -13,4 +13,4 @@ export * from './defaults';
 export { LinguaTubeStorageService, storageService } from './StorageService';
 
 // Re-export singleton instance as default
-export { storageService as default } from './StorageService'; 
+export { storageService as default } from './StorageService';

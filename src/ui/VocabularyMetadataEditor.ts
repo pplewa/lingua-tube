@@ -41,10 +41,10 @@ export class VocabularyMetadataEditor {
   private container: HTMLElement | null = null;
   private shadowRoot: ShadowRoot | null = null;
   private vocabularyManager: VocabularyManager;
-  
+
   private config: MetadataEditorConfig;
   private events: { [K in keyof MetadataEditorEvents]?: MetadataEditorEvents[K] } = {};
-  
+
   private currentItem: VocabularyItem | null = null;
   private currentMetadata: Partial<VocabularyItem> = {};
   private availableTags: string[] = [];
@@ -85,7 +85,7 @@ export class VocabularyMetadataEditor {
 
   public on<K extends keyof MetadataEditorEvents>(
     event: K,
-    callback: MetadataEditorEvents[K]
+    callback: MetadataEditorEvents[K],
   ): void {
     this.events[event] = callback;
   }
@@ -159,18 +159,22 @@ export class VocabularyMetadataEditor {
 
   private renderTagsSection(): string {
     const currentTags = this.currentMetadata.tags || [];
-    
+
     return `
       <div class="field-section">
         <label class="field-label">Tags</label>
         <div class="tags-container">
           <div class="current-tags">
-            ${currentTags.map(tag => `
+            ${currentTags
+              .map(
+                (tag) => `
               <span class="tag-chip">
                 ${this.escapeHtml(tag)}
                 <button class="tag-remove" data-action="remove-tag" data-tag="${this.escapeHtml(tag)}">×</button>
               </span>
-            `).join('')}
+            `,
+              )
+              .join('')}
           </div>
           <div class="tag-input-container">
             <input 
@@ -181,19 +185,26 @@ export class VocabularyMetadataEditor {
             >
             <button class="add-tag-button" data-action="add-tag">Add</button>
           </div>
-          ${this.availableTags.length > 0 ? `
+          ${
+            this.availableTags.length > 0
+              ? `
             <div class="suggested-tags">
               <span class="suggestion-label">Suggestions:</span>
               ${this.availableTags
-                .filter(tag => !currentTags.includes(tag))
+                .filter((tag) => !currentTags.includes(tag))
                 .slice(0, 5)
-                .map(tag => `
+                .map(
+                  (tag) => `
                   <button class="suggestion-tag" data-action="add-suggested-tag" data-tag="${this.escapeHtml(tag)}">
                     ${this.escapeHtml(tag)}
                   </button>
-                `).join('')}
+                `,
+                )
+                .join('')}
             </div>
-          ` : ''}
+          `
+              : ''
+          }
         </div>
       </div>
     `;
@@ -212,7 +223,9 @@ export class VocabularyMetadataEditor {
       <div class="field-section">
         <label class="field-label">Learning Status</label>
         <div class="status-options">
-          ${statuses.map(status => `
+          ${statuses
+            .map(
+              (status) => `
             <label class="status-option ${status.value === currentStatus ? 'selected' : ''}">
               <input 
                 type="radio" 
@@ -226,7 +239,9 @@ export class VocabularyMetadataEditor {
                 <span class="status-description">${status.description}</span>
               </div>
             </label>
-          `).join('')}
+          `,
+            )
+            .join('')}
         </div>
       </div>
     `;
@@ -245,11 +260,15 @@ export class VocabularyMetadataEditor {
       <div class="field-section">
         <label class="field-label">Difficulty</label>
         <select class="difficulty-select" data-field="difficulty">
-          ${difficulties.map(diff => `
+          ${difficulties
+            .map(
+              (diff) => `
             <option value="${diff.value}" ${diff.value === currentDifficulty ? 'selected' : ''}>
               ${diff.label}
             </option>
-          `).join('')}
+          `,
+            )
+            .join('')}
         </select>
       </div>
     `;
@@ -362,10 +381,10 @@ export class VocabularyMetadataEditor {
   private handleFieldChange(field: string, value: string): void {
     this.isDirty = true;
     this.events.onChange?.(field, value);
-    
+
     // Update UI to reflect dirty state
     this.updateSaveButton();
-    
+
     // Update character counter for notes
     if (field === 'notes') {
       this.updateNotesCounter(value);
@@ -402,7 +421,7 @@ export class VocabularyMetadataEditor {
     if (!this.currentItem || !tag) return;
 
     const currentTags = this.currentMetadata.tags || [];
-    const newTags = currentTags.filter(t => t !== tag);
+    const newTags = currentTags.filter((t) => t !== tag);
 
     this.currentMetadata = {
       ...this.currentMetadata,
@@ -435,17 +454,25 @@ export class VocabularyMetadataEditor {
 
     // Learning status
     if (this.config.showLearningStatus) {
-      const statusInput = this.shadowRoot.querySelector('input[name="learning-status"]:checked') as HTMLInputElement;
+      const statusInput = this.shadowRoot.querySelector(
+        'input[name="learning-status"]:checked',
+      ) as HTMLInputElement;
       if (statusInput) {
-        Object.assign(metadata, { learningStatus: statusInput.value as VocabularyItem['learningStatus'] });
+        Object.assign(metadata, {
+          learningStatus: statusInput.value as VocabularyItem['learningStatus'],
+        });
       }
     }
 
     // Difficulty
     if (this.config.showDifficulty) {
-      const difficultySelect = this.shadowRoot.querySelector('.difficulty-select') as HTMLSelectElement;
+      const difficultySelect = this.shadowRoot.querySelector(
+        '.difficulty-select',
+      ) as HTMLSelectElement;
       if (difficultySelect && difficultySelect.value) {
-        Object.assign(metadata, { difficulty: difficultySelect.value as VocabularyItem['difficulty'] });
+        Object.assign(metadata, {
+          difficulty: difficultySelect.value as VocabularyItem['difficulty'],
+        });
       }
     }
 
@@ -860,4 +887,4 @@ export class VocabularyMetadataEditor {
       }
     `;
   }
-} 
+}

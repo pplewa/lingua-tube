@@ -3,13 +3,10 @@
  * Provides reactive UI updates for vocabulary changes with specialized event handling
  */
 
-import {
-  VocabularyItem,
-  StorageEventType,
-  StorageEvent,
-  storageService,
-} from '../storage';
+import { VocabularyItem, StorageEventType, StorageEvent, storageService } from '../storage';
 import { vocabularyManager, VocabularyFilters } from './VocabularyManager';
+import { Logger } from '../logging/Logger';
+import { ComponentType } from '../logging/types';
 
 // ========================================
 // Vocabulary-Specific Event Types
@@ -75,11 +72,11 @@ export interface BatchEventData extends VocabularyEventData {
   totalProcessed: number;
 }
 
-export type VocabularyEvent = 
-  | WordEventData 
-  | SearchEventData 
-  | StatisticsEventData 
-  | HighlightEventData 
+export type VocabularyEvent =
+  | WordEventData
+  | SearchEventData
+  | StatisticsEventData
+  | HighlightEventData
   | BatchEventData
   | VocabularyEventData;
 
@@ -87,7 +84,9 @@ export type VocabularyEvent =
 // Observer Callback Types
 // ========================================
 
-export type VocabularyObserverCallback<T extends VocabularyEvent = VocabularyEvent> = (event: T) => void;
+export type VocabularyObserverCallback<T extends VocabularyEvent = VocabularyEvent> = (
+  event: T,
+) => void;
 
 export interface VocabularyObserverCallbacks {
   onWordAdded?: VocabularyObserverCallback<WordEventData>;
@@ -121,19 +120,21 @@ export interface VocabularyUIComponent {
 
 export class VocabularyObserver {
   private static instance: VocabularyObserver | null = null;
-  
+  private readonly logger: Logger | null = null;
+
   private eventListeners = new Map<VocabularyEventType, Set<VocabularyObserverCallback>>();
   private globalCallbacks = new Set<VocabularyObserverCallback>();
   private uiComponents = new Map<string, VocabularyUIComponent>();
-  
+
   private lastStatisticsUpdate = 0;
   private statisticsCache: StatisticsEventData['statistics'] | null = null;
   private readonly STATISTICS_CACHE_TTL = 30 * 1000; // 30 seconds
-  
+
   private isInitialized = false;
   private pendingEvents: VocabularyEvent[] = [];
 
   private constructor() {
+    this.logger = Logger.getInstance();
     this.setupStorageEventListeners();
   }
 
@@ -158,7 +159,7 @@ export class VocabularyObserver {
       // Process any pending events
       const events = [...this.pendingEvents];
       this.pendingEvents = [];
-      
+
       for (const event of events) {
         this.emitEvent(event);
       }
@@ -167,9 +168,13 @@ export class VocabularyObserver {
       await this.updateStatistics();
 
       this.isInitialized = true;
-      console.log('[VocabularyObserver] Initialized successfully');
+      this.logger?.info('Initialized successfully', { component: ComponentType.WORD_LOOKUP });
     } catch (error) {
-      console.error('[VocabularyObserver] Initialization failed:', error);
+      this.logger?.error(
+        'Initialization failed',
+        { component: ComponentType.WORD_LOOKUP },
+        error instanceof Error ? error : undefined,
+      );
       throw error;
     }
   }
@@ -181,28 +186,25 @@ export class VocabularyObserver {
   /**
    * Add event listener for specific vocabulary event type
    */
-     public on(
-     eventType: VocabularyEventType,
-     callback: VocabularyObserverCallback
-   ): () => void {
-     if (!this.eventListeners.has(eventType)) {
-       this.eventListeners.set(eventType, new Set());
-     }
-     
-     this.eventListeners.get(eventType)!.add(callback);
-     
-     // Return unsubscribe function
-     return () => {
-       this.eventListeners.get(eventType)?.delete(callback);
-     };
-   }
+  public on(eventType: VocabularyEventType, callback: VocabularyObserverCallback): () => void {
+    if (!this.eventListeners.has(eventType)) {
+      this.eventListeners.set(eventType, new Set());
+    }
+
+    this.eventListeners.get(eventType)!.add(callback);
+
+    // Return unsubscribe function
+    return () => {
+      this.eventListeners.get(eventType)?.delete(callback);
+    };
+  }
 
   /**
    * Add global event listener for all vocabulary events
    */
   public onAny(callback: VocabularyObserverCallback): () => void {
     this.globalCallbacks.add(callback);
-    
+
     return () => {
       this.globalCallbacks.delete(callback);
     };
@@ -219,18 +221,15 @@ export class VocabularyObserver {
     }
   }
 
-     /**
-    * Add one-time event listener
-    */
-   public once(
-     eventType: VocabularyEventType,
-     callback: VocabularyObserverCallback
-   ): void {
-     const unsubscribe = this.on(eventType, (event) => {
-       callback(event);
-       unsubscribe();
-     });
-   }
+  /**
+   * Add one-time event listener
+   */
+  public once(eventType: VocabularyEventType, callback: VocabularyObserverCallback): void {
+    const unsubscribe = this.on(eventType, (event) => {
+      callback(event);
+      unsubscribe();
+    });
+  }
 
   // ========================================
   // UI Component Management
@@ -241,18 +240,18 @@ export class VocabularyObserver {
    */
   public registerComponent(component: VocabularyUIComponent): () => void {
     this.uiComponents.set(component.id, component);
-    
+
     // Set up automatic refresh on vocabulary changes
     const unsubscribeCallbacks: (() => void)[] = [];
-    
+
     if (component.onVocabularyUpdate) {
       unsubscribeCallbacks.push(this.onAny(component.onVocabularyUpdate));
     }
-    
+
     // Return cleanup function
     return () => {
       this.uiComponents.delete(component.id);
-      unsubscribeCallbacks.forEach(unsub => unsub());
+      unsubscribeCallbacks.forEach((unsub) => unsub());
     };
   }
 
@@ -272,13 +271,17 @@ export class VocabularyObserver {
    */
   public async refreshAllComponents(): Promise<void> {
     const refreshPromises = Array.from(this.uiComponents.values())
-      .filter(component => component.refresh)
-      .map(component => component.refresh!());
-    
+      .filter((component) => component.refresh)
+      .map((component) => component.refresh!());
+
     try {
       await Promise.all(refreshPromises);
     } catch (error) {
-      console.error('[VocabularyObserver] Component refresh failed:', error);
+      this.logger?.error(
+        'Component refresh failed',
+        { component: ComponentType.WORD_LOOKUP },
+        error instanceof Error ? error : undefined,
+      );
     }
   }
 
@@ -287,13 +290,20 @@ export class VocabularyObserver {
    */
   public async refreshComponentsByType(type: VocabularyUIComponent['type']): Promise<void> {
     const refreshPromises = Array.from(this.uiComponents.values())
-      .filter(component => component.type === type && component.refresh)
-      .map(component => component.refresh!());
-    
+      .filter((component) => component.type === type && component.refresh)
+      .map((component) => component.refresh!());
+
     try {
       await Promise.all(refreshPromises);
     } catch (error) {
-      console.error('[VocabularyObserver] Component refresh failed:', error);
+      this.logger?.error(
+        'Component refresh by type failed',
+        {
+          component: ComponentType.WORD_LOOKUP,
+          metadata: { type },
+        },
+        error instanceof Error ? error : undefined,
+      );
     }
   }
 
@@ -314,29 +324,49 @@ export class VocabularyObserver {
       // Emit to specific event listeners
       const listeners = this.eventListeners.get(event.type);
       if (listeners) {
-        listeners.forEach(callback => {
+        listeners.forEach((callback) => {
           try {
             callback(event);
           } catch (error) {
-            console.error('[VocabularyObserver] Event listener error:', error);
+            this.logger?.error(
+              'Event listener error',
+              {
+                component: ComponentType.WORD_LOOKUP,
+                metadata: { eventType: event.type },
+              },
+              error instanceof Error ? error : undefined,
+            );
           }
         });
       }
 
       // Emit to global listeners
-      this.globalCallbacks.forEach(callback => {
+      this.globalCallbacks.forEach((callback) => {
         try {
           callback(event);
         } catch (error) {
-          console.error('[VocabularyObserver] Global listener error:', error);
+          this.logger?.error(
+            'Global listener error',
+            {
+              component: ComponentType.WORD_LOOKUP,
+              metadata: { eventType: event.type },
+            },
+            error instanceof Error ? error : undefined,
+          );
         }
       });
 
       // Update components
       this.notifyComponents(event);
-      
     } catch (error) {
-      console.error('[VocabularyObserver] Event emission failed:', error);
+      this.logger?.error(
+        'Event emission failed',
+        {
+          component: ComponentType.WORD_LOOKUP,
+          metadata: { eventType: event.type },
+        },
+        error instanceof Error ? error : undefined,
+      );
     }
   }
 
@@ -354,7 +384,7 @@ export class VocabularyObserver {
       timestamp: Date.now(),
       source,
     });
-    
+
     // Trigger statistics update
     this.updateStatisticsAsync();
   }
@@ -362,14 +392,17 @@ export class VocabularyObserver {
   /**
    * Emit word removed event
    */
-  public emitWordRemoved(word: VocabularyItem, source: VocabularyEventData['source'] = 'user'): void {
+  public emitWordRemoved(
+    word: VocabularyItem,
+    source: VocabularyEventData['source'] = 'user',
+  ): void {
     this.emitEvent({
       type: VocabularyEventType.WORD_REMOVED,
       word,
       timestamp: Date.now(),
       source,
     });
-    
+
     // Trigger statistics update
     this.updateStatisticsAsync();
   }
@@ -378,9 +411,9 @@ export class VocabularyObserver {
    * Emit word updated event
    */
   public emitWordUpdated(
-    word: VocabularyItem, 
+    word: VocabularyItem,
     previousWord?: VocabularyItem,
-    source: VocabularyEventData['source'] = 'user'
+    source: VocabularyEventData['source'] = 'user',
   ): void {
     this.emitEvent({
       type: VocabularyEventType.WORD_UPDATED,
@@ -398,7 +431,7 @@ export class VocabularyObserver {
     searchTerm: string,
     results: VocabularyItem[],
     filters?: VocabularyFilters,
-    source: VocabularyEventData['source'] = 'user'
+    source: VocabularyEventData['source'] = 'user',
   ): void {
     this.emitEvent({
       type: VocabularyEventType.SEARCH_RESULTS_UPDATED,
@@ -418,10 +451,13 @@ export class VocabularyObserver {
     operation: BatchEventData['operation'],
     successful: string[],
     failed: Array<{ id: string; error: string }>,
-    source: VocabularyEventData['source'] = 'user'
+    source: VocabularyEventData['source'] = 'user',
   ): void {
     this.emitEvent({
-      type: operation === 'import' ? VocabularyEventType.VOCABULARY_IMPORTED : VocabularyEventType.VOCABULARY_EXPORTED,
+      type:
+        operation === 'import'
+          ? VocabularyEventType.VOCABULARY_IMPORTED
+          : VocabularyEventType.VOCABULARY_EXPORTED,
       operation,
       successful,
       failed,
@@ -429,7 +465,7 @@ export class VocabularyObserver {
       timestamp: Date.now(),
       source,
     });
-    
+
     // Trigger statistics update for import/delete operations
     if (operation === 'import' || operation === 'delete') {
       this.updateStatisticsAsync();
@@ -446,19 +482,22 @@ export class VocabularyObserver {
   public async updateStatistics(): Promise<void> {
     try {
       const statistics = await vocabularyManager.getVocabularyStats();
-      
+
       this.statisticsCache = statistics;
       this.lastStatisticsUpdate = Date.now();
-      
+
       this.emitEvent({
         type: VocabularyEventType.STATISTICS_UPDATED,
         statistics,
         timestamp: Date.now(),
         source: 'system',
       });
-      
     } catch (error) {
-      console.error('[VocabularyObserver] Statistics update failed:', error);
+      this.logger?.error(
+        'Statistics update failed',
+        { component: ComponentType.WORD_LOOKUP },
+        error instanceof Error ? error : undefined,
+      );
     }
   }
 
@@ -470,10 +509,14 @@ export class VocabularyObserver {
     if (now - this.lastStatisticsUpdate < this.STATISTICS_CACHE_TTL) {
       return; // Skip if updated recently
     }
-    
+
     // Update in background
-    this.updateStatistics().catch(error => {
-      console.error('[VocabularyObserver] Async statistics update failed:', error);
+    this.updateStatistics().catch((error) => {
+      this.logger?.error(
+        'Async statistics update failed',
+        { component: ComponentType.WORD_LOOKUP },
+        error instanceof Error ? error : undefined,
+      );
     });
   }
 
@@ -521,12 +564,19 @@ export class VocabularyObserver {
   }
 
   private notifyComponents(event: VocabularyEvent): void {
-    this.uiComponents.forEach(component => {
+    this.uiComponents.forEach((component) => {
       if (component.onVocabularyUpdate) {
         try {
           component.onVocabularyUpdate(event);
         } catch (error) {
-          console.error(`[VocabularyObserver] Component ${component.id} update failed:`, error);
+          this.logger?.error(
+            'Component update failed',
+            {
+              component: ComponentType.WORD_LOOKUP,
+              metadata: { componentId: component.id, eventType: event.type },
+            },
+            error instanceof Error ? error : undefined,
+          );
         }
       }
     });
@@ -543,22 +593,22 @@ export class VocabularyObserver {
     // Clean up all listeners
     this.eventListeners.clear();
     this.globalCallbacks.clear();
-    
+
     // Clean up all components
-    this.uiComponents.forEach(component => {
+    this.uiComponents.forEach((component) => {
       if (component.destroy) {
         component.destroy();
       }
     });
     this.uiComponents.clear();
-    
+
     // Clear cache
     this.statisticsCache = null;
     this.lastStatisticsUpdate = 0;
-    
+
     // Clear pending events
     this.pendingEvents = [];
-    
+
     this.isInitialized = false;
     VocabularyObserver.instance = null;
   }
@@ -573,34 +623,37 @@ export class VocabularyObserver {
  */
 export function createReactiveVocabularyComponent<T extends VocabularyUIComponent>(
   component: T,
-  callbacks?: Partial<VocabularyObserverCallbacks>
+  callbacks?: Partial<VocabularyObserverCallbacks>,
 ): T & { unsubscribe: () => void } {
   const observer = VocabularyObserver.getInstance();
   const unsubscribeFunctions: (() => void)[] = [];
-  
+
   // Register component
   unsubscribeFunctions.push(observer.registerComponent(component));
-  
+
   // Set up specific callbacks
   if (callbacks) {
     Object.entries(callbacks).forEach(([eventName, callback]) => {
       if (callback && typeof callback === 'function') {
-        const eventType = eventName.replace('on', '').replace(/([A-Z])/g, '_$1').toUpperCase() as VocabularyEventType;
+        const eventType = eventName
+          .replace('on', '')
+          .replace(/([A-Z])/g, '_$1')
+          .toUpperCase() as VocabularyEventType;
         if (Object.values(VocabularyEventType).includes(eventType)) {
           unsubscribeFunctions.push(observer.on(eventType, callback as any));
         }
       }
     });
   }
-  
+
   // Return enhanced component with cleanup
   return {
     ...component,
     unsubscribe: () => {
-      unsubscribeFunctions.forEach(unsub => unsub());
-    }
+      unsubscribeFunctions.forEach((unsub) => unsub());
+    },
   };
 }
 
 // Export singleton instance
-export const vocabularyObserver = VocabularyObserver.getInstance(); 
+export const vocabularyObserver = VocabularyObserver.getInstance();

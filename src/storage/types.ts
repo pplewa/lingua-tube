@@ -42,6 +42,7 @@ export interface UserSettings {
   readonly vocabulary: VocabularySettings;
   readonly ui: UISettings;
   readonly privacy: PrivacySettings;
+  readonly developer: DeveloperSettings;
 }
 
 /**
@@ -126,6 +127,20 @@ export interface PrivacySettings {
   readonly maxCacheSize: number; // MB
   readonly autoDeleteOldData: boolean;
   readonly dataRetentionDays: number;
+}
+
+/**
+ * Developer and debug settings
+ */
+export interface DeveloperSettings {
+  readonly debugMode: boolean;
+  readonly verboseLogging: boolean;
+  readonly consoleTimestamps: boolean;
+  readonly performanceProfiling: boolean;
+  readonly memoryMonitoring: boolean;
+  readonly consoleLogLevel: 'debug' | 'info' | 'warn' | 'error' | 'critical';
+  readonly enabledComponents: string[];
+  readonly autoExportDebugData: boolean;
 }
 
 // ========================================
@@ -252,23 +267,23 @@ export interface StorageService {
   removeWord(id: string): Promise<StorageResult<void>>;
   updateWord(id: string, updates: Partial<VocabularyItem>): Promise<StorageResult<VocabularyItem>>;
   clearVocabulary(): Promise<StorageResult<void>>;
-  
+
   // Settings operations
   saveSettings(settings: Partial<UserSettings>): Promise<StorageResult<UserSettings>>;
   getSettings(): Promise<StorageResult<UserSettings>>;
   resetSettings(): Promise<StorageResult<UserSettings>>;
-  
+
   // Cache operations
   setCache<T>(key: string, value: T, ttl?: number): Promise<StorageResult<void>>;
   getCache<T>(key: string): Promise<StorageResult<T | null>>;
   clearCache(): Promise<StorageResult<void>>;
-  
+
   // Event handling
   addEventListener(type: StorageEventType, listener: (event: StorageEvent) => void): void;
   removeEventListener(type: StorageEventType, listener: (event: StorageEvent) => void): void;
-  
+
   // Utility
   getStorageUsage(): Promise<StorageResult<{ used: number; available: number }>>;
   exportData(): Promise<StorageResult<string>>;
   importData(data: string): Promise<StorageResult<void>>;
-} 
+}

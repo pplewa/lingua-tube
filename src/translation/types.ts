@@ -249,7 +249,7 @@ export enum TranslationErrorCode {
   CANCELLED = 'CANCELLED',
 
   // Unknown Errors
-  UNKNOWN_ERROR = 'UNKNOWN_ERROR'
+  UNKNOWN_ERROR = 'UNKNOWN_ERROR',
 }
 
 export interface TranslationError extends Error {
@@ -300,38 +300,135 @@ export const DEFAULT_TRANSLATION_CONFIG: Partial<TranslationConfig> = {
     maxCharactersPerMonth: 2000000, // Free tier limit
     maxCharactersPerMinute: 10000,
     maxRequestsPerSecond: 10,
-    trackingEnabled: true
+    trackingEnabled: true,
   },
   cacheConfig: {
     enabled: true,
     ttlHours: 24,
     maxEntries: 10000,
-    compressionEnabled: true
+    compressionEnabled: true,
   },
   batchConfig: {
     enabled: true,
     maxTextsPerBatch: 100, // Azure API limit
     maxBatchSizeBytes: 50000,
-    batchTimeoutMs: 5000
-  }
+    batchTimeoutMs: 5000,
+  },
 };
 
 // ============================================================================
 // Language Code Types
 // ============================================================================
 
-export type LanguageCode = 
-  | 'en' | 'es' | 'fr' | 'de' | 'it' | 'pt' | 'ru' | 'ja' | 'ko' | 'zh' 
-  | 'ar' | 'hi' | 'tr' | 'pl' | 'nl' | 'sv' | 'da' | 'no' | 'fi' | 'cs'
-  | 'hu' | 'ro' | 'bg' | 'hr' | 'sk' | 'sl' | 'et' | 'lv' | 'lt' | 'mt'
-  | 'el' | 'he' | 'th' | 'vi' | 'id' | 'ms' | 'tl' | 'sw' | 'yo' | 'zu'
-  | 'af' | 'sq' | 'am' | 'hy' | 'az' | 'eu' | 'be' | 'bn' | 'bs' | 'my'
-  | 'ca' | 'ceb' | 'ny' | 'co' | 'cy' | 'eo' | 'fa' | 'fy' | 'gd' | 'gl'
-  | 'ka' | 'gu' | 'ht' | 'ha' | 'haw' | 'iw' | 'hmn' | 'is' | 'ig' | 'ga'
-  | 'jw' | 'kn' | 'kk' | 'km' | 'rw' | 'ku' | 'ky' | 'lo' | 'la' | 'lb'
-  | 'mk' | 'mg' | 'ml' | 'mi' | 'mr' | 'mn' | 'ne' | 'ps' | 'pa' | 'sm'
-  | 'sr' | 'st' | 'sn' | 'sd' | 'si' | 'so' | 'su' | 'tg' | 'ta' | 'tt'
-  | 'te' | 'uk' | 'ur' | 'ug' | 'uz' | 'xh' | 'yi' | 'auto';
+export type LanguageCode =
+  | 'en'
+  | 'es'
+  | 'fr'
+  | 'de'
+  | 'it'
+  | 'pt'
+  | 'ru'
+  | 'ja'
+  | 'ko'
+  | 'zh'
+  | 'ar'
+  | 'hi'
+  | 'tr'
+  | 'pl'
+  | 'nl'
+  | 'sv'
+  | 'da'
+  | 'no'
+  | 'fi'
+  | 'cs'
+  | 'hu'
+  | 'ro'
+  | 'bg'
+  | 'hr'
+  | 'sk'
+  | 'sl'
+  | 'et'
+  | 'lv'
+  | 'lt'
+  | 'mt'
+  | 'el'
+  | 'he'
+  | 'th'
+  | 'vi'
+  | 'id'
+  | 'ms'
+  | 'tl'
+  | 'sw'
+  | 'yo'
+  | 'zu'
+  | 'af'
+  | 'sq'
+  | 'am'
+  | 'hy'
+  | 'az'
+  | 'eu'
+  | 'be'
+  | 'bn'
+  | 'bs'
+  | 'my'
+  | 'ca'
+  | 'ceb'
+  | 'ny'
+  | 'co'
+  | 'cy'
+  | 'eo'
+  | 'fa'
+  | 'fy'
+  | 'gd'
+  | 'gl'
+  | 'ka'
+  | 'gu'
+  | 'ht'
+  | 'ha'
+  | 'haw'
+  | 'iw'
+  | 'hmn'
+  | 'is'
+  | 'ig'
+  | 'ga'
+  | 'jw'
+  | 'kn'
+  | 'kk'
+  | 'km'
+  | 'rw'
+  | 'ku'
+  | 'ky'
+  | 'lo'
+  | 'la'
+  | 'lb'
+  | 'mk'
+  | 'mg'
+  | 'ml'
+  | 'mi'
+  | 'mr'
+  | 'mn'
+  | 'ne'
+  | 'ps'
+  | 'pa'
+  | 'sm'
+  | 'sr'
+  | 'st'
+  | 'sn'
+  | 'sd'
+  | 'si'
+  | 'so'
+  | 'su'
+  | 'tg'
+  | 'ta'
+  | 'tt'
+  | 'te'
+  | 'uk'
+  | 'ur'
+  | 'ug'
+  | 'uz'
+  | 'xh'
+  | 'yi'
+  | 'auto';
 
 // ============================================================================
 // Dictionary API Types
@@ -408,7 +505,7 @@ export enum DictionaryErrorCode {
   NETWORK_ERROR = 'NETWORK_ERROR',
   TIMEOUT = 'TIMEOUT',
   CACHE_ERROR = 'CACHE_ERROR',
-  UNKNOWN_ERROR = 'UNKNOWN_ERROR'
+  UNKNOWN_ERROR = 'UNKNOWN_ERROR',
 }
 
 export interface DictionaryError extends Error {
@@ -497,7 +594,7 @@ export enum TTSErrorCode {
   AUDIO_INTERRUPTED = 'AUDIO_INTERRUPTED',
   QUEUE_TIMEOUT = 'QUEUE_TIMEOUT',
   BROWSER_LIMITATION = 'BROWSER_LIMITATION',
-  UNKNOWN_ERROR = 'UNKNOWN_ERROR'
+  UNKNOWN_ERROR = 'UNKNOWN_ERROR',
 }
 
 export interface TTSError extends Error {
@@ -508,112 +605,112 @@ export interface TTSError extends Error {
 }
 
 export const SUPPORTED_LANGUAGES: Record<LanguageCode, string> = {
-  'en': 'English',
-  'es': 'Spanish',
-  'fr': 'French',
-  'de': 'German',
-  'it': 'Italian',
-  'pt': 'Portuguese',
-  'ru': 'Russian',
-  'ja': 'Japanese',
-  'ko': 'Korean',
-  'zh': 'Chinese',
-  'ar': 'Arabic',
-  'hi': 'Hindi',
-  'tr': 'Turkish',
-  'pl': 'Polish',
-  'nl': 'Dutch',
-  'sv': 'Swedish',
-  'da': 'Danish',
-  'no': 'Norwegian',
-  'fi': 'Finnish',
-  'cs': 'Czech',
-  'hu': 'Hungarian',
-  'ro': 'Romanian',
-  'bg': 'Bulgarian',
-  'hr': 'Croatian',
-  'sk': 'Slovak',
-  'sl': 'Slovenian',
-  'et': 'Estonian',
-  'lv': 'Latvian',
-  'lt': 'Lithuanian',
-  'mt': 'Maltese',
-  'el': 'Greek',
-  'he': 'Hebrew',
-  'th': 'Thai',
-  'vi': 'Vietnamese',
-  'id': 'Indonesian',
-  'ms': 'Malay',
-  'tl': 'Filipino',
-  'sw': 'Swahili',
-  'yo': 'Yoruba',
-  'zu': 'Zulu',
-  'af': 'Afrikaans',
-  'sq': 'Albanian',
-  'am': 'Amharic',
-  'hy': 'Armenian',
-  'az': 'Azerbaijani',
-  'eu': 'Basque',
-  'be': 'Belarusian',
-  'bn': 'Bengali',
-  'bs': 'Bosnian',
-  'my': 'Myanmar',
-  'ca': 'Catalan',
-  'ceb': 'Cebuano',
-  'ny': 'Chichewa',
-  'co': 'Corsican',
-  'cy': 'Welsh',
-  'eo': 'Esperanto',
-  'fa': 'Persian',
-  'fy': 'Frisian',
-  'gd': 'Scottish Gaelic',
-  'gl': 'Galician',
-  'ka': 'Georgian',
-  'gu': 'Gujarati',
-  'ht': 'Haitian Creole',
-  'ha': 'Hausa',
-  'haw': 'Hawaiian',
-  'iw': 'Hebrew',
-  'hmn': 'Hmong',
-  'is': 'Icelandic',
-  'ig': 'Igbo',
-  'ga': 'Irish',
-  'jw': 'Javanese',
-  'kn': 'Kannada',
-  'kk': 'Kazakh',
-  'km': 'Khmer',
-  'rw': 'Kinyarwanda',
-  'ku': 'Kurdish',
-  'ky': 'Kyrgyz',
-  'lo': 'Lao',
-  'la': 'Latin',
-  'lb': 'Luxembourgish',
-  'mk': 'Macedonian',
-  'mg': 'Malagasy',
-  'ml': 'Malayalam',
-  'mi': 'Maori',
-  'mr': 'Marathi',
-  'mn': 'Mongolian',
-  'ne': 'Nepali',
-  'ps': 'Pashto',
-  'pa': 'Punjabi',
-  'sm': 'Samoan',
-  'sr': 'Serbian',
-  'st': 'Sesotho',
-  'sn': 'Shona',
-  'sd': 'Sindhi',
-  'si': 'Sinhala',
-  'so': 'Somali',
-  'su': 'Sundanese',
-  'tg': 'Tajik',
-  'ta': 'Tamil',
-  'tt': 'Tatar',
-  'te': 'Telugu',
-  'uk': 'Ukrainian',
-  'ur': 'Urdu',
-  'ug': 'Uyghur',
-  'uz': 'Uzbek',
-  'xh': 'Xhosa',
-  'yi': 'Yiddish',
-  'auto': 'Auto-detect'
-}; 
+  en: 'English',
+  es: 'Spanish',
+  fr: 'French',
+  de: 'German',
+  it: 'Italian',
+  pt: 'Portuguese',
+  ru: 'Russian',
+  ja: 'Japanese',
+  ko: 'Korean',
+  zh: 'Chinese',
+  ar: 'Arabic',
+  hi: 'Hindi',
+  tr: 'Turkish',
+  pl: 'Polish',
+  nl: 'Dutch',
+  sv: 'Swedish',
+  da: 'Danish',
+  no: 'Norwegian',
+  fi: 'Finnish',
+  cs: 'Czech',
+  hu: 'Hungarian',
+  ro: 'Romanian',
+  bg: 'Bulgarian',
+  hr: 'Croatian',
+  sk: 'Slovak',
+  sl: 'Slovenian',
+  et: 'Estonian',
+  lv: 'Latvian',
+  lt: 'Lithuanian',
+  mt: 'Maltese',
+  el: 'Greek',
+  he: 'Hebrew',
+  th: 'Thai',
+  vi: 'Vietnamese',
+  id: 'Indonesian',
+  ms: 'Malay',
+  tl: 'Filipino',
+  sw: 'Swahili',
+  yo: 'Yoruba',
+  zu: 'Zulu',
+  af: 'Afrikaans',
+  sq: 'Albanian',
+  am: 'Amharic',
+  hy: 'Armenian',
+  az: 'Azerbaijani',
+  eu: 'Basque',
+  be: 'Belarusian',
+  bn: 'Bengali',
+  bs: 'Bosnian',
+  my: 'Myanmar',
+  ca: 'Catalan',
+  ceb: 'Cebuano',
+  ny: 'Chichewa',
+  co: 'Corsican',
+  cy: 'Welsh',
+  eo: 'Esperanto',
+  fa: 'Persian',
+  fy: 'Frisian',
+  gd: 'Scottish Gaelic',
+  gl: 'Galician',
+  ka: 'Georgian',
+  gu: 'Gujarati',
+  ht: 'Haitian Creole',
+  ha: 'Hausa',
+  haw: 'Hawaiian',
+  iw: 'Hebrew',
+  hmn: 'Hmong',
+  is: 'Icelandic',
+  ig: 'Igbo',
+  ga: 'Irish',
+  jw: 'Javanese',
+  kn: 'Kannada',
+  kk: 'Kazakh',
+  km: 'Khmer',
+  rw: 'Kinyarwanda',
+  ku: 'Kurdish',
+  ky: 'Kyrgyz',
+  lo: 'Lao',
+  la: 'Latin',
+  lb: 'Luxembourgish',
+  mk: 'Macedonian',
+  mg: 'Malagasy',
+  ml: 'Malayalam',
+  mi: 'Maori',
+  mr: 'Marathi',
+  mn: 'Mongolian',
+  ne: 'Nepali',
+  ps: 'Pashto',
+  pa: 'Punjabi',
+  sm: 'Samoan',
+  sr: 'Serbian',
+  st: 'Sesotho',
+  sn: 'Shona',
+  sd: 'Sindhi',
+  si: 'Sinhala',
+  so: 'Somali',
+  su: 'Sundanese',
+  tg: 'Tajik',
+  ta: 'Tamil',
+  tt: 'Tatar',
+  te: 'Telugu',
+  uk: 'Ukrainian',
+  ur: 'Urdu',
+  ug: 'Uyghur',
+  uz: 'Uzbek',
+  xh: 'Xhosa',
+  yi: 'Yiddish',
+  auto: 'Auto-detect',
+};

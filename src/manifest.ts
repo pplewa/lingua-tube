@@ -1,8 +1,8 @@
-import { defineManifest } from '@crxjs/vite-plugin'
-import packageData from '../package.json'
+import { defineManifest } from '@crxjs/vite-plugin';
+import packageData from '../package.json';
 
 //@ts-ignore
-const isDev = process.env.NODE_ENV == 'development'
+const isDev = process.env.NODE_ENV == 'development';
 
 export default defineManifest({
   name: `${packageData.displayName || packageData.name}${isDev ? ` ➡️ Dev` : ''}`,
@@ -26,11 +26,20 @@ export default defineManifest({
       run_at: 'document_end',
     },
   ],
+  host_permissions: ['<all_urls>'],
   web_accessible_resources: [
     {
       resources: ['img/logo-16.png', 'img/logo-32.png', 'img/logo-48.png', 'img/logo-128.png'],
       matches: ['*://*.youtube.com/*'],
     },
   ],
-  permissions: ['storage', 'activeTab', 'scripting', 'notifications', 'contextMenus', 'tabs']
-})
+  permissions: [
+    'storage',
+    'activeTab',
+    'scripting',
+    'notifications',
+    'contextMenus',
+    'tabs',
+    'webRequest',
+  ],
+});
