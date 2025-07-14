@@ -10,7 +10,7 @@ import {
   ActiveSubtitleCue,
 } from '../youtube/PlayerInteractionService';
 import { StorageService } from '../storage';
-import { UserSettings, SubtitleSettings } from '../storage/types';
+import { UserSettings } from '../storage/types';
 import { VocabularyManager } from '../vocabulary/VocabularyManager';
 import { VocabularyObserver, VocabularyEventType } from '../vocabulary/VocabularyObserver';
 import { Logger } from '../logging/Logger';
@@ -902,7 +902,7 @@ export class DualSubtitleComponent {
 
     if (combinedNative || combinedTarget) {
       this.showSubtitles();
-    } 
+    }
   }
 
   private renderTargetLine(text: string): void {
@@ -1346,6 +1346,7 @@ export class DualSubtitleComponent {
         (await this.vocabularyManager.isWordSaved(cleanWord, 'en')) ||
         (await this.vocabularyManager.isWordSaved(cleanWord, 'es')) ||
         (await this.vocabularyManager.isWordSaved(cleanWord, 'fr')) ||
+        (await this.vocabularyManager.isWordSaved(cleanWord, 'th')) ||
         (await this.vocabularyManager.isWordSaved(cleanWord, 'de'));
 
       this.vocabularyCache.set(word, isVocabularyWord.toString());

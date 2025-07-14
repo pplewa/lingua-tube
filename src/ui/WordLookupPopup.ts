@@ -6,6 +6,7 @@
 
 import { DictionaryApiService } from '../translation/DictionaryApiService';
 import { TranslationApiService } from '../translation/TranslationApiService';
+import { translationCacheService } from '../translation/TranslationCacheService';
 import { TTSService } from '../translation/TTSService';
 import { StorageService } from '../storage';
 import { Logger } from '../logging';
@@ -1230,6 +1231,8 @@ export class WordLookupPopup {
   private isVisible: boolean = false;
   private isLoading: boolean = false;
   private currentWord: string = '';
+  private currentContext: string = '';
+  private translation: string = '';
   private currentSourceLanguage: string = 'en'; // Default fallback
   private currentTargetLanguage: string = 'es'; // Default fallback
   private autoHideTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -1442,12 +1445,13 @@ export class WordLookupPopup {
         pos = position || { x: 0, y: 0 };
         sourceLanguage = this.currentSourceLanguage;
         targetLanguage = this.currentTargetLanguage;
+        context = '';
       } else {
         word = wordOrData.word;
         pos = wordOrData.position;
         sourceLanguage = wordOrData.sourceLanguage || this.currentSourceLanguage;
         targetLanguage = wordOrData.targetLanguage || this.currentTargetLanguage;
-        context = wordOrData.context;
+        context = wordOrData.context || '';
       }
 
       // Enhanced word validation with language-specific handling
@@ -1477,6 +1481,7 @@ export class WordLookupPopup {
 
       // Store current word
       this.currentWord = processedWord;
+      this.currentContext = context;
 
       // Show popup immediately with loading state
       this.showLoadingState();
@@ -1690,8 +1695,12 @@ export class WordLookupPopup {
   // ========================================
   // Content Loading and Rendering
   // ========================================
-
   private async loadWordContent(word: string): Promise<PopupContent> {
+    // Show partial content with translation (only if not destroyed)
+    if (!this.isDestroyed) {
+      this.showPartialContent(word);
+    }
+
     this.logger?.debug('Loading content for word', {
       component: ComponentType.WORD_LOOKUP,
       metadata: {
@@ -1702,38 +1711,58 @@ export class WordLookupPopup {
     });
 
     // Progressive loading: show translation first, then definition (if applicable)
-    let translation = '';
     let definition: any = { meanings: [], phonetics: [] };
 
     try {
-      // Load translation first (usually faster) - tracked operation
-      this.logger?.debug('Getting translation', {
-        component: ComponentType.WORD_LOOKUP,
-        metadata: {
-          word,
-          sourceLanguage: this.currentSourceLanguage,
-          targetLanguage: this.currentTargetLanguage,
-        },
-      });
-      const translationPromise = this.translationService.translateText({
-        text: word,
-        fromLanguage: this.currentSourceLanguage,
-        toLanguage: this.currentTargetLanguage,
-      });
-      translation = await this.trackOperation(translationPromise);
+      const cached = await translationCacheService.get(
+        word,
+        this.currentSourceLanguage,
+        this.currentTargetLanguage,
+      );
+      if (cached) {
+        this.logger?.debug('Found cached translation', {
+          component: ComponentType.WORD_LOOKUP,
+          metadata: {
+            word,
+            cachedTranslation: cached,
+            sourceLanguage: this.currentSourceLanguage,
+            targetLanguage: this.currentTargetLanguage,
+          },
+        });
+        this.translation = cached;
+      } else {
+        // Load translation first (usually faster) - tracked operation
+        this.logger?.debug('Getting translation', {
+          component: ComponentType.WORD_LOOKUP,
+          metadata: {
+            word,
+            sourceLanguage: this.currentSourceLanguage,
+            targetLanguage: this.currentTargetLanguage,
+          },
+        });
+        const translationPromise = this.translationService.translateText({
+          text: word,
+          fromLanguage: this.currentSourceLanguage,
+          toLanguage: this.currentTargetLanguage,
+        });
+        this.translation = await this.trackOperation(translationPromise);
+      }
+
+      await translationCacheService.set(
+        word,
+        this.translation,
+        this.currentSourceLanguage,
+        this.currentTargetLanguage,
+      );
+
       this.logger?.debug('Translation received', {
         component: ComponentType.WORD_LOOKUP,
-        metadata: { word, translation: translation.substring(0, 50) },
+        metadata: { word, translation: this.translation.substring(0, 50) },
       });
-
-      // Show partial content with translation (only if not destroyed)
-      if (!this.isDestroyed) {
-        this.showPartialContent(word, translation);
-      }
 
       // Only try to get definition if the source language is English
       // (since DictionaryApiService only supports English)
-      if (this.currentSourceLanguage === 'en' || this.currentSourceLanguage === 'auto') {
+      if (this.currentSourceLanguage === 'en') {
         try {
           this.logger?.debug('Getting definition for English word', {
             component: ComponentType.WORD_LOOKUP,
@@ -1777,7 +1806,7 @@ export class WordLookupPopup {
 
       // If translation fails, try definition only (for English words)
       if (
-        !translation &&
+        !this.translation &&
         !this.isDestroyed &&
         (this.currentSourceLanguage === 'en' || this.currentSourceLanguage === 'auto')
       ) {
@@ -1815,7 +1844,7 @@ export class WordLookupPopup {
 
     const content = {
       word,
-      translation,
+      translation: this.translation,
       phonetic: definition.phonetics?.[0]?.text || '',
       definitions: definition.meanings
         ? definition.meanings.map((meaning: any) => ({
@@ -1853,7 +1882,7 @@ export class WordLookupPopup {
     return content;
   }
 
-  private showPartialContent(word: string, translation: string): void {
+  private showPartialContent(word: string): void {
     if (!this.popupContainer || !this.isLoading) return;
 
     this.popupContainer.classList.remove('loading');
@@ -1867,7 +1896,7 @@ export class WordLookupPopup {
         </div>
         
         <div class="translation-section">
-          <p class="translation-text">${this.escapeHtml(translation)}</p>
+          <p class="translation-text"></p>
         </div>
         
         <div class="definitions-section">
@@ -1876,8 +1905,24 @@ export class WordLookupPopup {
         </div>
         
         <div class="actions-section" style="display: flex; gap: 8px;">
-          <div class="skeleton skeleton-button"></div>
-          <div class="skeleton skeleton-button"></div>
+        ${
+          this.config.enableTTS
+            ? `
+          <button class="action-button" type="button" data-action="tts" aria-label="Listen to pronunciation of ${this.escapeHtml(word)}">
+            <span class="button-text">🔊 Listen</span>
+          </button>
+        `
+            : ''
+        }
+          ${
+            this.config.enableVocabulary
+              ? `
+            <button class="action-button primary" type="button" data-action="save" aria-label="Save ${this.escapeHtml(word)} to vocabulary" disabled>
+              <span class="button-text">💾 Save Word</span>
+            </button>
+          `
+              : ''
+          }
         </div>
       </div>
     `;
@@ -2168,12 +2213,12 @@ export class WordLookupPopup {
     try {
       const savePromise = this.storageService.saveWord({
         word: this.currentWord,
-        translation: '', // This would be populated from current content
-        context: '',
+        translation: this.translation,
+        context: this.currentContext,
         sourceLanguage: this.currentSourceLanguage,
         targetLanguage: this.currentTargetLanguage,
-        videoId: '',
-        videoTitle: '',
+        videoId: this.extractVideoId(window.location.href) || '',
+        videoTitle: await this.getVideoTitle(),
         timestamp: Date.now(),
         reviewCount: 0,
       });
@@ -2211,6 +2256,20 @@ export class WordLookupPopup {
         this.setActionLoading(actionKey, false);
       }
     }
+  }
+
+  private async getVideoTitle(): Promise<string> {
+    try {
+      const titleElement = document.querySelector('h1.ytd-watch-metadata');
+      return titleElement?.textContent?.trim() || 'Unknown Video';
+    } catch (error) {
+      return 'Unknown Video';
+    }
+  }
+
+  private extractVideoId(url: string): string | null {
+    const match = url.match(/[?&]v=([^&]+)/);
+    return match ? match[1] : null;
   }
 
   private async retryLoad(): Promise<void> {
@@ -2507,12 +2566,14 @@ export class WordLookupPopup {
     isVisible: boolean;
     isLoading: boolean;
     currentWord: string;
+    translation: string;
     error: Error | null;
   } {
     return {
       isVisible: this.isVisible,
       isLoading: this.isLoading,
       currentWord: this.currentWord,
+      translation: this.translation,
       error: null, // Could be enhanced to track errors
     };
   }
@@ -3365,5 +3426,7 @@ export class WordLookupPopup {
     this.isVisible = false;
     this.isLoading = false;
     this.currentWord = '';
+    this.translation = '';
+    this.currentContext = '';
   }
 }

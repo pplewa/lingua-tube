@@ -256,7 +256,6 @@ class LinguaTubeContentScript {
     this.state.components.subtitleManager = new DualSubtitleManager(
       this.state.components.playerService,
       storageService,
-      this.state.components.translationService || new TranslationApiService(),
       this.state.components.wordLookupPopup,
     );
     await this.state.components.subtitleManager.initialize();
@@ -448,12 +447,11 @@ class LinguaTubeContentScript {
 
       const currentSettings = settingsResult.data;
 
-      // Use 'auto' for source language to let translation API handle detection
       const updatedSettings = {
         ...currentSettings,
         languages: {
           ...currentSettings.languages,
-          sourceLanguage: 'auto', // Let translation API auto-detect the language
+          sourceLanguage: subtitleLanguageCode,
         },
       };
 
@@ -467,7 +465,7 @@ class LinguaTubeContentScript {
         // Propagate the language change to the subtitle manager if it exists
         if (this.state.components.subtitleManager) {
           this.state.components.subtitleManager.setLanguages(
-            'auto',
+            currentSettings.languages.sourceLanguage,
             currentSettings.languages.nativeLanguage,
           );
           this.logger?.info('Updated DualSubtitleManager with auto language detection', {
