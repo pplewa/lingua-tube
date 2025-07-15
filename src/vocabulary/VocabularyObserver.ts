@@ -323,6 +323,17 @@ export class VocabularyObserver {
     try {
       // Emit to specific event listeners
       const listeners = this.eventListeners.get(event.type);
+      
+      this.logger?.debug('Emitting vocabulary event', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: { 
+          eventType: event.type,
+          specificListeners: listeners?.size || 0,
+          globalListeners: this.globalCallbacks.size,
+          registeredComponents: this.uiComponents.size
+        },
+      });
+
       if (listeners) {
         listeners.forEach((callback) => {
           try {
@@ -378,6 +389,11 @@ export class VocabularyObserver {
    * Emit word added event
    */
   public emitWordAdded(word: VocabularyItem, source: VocabularyEventData['source'] = 'user'): void {
+    this.logger?.debug('Emitting WORD_ADDED event', {
+      component: ComponentType.WORD_LOOKUP,
+      metadata: { word: word.word, wordId: word.id, source },
+    });
+
     this.emitEvent({
       type: VocabularyEventType.WORD_ADDED,
       word,
@@ -538,12 +554,22 @@ export class VocabularyObserver {
   private setupStorageEventListeners(): void {
     // Listen to storage events and convert to vocabulary events
     storageService.addEventListener(StorageEventType.VOCABULARY_ADDED, (event) => {
+      this.logger?.debug('Storage event received: VOCABULARY_ADDED', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: { eventData: event.data },
+      });
+      
       if (event.data) {
         this.emitWordAdded(event.data as VocabularyItem, 'system');
       }
     });
 
     storageService.addEventListener(StorageEventType.VOCABULARY_REMOVED, (event) => {
+      this.logger?.debug('Storage event received: VOCABULARY_REMOVED', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: { eventData: event.data },
+      });
+      
       if (event.data) {
         this.emitWordRemoved(event.data as VocabularyItem, 'system');
       } else {
@@ -557,6 +583,11 @@ export class VocabularyObserver {
     });
 
     storageService.addEventListener(StorageEventType.VOCABULARY_UPDATED, (event) => {
+      this.logger?.debug('Storage event received: VOCABULARY_UPDATED', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: { eventData: event.data },
+      });
+      
       if (event.data) {
         this.emitWordUpdated(event.data as VocabularyItem, undefined, 'system');
       }

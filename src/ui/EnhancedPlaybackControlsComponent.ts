@@ -2125,11 +2125,11 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     });
 
     this.keyboardShortcuts.set('Comma', () => {
-      this.skipTime(-5);
+      this.skipTime(-1);
     });
 
     this.keyboardShortcuts.set('Period', () => {
-      this.skipTime(5);
+      this.skipTime(1);
     });
 
     this.keyboardShortcuts.set('Digit1', () => {

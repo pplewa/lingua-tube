@@ -641,6 +641,83 @@ const POPUP_STYLES = `
     margin-bottom: 16px;
   }
 
+  .context-section {
+    margin-bottom: 16px;
+    padding: 12px;
+    background: rgba(113, 128, 150, 0.05);
+    border-radius: 8px;
+    border-left: 3px solid #718096;
+  }
+
+  .context-text {
+    font-size: 14px;
+    color: var(--popup-text-color);
+    line-height: 1.5;
+    margin: 0 0 8px 0;
+    font-style: italic;
+  }
+
+  .context-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .context-tts-button {
+    background: transparent;
+    border: 1px solid #718096;
+    border-radius: 4px;
+    color: #718096;
+    font-size: 11px;
+    padding: 4px 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .context-tts-button:hover {
+    background: #718096;
+    color: white;
+  }
+
+  .context-tts-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .context-tts-button.loading {
+    position: relative;
+    pointer-events: none;
+  }
+
+  .context-tts-button.loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 12px;
+    height: 12px;
+    margin: -6px 0 0 -6px;
+    border: 1px solid transparent;
+    border-top: 1px solid currentColor;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+
+  .context-tts-button.loading .button-text {
+    opacity: 0;
+  }
+
+  .context-label {
+    font-size: 11px;
+    color: #a0aec0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 500;
+  }
+
   .example-item {
     margin-bottom: 8px;
     padding: 8px;
@@ -829,6 +906,29 @@ const POPUP_STYLES = `
     .examples-section {
       margin-bottom: 12px;
     }
+    
+    .context-section {
+      margin-bottom: 12px;
+      padding: 10px;
+    }
+    
+    .context-text {
+      font-size: 13px;
+      margin-bottom: 6px;
+    }
+    
+    .context-controls {
+      gap: 6px;
+    }
+    
+    .context-tts-button {
+      font-size: 10px;
+      padding: 3px 6px;
+    }
+    
+    .context-label {
+      font-size: 10px;
+    }
   }
 
   @media (max-width: 480px) {
@@ -897,6 +997,29 @@ const POPUP_STYLES = `
       font-size: 13px;
     }
     
+    .context-section {
+      margin-bottom: 10px;
+      padding: 8px;
+    }
+    
+    .context-text {
+      font-size: 12px;
+      margin-bottom: 5px;
+    }
+    
+    .context-controls {
+      gap: 5px;
+    }
+    
+    .context-tts-button {
+      font-size: 9px;
+      padding: 2px 5px;
+    }
+    
+    .context-label {
+      font-size: 9px;
+    }
+    
     .loading-spinner {
       padding: 30px;
     }
@@ -933,6 +1056,29 @@ const POPUP_STYLES = `
     .action-button {
       padding: 8px 12px;
       font-size: 12px;
+    }
+    
+    .context-section {
+      margin-bottom: 8px;
+      padding: 6px;
+    }
+    
+    .context-text {
+      font-size: 11px;
+      margin-bottom: 4px;
+    }
+    
+    .context-controls {
+      gap: 4px;
+    }
+    
+    .context-tts-button {
+      font-size: 8px;
+      padding: 2px 4px;
+    }
+    
+    .context-label {
+      font-size: 8px;
     }
   }
 
@@ -1236,6 +1382,8 @@ export class WordLookupPopup {
   private translation: string = '';
   private currentSourceLanguage: string = 'en'; // Default fallback
   private currentTargetLanguage: string = 'es'; // Default fallback
+  private isWordSaved: boolean = false;
+  private isPerformingAction: boolean = false;
   private autoHideTimeout: ReturnType<typeof setTimeout> | null = null;
   private loadingTimeout: ReturnType<typeof setTimeout> | null = null;
   private actionLoadingStates: Map<string, boolean> = new Map();
@@ -1494,6 +1642,10 @@ export class WordLookupPopup {
 
       // Load content asynchronously
       const content = await this.loadWordContent(processedWord);
+
+      // Check if word is already saved
+      await this.checkWordSaved(processedWord);
+
       this.updateContent(content);
 
       // Set up auto-hide if configured
@@ -1903,6 +2055,28 @@ export class WordLookupPopup {
           <p class="translation-text"></p>
         </div>
         
+        ${
+          this.currentContext && this.currentContext.trim().length > 0
+            ? `
+        <div class="context-section" role="region" aria-labelledby="context-title">
+          <div class="context-controls">
+            <span class="context-label" id="context-title">Context</span>
+            ${
+              this.config.enableTTS
+                ? `
+              <button class="context-tts-button" type="button" data-action="context-tts" aria-label="Listen to context">
+                <span class="button-text">🔊</span>
+              </button>
+            `
+                : ''
+            }
+          </div>
+          <p class="context-text">${this.escapeHtml(this.currentContext)}</p>
+        </div>
+        `
+            : ''
+        }
+        
         <div class="definitions-section">
           <div class="skeleton skeleton-text medium"></div>
           <div class="skeleton skeleton-text small"></div>
@@ -1922,7 +2096,7 @@ export class WordLookupPopup {
             this.config.enableVocabulary
               ? `
             <button class="action-button primary" type="button" data-action="save" aria-label="Save ${this.escapeHtml(word)} to vocabulary" disabled>
-              <span class="button-text">💾 Save Word</span>
+              <span class="button-text">${this.isWordSaved ? '🗑️ Remove Word' : '💾 Save Word'}</span>
             </button>
           `
               : ''
@@ -1957,6 +2131,28 @@ export class WordLookupPopup {
               : ''
           }
         </div>
+        
+        ${
+          this.currentContext && this.currentContext.trim().length > 0
+            ? `
+          <div class="context-section" role="region" aria-labelledby="context-title">
+            <div class="context-controls">
+              <span class="context-label" id="context-title">Context</span>
+              ${
+                this.config.enableTTS
+                  ? `
+                <button class="context-tts-button" type="button" data-action="context-tts" aria-label="Listen to context">
+                  <span class="button-text">🔊</span>
+                </button>
+              `
+                  : ''
+              }
+            </div>
+            <p class="context-text">${this.escapeHtml(this.currentContext)}</p>
+          </div>
+        `
+            : ''
+        }
         
         ${
           content.definitions.length > 0
@@ -2021,7 +2217,7 @@ export class WordLookupPopup {
             this.config.enableVocabulary
               ? `
             <button class="action-button primary" type="button" data-action="save" aria-label="Save ${this.escapeHtml(content.word)} to vocabulary">
-              <span class="button-text">💾 Save Word</span>
+              <span class="button-text">${this.isWordSaved ? '🗑️ Remove Word' : '💾 Save Word'}</span>
             </button>
           `
               : ''
@@ -2086,6 +2282,45 @@ export class WordLookupPopup {
     } else {
       button.classList.remove('loading');
       button.disabled = false;
+      // Update button text after action completes
+      if (action === 'save') {
+        this.updateSaveButtonText();
+      }
+    }
+  }
+
+  private setContextTTSLoading(isLoading: boolean): void {
+    if (!this.popupContainer) return;
+
+    const button = this.popupContainer.querySelector(
+      '[data-action="context-tts"]',
+    ) as HTMLButtonElement;
+    if (!button) return;
+
+    if (isLoading) {
+      button.classList.add('loading');
+      button.disabled = true;
+    } else {
+      button.classList.remove('loading');
+      button.disabled = false;
+    }
+  }
+
+  private updateSaveButtonText(): void {
+    if (!this.popupContainer) return;
+
+    const button = this.popupContainer.querySelector('[data-action="save"]') as HTMLButtonElement;
+    if (!button) return;
+
+    const buttonText = button.querySelector('.button-text');
+    if (!buttonText) return;
+
+    if (this.isWordSaved) {
+      buttonText.textContent = '🗑️ Remove Word';
+      button.setAttribute('aria-label', `Remove ${this.currentWord} from vocabulary`);
+    } else {
+      buttonText.textContent = '💾 Save Word';
+      button.setAttribute('aria-label', `Save ${this.currentWord} to vocabulary`);
     }
   }
 
@@ -2158,6 +2393,9 @@ export class WordLookupPopup {
       case 'tts':
         await this.playTTS();
         break;
+      case 'context-tts':
+        await this.playContextTTS();
+        break;
       case 'save':
         await this.saveWord();
         break;
@@ -2208,47 +2446,41 @@ export class WordLookupPopup {
     }
   }
 
-  private async saveWord(): Promise<void> {
-    if (!this.currentWord || this.isDestroyed) return;
+  private async playContextTTS(): Promise<void> {
+    if (!this.currentContext || this.currentContext.trim().length === 0 || this.isDestroyed) return;
 
-    const actionKey = 'save';
-    this.setActionLoading(actionKey, true);
+    const actionKey = 'context-tts';
+    this.setContextTTSLoading(true);
 
     try {
-      const savePromise = this.vocabularyService.saveWord(
-        this.currentWord,
-        this.translation,
-        this.currentContext,
-        {
-          sourceLanguage: this.currentSourceLanguage,
-          targetLanguage: this.currentTargetLanguage,
-          videoId: this.extractVideoId(window.location.href) || '',
-          videoTitle: await this.getVideoTitle(),
-          timestamp: Date.now(),
-        },
-      );
-
-      await this.trackOperation(savePromise);
+      const ttsPromise = this.ttsService.speak(this.currentContext);
+      await this.trackOperation(ttsPromise);
 
       if (!this.isDestroyed) {
-        this.events.onWordSaved?.(this.currentWord);
-
-        // Show success feedback
-        this.showActionSuccess(actionKey, 'Word saved!');
+        this.logger?.debug('Context TTS played successfully', {
+          component: ComponentType.WORD_LOOKUP,
+          metadata: {
+            word: this.currentWord,
+            contextLength: this.currentContext.length,
+            sourceLanguage: this.currentSourceLanguage,
+          },
+        });
       }
     } catch (error) {
-      this.logger?.error('Save word failed', {
+      this.logger?.error('Context TTS failed', {
         component: ComponentType.WORD_LOOKUP,
         metadata: {
           word: this.currentWord,
+          contextLength: this.currentContext.length,
+          sourceLanguage: this.currentSourceLanguage,
           error: error instanceof Error ? error.message : String(error),
         },
       });
       if (!this.isDestroyed) {
-        // Use enhanced error handling for storage errors
+        // Use enhanced error handling for context TTS errors
         const errorContext = this.classifyError(error as Error, {
-          service: 'storage',
-          operation: 'save',
+          service: 'tts',
+          operation: 'context-tts',
           word: this.currentWord,
         });
 
@@ -2257,6 +2489,113 @@ export class WordLookupPopup {
         this.events.onError?.(error as Error);
       }
     } finally {
+      if (!this.isDestroyed) {
+        this.setContextTTSLoading(false);
+      }
+    }
+  }
+
+  private async checkWordSaved(word: string): Promise<void> {
+    try {
+      this.isWordSaved = await this.vocabularyService.isWordSaved(word, this.currentSourceLanguage);
+    } catch (error) {
+      this.logger?.warn('Failed to check if word is saved', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: {
+          word,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+      this.isWordSaved = false;
+    }
+  }
+
+  private async saveWord(): Promise<void> {
+    if (!this.currentWord || this.isDestroyed) return;
+
+    const actionKey = 'save';
+    this.isPerformingAction = true;
+    this.setActionLoading(actionKey, true);
+
+    try {
+      if (this.isWordSaved) {
+        // Remove word if it's already saved
+        const vocabulary = await this.vocabularyService.getVocabulary();
+        if (vocabulary.success && vocabulary.data) {
+          const existingWord = vocabulary.data.find(
+            (item) =>
+              item.word.toLowerCase() === this.currentWord.toLowerCase() &&
+              item.sourceLanguage === this.currentSourceLanguage,
+          );
+
+          if (existingWord) {
+            await this.vocabularyService.removeWords([existingWord.id]);
+            this.isWordSaved = false;
+
+            if (!this.isDestroyed) {
+              this.events.onWordSaved?.(this.currentWord);
+            }
+
+            this.logger?.debug('Word removed from vocabulary', {
+              component: ComponentType.WORD_LOOKUP,
+              metadata: { word: this.currentWord, wordId: existingWord.id },
+            });
+          }
+        }
+      } else {
+        // Save word if it's not already saved
+        const savePromise = this.vocabularyService.saveWord(
+          this.currentWord,
+          this.translation,
+          this.currentContext,
+          {
+            sourceLanguage: this.currentSourceLanguage,
+            targetLanguage: this.currentTargetLanguage,
+            videoId: this.extractVideoId(window.location.href) || '',
+            videoTitle: await this.getVideoTitle(),
+            timestamp: Date.now(),
+          },
+        );
+
+        const result = await this.trackOperation(savePromise);
+        this.isWordSaved = true;
+
+        if (!this.isDestroyed) {
+          this.events.onWordSaved?.(this.currentWord);
+        }
+
+        this.logger?.debug('Word saved to vocabulary', {
+          component: ComponentType.WORD_LOOKUP,
+          metadata: {
+            word: this.currentWord,
+            result: result?.success ? 'success' : 'failed',
+            wordId: result?.data?.id,
+          },
+        });
+      }
+    } catch (error) {
+      this.logger?.error('Save/remove word failed', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: {
+          word: this.currentWord,
+          action: this.isWordSaved ? 'remove' : 'save',
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+      if (!this.isDestroyed) {
+        // Use enhanced error handling for storage errors
+        const errorContext = this.classifyError(error as Error, {
+          service: 'storage',
+          operation: this.isWordSaved ? 'remove' : 'save',
+          word: this.currentWord,
+        });
+
+        this.updateErrorState(errorContext);
+        this.showEnhancedErrorState(errorContext);
+        this.events.onError?.(error as Error);
+      }
+    } finally {
+      this.isPerformingAction = false;
       if (!this.isDestroyed) {
         this.setActionLoading(actionKey, false);
       }

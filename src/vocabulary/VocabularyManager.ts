@@ -73,7 +73,7 @@ export class VocabularyManager {
   private static instance: VocabularyManager | null = null;
   private vocabularyCache: VocabularyItem[] = [];
   private lastCacheUpdate = 0;
-  private readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+  private readonly CACHE_TTL = 0; // no cache
 
   private constructor() {
     this.setupEventListeners();

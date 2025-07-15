@@ -6,6 +6,7 @@
 import { subtitleDiscoveryService } from '../youtube';
 import { DualSubtitleManager } from '../ui/DualSubtitleManager';
 import { VocabularyManager } from '../vocabulary/VocabularyManager';
+import { vocabularyObserver } from '../vocabulary/VocabularyObserver';
 import { VocabularyListManager } from '../ui/VocabularyListManager';
 import { EnhancedPlaybackControlsComponent } from '../ui/EnhancedPlaybackControlsComponent';
 import { PlayerInteractionService } from '../youtube/PlayerInteractionService';
@@ -217,6 +218,13 @@ class LinguaTubeContentScript {
     this.logger?.debug('Vocabulary manager initialized', {
       component: ComponentType.CONTENT_SCRIPT,
       action: 'vocabulary_ready',
+    });
+
+    // Initialize vocabulary observer
+    await vocabularyObserver.initialize();
+    this.logger?.debug('Vocabulary observer initialized', {
+      component: ComponentType.CONTENT_SCRIPT,
+      action: 'vocabulary_observer_ready',
     });
 
     // Initialize translation service if configured

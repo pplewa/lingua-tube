@@ -372,8 +372,7 @@ export class DualSubtitleComponent {
 
   private subtitleSyncHandler: (event: SubtitleSyncEvent) => void;
   private vocabularyCache: Map<string, string> = new Map();
-  private vocabularyEventListeners: Map<VocabularyEventType, (event: VocabularyEventType) => void> =
-    new Map();
+  private vocabularyEventUnsubscribers: (() => void)[] = [];
   private readonly logger = Logger.getInstance();
 
   constructor(
@@ -558,10 +557,8 @@ export class DualSubtitleComponent {
       this.visibilityListeners.clear();
 
       // Clean up vocabulary event listeners
-      this.vocabularyObserver.off(VocabularyEventType.WORD_ADDED);
-      this.vocabularyObserver.off(VocabularyEventType.WORD_REMOVED);
-      this.vocabularyObserver.off(VocabularyEventType.VOCABULARY_CLEARED);
-      this.vocabularyObserver.off(VocabularyEventType.VOCABULARY_IMPORTED);
+      this.vocabularyEventUnsubscribers.forEach((unsubscribe) => unsubscribe());
+      this.vocabularyEventUnsubscribers = [];
 
       // Clear vocabulary cache
       this.vocabularyCache.clear();
@@ -1212,26 +1209,53 @@ export class DualSubtitleComponent {
   }
 
   private setupVocabularyEventListeners(): void {
+    this.logger?.debug('Setting up vocabulary event listeners', {
+      component: ComponentType.SUBTITLE_MANAGER,
+      metadata: {},
+    });
+
     // Listen for vocabulary changes that affect highlighting
-    this.vocabularyObserver.on(
-      VocabularyEventType.WORD_ADDED,
-      this.handleVocabularyChange.bind(this),
+    this.vocabularyEventUnsubscribers.push(
+      this.vocabularyObserver.on(
+        VocabularyEventType.WORD_ADDED,
+        this.handleVocabularyChange.bind(this),
+      ),
     );
-    this.vocabularyObserver.on(
-      VocabularyEventType.WORD_REMOVED,
-      this.handleVocabularyChange.bind(this),
+    this.vocabularyEventUnsubscribers.push(
+      this.vocabularyObserver.on(
+        VocabularyEventType.WORD_REMOVED,
+        this.handleVocabularyChange.bind(this),
+      ),
     );
-    this.vocabularyObserver.on(
-      VocabularyEventType.VOCABULARY_CLEARED,
-      this.handleVocabularyChange.bind(this),
+    this.vocabularyEventUnsubscribers.push(
+      this.vocabularyObserver.on(
+        VocabularyEventType.VOCABULARY_CLEARED,
+        this.handleVocabularyChange.bind(this),
+      ),
     );
-    this.vocabularyObserver.on(
-      VocabularyEventType.VOCABULARY_IMPORTED,
-      this.handleVocabularyChange.bind(this),
+    this.vocabularyEventUnsubscribers.push(
+      this.vocabularyObserver.on(
+        VocabularyEventType.VOCABULARY_IMPORTED,
+        this.handleVocabularyChange.bind(this),
+      ),
     );
+    
+    this.logger?.debug('Vocabulary event listeners set up', {
+      component: ComponentType.SUBTITLE_MANAGER,
+      metadata: { listenersCount: this.vocabularyEventUnsubscribers.length },
+    });
   }
 
   private handleVocabularyChange(): void {
+    this.logger?.debug('Vocabulary change detected - refreshing highlights', {
+      component: ComponentType.SUBTITLE_MANAGER,
+      metadata: { 
+        isVisible: this.isVisible,
+        currentCuesCount: this.currentCues.length,
+        cacheSize: this.vocabularyCache.size
+      },
+    });
+
     // Clear vocabulary cache to force refresh
     this.vocabularyCache.clear();
 
