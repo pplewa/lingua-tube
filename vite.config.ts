@@ -26,6 +26,7 @@ export default defineConfig(({ mode }) => {
     define: {
       // Explicitly expose environment variables to the extension
       'import.meta.env.VITE_TRANSLATION_API_KEY': JSON.stringify(env.VITE_TRANSLATION_API_KEY),
+      'import.meta.env.VITE_AI_API_KEY': JSON.stringify(env.VITE_AI_API_KEY),
       'import.meta.env.VITE_TRANSLATION_API_REGION': JSON.stringify(
         env.VITE_TRANSLATION_API_REGION,
       ),

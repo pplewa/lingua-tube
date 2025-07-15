@@ -532,6 +532,11 @@ const POPUP_STYLES = `
     font-style: italic;
   }
 
+  .highlight {
+    color: var(--popup-accent-color);
+    font-weight: 600;
+  }
+
   .close-button {
     background: none;
     border: none;
@@ -663,7 +668,7 @@ const POPUP_STYLES = `
     gap: 8px;
   }
 
-  .context-tts-button {
+  .context-button {
     background: transparent;
     border: 1px solid #718096;
     border-radius: 4px;
@@ -677,22 +682,22 @@ const POPUP_STYLES = `
     gap: 4px;
   }
 
-  .context-tts-button:hover {
+  .context-button:hover {
     background: #718096;
     color: white;
   }
 
-  .context-tts-button:disabled {
+  .context-button:disabled {
     opacity: 0.5;
     cursor: not-allowed;
   }
 
-  .context-tts-button.loading {
+  .context-button.loading {
     position: relative;
     pointer-events: none;
   }
 
-  .context-tts-button.loading::after {
+  .context-button.loading::after {
     content: '';
     position: absolute;
     top: 50%;
@@ -706,7 +711,7 @@ const POPUP_STYLES = `
     animation: spin 1s linear infinite;
   }
 
-  .context-tts-button.loading .button-text {
+  .context-button.loading .button-text {
     opacity: 0;
   }
 
@@ -716,6 +721,41 @@ const POPUP_STYLES = `
     text-transform: uppercase;
     letter-spacing: 0.5px;
     font-weight: 500;
+  }
+
+  .ai-enhancement {
+    margin-top: 16px;
+    padding: 12px;
+    background: rgba(66, 153, 225, 0.03);
+    border-radius: 8px;
+    border-left: 3px solid var(--popup-accent-color);
+  }
+
+  .ai-enhancement-header {
+    margin-bottom: 8px;
+  }
+
+  .ai-enhancement-label {
+    font-size: 11px;
+    color: var(--popup-accent-color);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+  }
+
+  .ai-enhancement-content {
+    max-height: 200px;
+    overflow-y: auto;
+  }
+
+  .ai-enhancement-text {
+    font-size: 13px;
+    color: var(--popup-text-color);
+    line-height: 1.4;
+    margin: 0;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 
   .example-item {
@@ -921,13 +961,30 @@ const POPUP_STYLES = `
       gap: 6px;
     }
     
-    .context-tts-button {
+    .context-button {
       font-size: 10px;
       padding: 3px 6px;
     }
     
     .context-label {
       font-size: 10px;
+    }
+
+    .ai-enhancement {
+      margin-top: 12px;
+      padding: 10px;
+    }
+
+    .ai-enhancement-label {
+      font-size: 10px;
+    }
+
+    .ai-enhancement-text {
+      font-size: 12px;
+    }
+
+    .ai-enhancement-content {
+      max-height: 150px;
     }
   }
 
@@ -1011,13 +1068,30 @@ const POPUP_STYLES = `
       gap: 5px;
     }
     
-    .context-tts-button {
+    .context-button {
       font-size: 9px;
       padding: 2px 5px;
     }
     
     .context-label {
       font-size: 9px;
+    }
+
+    .ai-enhancement {
+      margin-top: 10px;
+      padding: 8px;
+    }
+
+    .ai-enhancement-label {
+      font-size: 9px;
+    }
+
+    .ai-enhancement-text {
+      font-size: 11px;
+    }
+
+    .ai-enhancement-content {
+      max-height: 120px;
     }
     
     .loading-spinner {
@@ -1072,13 +1146,30 @@ const POPUP_STYLES = `
       gap: 4px;
     }
     
-    .context-tts-button {
+    .context-button {
       font-size: 8px;
       padding: 2px 4px;
     }
     
     .context-label {
       font-size: 8px;
+    }
+
+    .ai-enhancement {
+      margin-top: 8px;
+      padding: 6px;
+    }
+
+    .ai-enhancement-label {
+      font-size: 8px;
+    }
+
+    .ai-enhancement-text {
+      font-size: 10px;
+    }
+
+    .ai-enhancement-content {
+      max-height: 100px;
     }
   }
 
@@ -2064,12 +2155,15 @@ export class WordLookupPopup {
             ${
               this.config.enableTTS
                 ? `
-              <button class="context-tts-button" type="button" data-action="context-tts" aria-label="Listen to context">
+              <button class="context-button" type="button" data-action="context-tts" aria-label="Listen to context">
                 <span class="button-text">🔊</span>
               </button>
             `
                 : ''
             }
+            <button class="context-button" type="button" data-action="ai-enhance" aria-label="AI enhance">
+              <span class="button-text">✨</span>
+            </button>
           </div>
           <p class="context-text">${this.escapeHtml(this.currentContext)}</p>
         </div>
@@ -2141,14 +2235,17 @@ export class WordLookupPopup {
               ${
                 this.config.enableTTS
                   ? `
-                <button class="context-tts-button" type="button" data-action="context-tts" aria-label="Listen to context">
+                <button class="context-button" type="button" data-action="context-tts" aria-label="Listen to context">
                   <span class="button-text">🔊</span>
                 </button>
               `
                   : ''
               }
+              <button class="context-button" type="button" data-action="ai-enhance" aria-label="AI enhance">
+                <span class="button-text">✨</span>
+              </button>
             </div>
-            <p class="context-text">${this.escapeHtml(this.currentContext)}</p>
+            <p class="context-text">${this.escapeHtml(this.currentContext).replace(this.escapeHtml(content.word), `<span class="highlight">${this.escapeHtml(content.word)}</span>`)}</p>
           </div>
         `
             : ''
@@ -2306,6 +2403,50 @@ export class WordLookupPopup {
     }
   }
 
+  private setAIEnhanceLoading(isLoading: boolean): void {
+    if (!this.popupContainer) return;
+
+    const button = this.popupContainer.querySelector(
+      '[data-action="ai-enhance"]',
+    ) as HTMLButtonElement;
+    if (!button) return;
+
+    if (isLoading) {
+      button.classList.add('loading');
+      button.disabled = true;
+    } else {
+      button.classList.remove('loading');
+      button.disabled = false;
+    }
+  }
+
+  private displayAIEnhancement(analysis: string): void {
+    if (!this.popupContainer) return;
+
+    const contextSection = this.popupContainer.querySelector('.context-section');
+    if (!contextSection) return;
+
+    // Remove existing AI enhancement display
+    const existingEnhancement = contextSection.querySelector('.ai-enhancement');
+    if (existingEnhancement) {
+      existingEnhancement.remove();
+    }
+
+    // Create AI enhancement display
+    const enhancementDiv = document.createElement('div');
+    enhancementDiv.className = 'ai-enhancement';
+    enhancementDiv.innerHTML = `
+      <div class="ai-enhancement-header">
+        <span class="ai-enhancement-label">✨ AI Analysis</span>
+      </div>
+      <div class="ai-enhancement-content">
+        <pre class="ai-enhancement-text">${this.escapeHtml(analysis)}</pre>
+      </div>
+    `;
+
+    contextSection.appendChild(enhancementDiv);
+  }
+
   private updateSaveButtonText(): void {
     if (!this.popupContainer) return;
 
@@ -2395,6 +2536,9 @@ export class WordLookupPopup {
         break;
       case 'context-tts':
         await this.playContextTTS();
+        break;
+      case 'ai-enhance':
+        await this.aiEnhance();
         break;
       case 'save':
         await this.saveWord();
@@ -2493,6 +2637,113 @@ export class WordLookupPopup {
         this.setContextTTSLoading(false);
       }
     }
+  }
+
+  private async aiEnhance(): Promise<void> {
+    if (!this.currentContext || this.currentContext.trim().length === 0 || this.isDestroyed) return;
+
+    this.setAIEnhanceLoading(true);
+
+    try {
+      const enhancedAnalysis = await this.callOpenAI(this.currentContext);
+      
+      if (!this.isDestroyed) {
+        this.displayAIEnhancement(enhancedAnalysis);
+        
+        this.logger?.debug('AI enhancement completed successfully', {
+          component: ComponentType.WORD_LOOKUP,
+          metadata: {
+            word: this.currentWord,
+            contextLength: this.currentContext.length,
+            sourceLanguage: this.currentSourceLanguage,
+            analysisLength: enhancedAnalysis.length,
+          },
+        });
+      }
+    } catch (error) {
+      this.logger?.error('AI enhancement failed', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: {
+          word: this.currentWord,
+          contextLength: this.currentContext.length,
+          sourceLanguage: this.currentSourceLanguage,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+      
+      if (!this.isDestroyed) {
+        // Use enhanced error handling for AI enhancement errors
+        const errorContext = this.classifyError(error as Error, {
+          service: 'ai-enhancement',
+          operation: 'ai-enhance',
+          word: this.currentWord,
+        });
+
+        this.updateErrorState(errorContext);
+        this.showEnhancedErrorState(errorContext);
+        this.events.onError?.(error as Error);
+      }
+    } finally {
+      if (!this.isDestroyed) {
+        this.setAIEnhanceLoading(false);
+      }
+    }
+  }
+
+  private async callOpenAI(text: string): Promise<string> {
+    // Get API key from storage
+    const apiKey = await this.getOpenAIApiKey();
+    if (!apiKey) {
+      throw new Error('OpenAI API key not found. Please set OPENAI_API_KEY in your environment.');
+    }
+
+    const prompt = `You will be given a sentence in Thai. Your task is to first translate the whole sentence into English and then break up the entire translation in detail. You will list each part of the original sentence on a per line and translate that part alone. This is an example.
+
+<example1>
+input:
+ผมจะอยู่ที่นี่จนกว่าจะหมดสัญญา
+
+output:
+ผมจะอยู่ที่นี่จนกว่าจะหมดสัญญา (phǒm jà yùu thîi nîi jon kwàa jà mòt sǎn-yaa): I will stay here until the contract expires.
+ผม (phǒm): I (male)
+จะอยู่ (jà yùu): will stay
+ที่นี่ (thîi nîi): here
+จนกว่า (jon kwàa): until
+จะหมดสัญญา(jà mòt sǎn-yaa): the contract expire.
+</example1>
+
+Now analyze this Thai sentence:
+${text}`;
+
+    const response = await fetch('https://openrouter.ai/api/v1/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash-lite-preview-06-17',
+        prompt,
+        max_tokens: 1000,
+        temperature: 0.3
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`OpenAI API request failed: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    
+    if (!data.choices || !data.choices[0] || !data.choices[0].text) {
+      throw new Error('Invalid response from OpenAI API');
+    }
+
+    return data.choices[0].text;
+  }
+
+  private async getOpenAIApiKey(): Promise<string | null> {
+    return import.meta.env.VITE_AI_API_KEY;
   }
 
   private async checkWordSaved(word: string): Promise<void> {
