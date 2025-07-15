@@ -668,6 +668,7 @@ export class Logger {
     try {
       const message: LogMessage = {
         type: MessageType.LOG_EVENT,
+        level: entry.level,
         payload: { entry },
         sender: entry.context.component,
         timestamp: entry.timestamp,

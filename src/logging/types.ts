@@ -159,6 +159,7 @@ export enum MessageType {
  * Message structure for chrome.runtime.sendMessage
  */
 export interface LogMessage {
+  readonly level: LogLevel;
   readonly type: MessageType;
   readonly payload: LogMessagePayload;
   readonly sender: ComponentType;
@@ -315,7 +316,7 @@ export interface UserNotification {
  */
 export const DEFAULT_LOGGER_CONFIG: LoggerConfig = {
   enabled: true,
-  minLevel: LogLevel.INFO,
+  minLevel: LogLevel.DEBUG,
   maxStorageSize: 5 * 1024 * 1024, // 5MB
   maxEntries: 10000,
   retentionDays: 7,

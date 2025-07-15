@@ -85,7 +85,8 @@ chrome.webRequest.onBeforeRequest.addListener(
 
 // Handle messages from content scripts and popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  console.log('[LinguaTube] Received message:', request);
+  const level = (request.level ?? 'log') as 'log' | 'info' | 'warn' | 'error';
+  console[level]('[LinguaTube] Received message:', request);
 
   // Update last activity timestamp
   extensionState.lastActivity = Date.now();

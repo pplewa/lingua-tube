@@ -15,6 +15,7 @@ import { VocabularyManager } from '../vocabulary/VocabularyManager';
 import { VocabularyObserver, VocabularyEventType } from '../vocabulary/VocabularyObserver';
 import { Logger } from '../logging/Logger';
 import { ComponentType } from '../logging/types';
+import { sortedPhrases } from '../subtitles/gazetter';
 
 // ========================================
 // Types and Interfaces
@@ -827,10 +828,35 @@ export class DualSubtitleComponent {
    * Thai word segmentation using linguistic rules
    */
   private segmentThaiText(text: string): WordSegment[] {
-    const segmenter = new Intl.Segmenter('th', { granularity: 'sentence' });
-    const words = Array.from(segmenter.segment(text))
-      .map((word) => word.segment.split(/\s+/g))
-      .flat();
+    const segmenter = new Intl.Segmenter('th', { granularity: 'word' });
+    const wordSegments = Array.from(segmenter.segment(text))
+      .map((s) => s.segment.trim())
+      .filter((s) => s.replace(/\s+/g, '').length > 0);
+
+    const words: string[] = [];
+    let i = 0;
+    while (i < wordSegments.length) {
+      let matched = false;
+
+      // Step 2: Attempt to match the longest possible phrase first.
+      // We check for phrases up to a reasonable length (e.g., 30 words).
+      for (let len = Math.min(30, wordSegments.length - i); len > 1; len--) {
+        const potentialPhrase = wordSegments.slice(i, i + len).join('');
+
+        if (sortedPhrases.includes(potentialPhrase)) {
+          words.push(potentialPhrase);
+          i += len; // Advance the index by the length of the matched phrase
+          matched = true;
+          break; // Exit the inner loop once the longest match is found
+        }
+      }
+
+      // Step 3: If no multi-word phrase was matched, add the single token.
+      if (!matched) {
+        words.push(wordSegments[i]);
+        i++;
+      }
+    }
 
     const segments = words.map((word, index) => ({
       text: word,
@@ -921,7 +947,7 @@ export class DualSubtitleComponent {
     // Clear existing content
     this.targetLine.innerHTML = '';
 
-    // Get segmented words
+    // Get renderTargetLineed words
     const words = this.segmentWords(text);
 
     if (words.length === 0) {
@@ -930,7 +956,7 @@ export class DualSubtitleComponent {
     }
 
     // Create a more robust rendering approach
-    let currentText = text;
+    let currentText = text.replace(/\s+/g, '').trim();
     let wordIndex = 0;
 
     // Process each word and render it with surrounding text
