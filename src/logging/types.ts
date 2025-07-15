@@ -316,7 +316,7 @@ export interface UserNotification {
  */
 export const DEFAULT_LOGGER_CONFIG: LoggerConfig = {
   enabled: true,
-  minLevel: LogLevel.DEBUG,
+  minLevel: LogLevel.ERROR,
   maxStorageSize: 5 * 1024 * 1024, // 5MB
   maxEntries: 10000,
   retentionDays: 7,

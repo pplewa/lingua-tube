@@ -557,7 +557,13 @@ export const DEFAULT_POPUP_CONFIG: WordLookupPopupConfig = {
 
 /*
 // Basic usage
-const popup = new WordLookupPopup(services);
+const popup = new WordLookupPopup(
+  dictionaryService,
+  translationService,
+  ttsService,
+  storageService,
+  vocabularyManager
+);
 await popup.show({
   word: 'hello',
   sourceLanguage: 'en',
@@ -566,15 +572,18 @@ await popup.show({
 });
 
 // With configuration
-const popup = new WordLookupPopup(services, {
-  appearance: {
+const popup = new WordLookupPopup(
+  dictionaryService,
+  translationService,
+  ttsService,
+  storageService,
+  vocabularyManager,
+  {
     maxWidth: 500,
-    backgroundColor: '#f7fafc'
-  },
-  features: {
+    backgroundColor: '#f7fafc',
     enableTTS: false
   }
-});
+);
 
 // With event handlers
 popup.on('onShow', (data) => {

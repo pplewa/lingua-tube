@@ -250,6 +250,7 @@ class LinguaTubeContentScript {
       this.state.components.translationService || new TranslationApiService(),
       this.state.components.ttsService,
       storageService,
+      this.state.components.vocabularyManager || VocabularyManager.getInstance(),
     );
 
     // Initialize dual subtitle manager with word lookup popup

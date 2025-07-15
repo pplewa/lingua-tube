@@ -9,6 +9,7 @@ import { TranslationApiService } from '../translation/TranslationApiService';
 import { translationCacheService } from '../translation/TranslationCacheService';
 import { TTSService } from '../translation/TTSService';
 import { StorageService } from '../storage';
+import { VocabularyManager } from '../vocabulary/VocabularyManager';
 import { Logger } from '../logging';
 import { ComponentType } from '../logging/types';
 
@@ -1253,6 +1254,7 @@ export class WordLookupPopup {
   private translationService: TranslationApiService;
   private ttsService: TTSService;
   private storageService: StorageService;
+  private vocabularyService: VocabularyManager;
   private readonly logger = Logger.getInstance();
 
   private events: { [K in keyof PopupEvents]?: PopupEvents[K] } = {};
@@ -1272,12 +1274,14 @@ export class WordLookupPopup {
     translationService: TranslationApiService,
     ttsService: TTSService,
     storageService: StorageService,
+    vocabularyService: VocabularyManager,
     config?: Partial<WordLookupConfig>,
   ) {
     this.dictionaryService = dictionaryService;
     this.translationService = translationService;
     this.ttsService = ttsService;
     this.storageService = storageService;
+    this.vocabularyService = vocabularyService;
 
     this.config = {
       maxWidth: 400,
@@ -2211,17 +2215,18 @@ export class WordLookupPopup {
     this.setActionLoading(actionKey, true);
 
     try {
-      const savePromise = this.storageService.saveWord({
-        word: this.currentWord,
-        translation: this.translation,
-        context: this.currentContext,
-        sourceLanguage: this.currentSourceLanguage,
-        targetLanguage: this.currentTargetLanguage,
-        videoId: this.extractVideoId(window.location.href) || '',
-        videoTitle: await this.getVideoTitle(),
-        timestamp: Date.now(),
-        reviewCount: 0,
-      });
+      const savePromise = this.vocabularyService.saveWord(
+        this.currentWord,
+        this.translation,
+        this.currentContext,
+        {
+          sourceLanguage: this.currentSourceLanguage,
+          targetLanguage: this.currentTargetLanguage,
+          videoId: this.extractVideoId(window.location.href) || '',
+          videoTitle: await this.getVideoTitle(),
+          timestamp: Date.now(),
+        },
+      );
 
       await this.trackOperation(savePromise);
 
@@ -2316,14 +2321,17 @@ export class WordLookupPopup {
     const gapAboveWord = 50;
     const bottomDistance = window.innerHeight - position.y + gapAboveWord;
 
-    console.warn('[POPUP DEBUG] Simple bottom positioning', {
-      actualWidth,
-      actualHeight,
-      clickY: position.y,
-      viewportHeight: window.innerHeight,
-      bottomDistance,
-      gapAboveWord,
-      calculatedX: x,
+    this.logger?.debug('Copied content to clipboard', {
+      component: ComponentType.WORD_LOOKUP,
+      metadata: {
+        actualWidth,
+        actualHeight,
+        clickY: position.y,
+        viewportHeight: window.innerHeight,
+        bottomDistance,
+        gapAboveWord,
+        calculatedX: x,
+      },
     });
 
     // ALWAYS use bottom positioning for upward placement

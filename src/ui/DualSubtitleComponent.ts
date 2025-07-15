@@ -1360,21 +1360,35 @@ export class DualSubtitleComponent {
   }
 
   private async checkVocabularyWord(word: string): Promise<boolean> {
+    // Use boolean cache instead of string cache for better performance
     if (this.vocabularyCache.has(word)) {
       return this.vocabularyCache.get(word) === 'true';
     }
 
     try {
-      // Try to check with common source languages
-      const cleanWord = word.replace(/[^\w]/g, '').toLowerCase();
-      const isVocabularyWord =
-        (await this.vocabularyManager.isWordSaved(cleanWord, 'auto')) ||
-        (await this.vocabularyManager.isWordSaved(cleanWord, 'en')) ||
-        (await this.vocabularyManager.isWordSaved(cleanWord, 'es')) ||
-        (await this.vocabularyManager.isWordSaved(cleanWord, 'fr')) ||
-        (await this.vocabularyManager.isWordSaved(cleanWord, 'th')) ||
-        (await this.vocabularyManager.isWordSaved(cleanWord, 'de'));
+      // Get the current source language from the subtitle track
+      const currentTrack = this.playerService.getCurrentSubtitleTrack();
+      const sourceLanguage = currentTrack?.language || 'auto';
+      
+      // Normalize the word - less aggressive than before, preserving more characters
+      const cleanWord = word.trim().toLowerCase();
+      
+      // First try with the actual source language
+      let isVocabularyWord = await this.vocabularyManager.isWordSaved(cleanWord, sourceLanguage);
+      
+      // If not found and source language is not one of the common ones, try fallback languages
+      if (!isVocabularyWord && !['auto', 'en', 'es', 'fr', 'th', 'de'].includes(sourceLanguage)) {
+        const fallbackLanguages = ['auto', 'en', 'es', 'fr', 'th', 'de'];
+        
+        for (const lang of fallbackLanguages) {
+          isVocabularyWord = await this.vocabularyManager.isWordSaved(cleanWord, lang);
+          if (isVocabularyWord) {
+            break;
+          }
+        }
+      }
 
+      // Cache the result as a string to maintain compatibility with existing code
       this.vocabularyCache.set(word, isVocabularyWord.toString());
       return isVocabularyWord;
     } catch (error) {
