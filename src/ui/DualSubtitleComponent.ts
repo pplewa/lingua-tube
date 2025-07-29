@@ -161,7 +161,7 @@ const SUBTITLE_CONTAINER_STYLES = `
 
   .subtitle-line {
     display: block;
-    text-align: center;
+    text-align: left;
     line-height: var(--subtitle-line-spacing);
     margin: 0;
     padding: 2px 0;
@@ -920,7 +920,8 @@ export class DualSubtitleComponent {
 
     // Update native language line
     if (this.config.showNativeLanguage) {
-      this.nativeLine.textContent = combinedNative || '';
+      // Handle line breaks by converting \n to <br> tags
+      this.nativeLine.innerHTML = (combinedNative || '').replace(/\n/g, '<br>');
     }
 
     if (combinedNative || combinedTarget) {
@@ -937,89 +938,98 @@ export class DualSubtitleComponent {
     });
 
     if (!this.config.clickableWords) {
-      this.targetLine.textContent = text;
+      // Handle line breaks by converting \n to <br> tags
+      this.targetLine.innerHTML = text.replace(/\n/g, '<br>');
       return;
     }
 
     // Clear existing content
     this.targetLine.innerHTML = '';
 
-    // Get renderTargetLineed words
-    const words = this.segmentWords(text);
-
-    if (words.length === 0) {
-      this.targetLine.textContent = text;
-      return;
-    }
-
-    // Create a more robust rendering approach
-    let currentText = text.replace(/\s+/g, '').trim();
-    let wordIndex = 0;
-
-    // Process each word and render it with surrounding text
-    while (wordIndex < words.length && currentText.length > 0) {
-      const word = words[wordIndex];
-      const wordStartIndex = currentText.indexOf(word.text);
-
-      if (wordStartIndex === -1) {
-        // Word not found, skip it
-        wordIndex++;
-        continue;
+    // Split text by line breaks first, then process each line
+    const lines = text.split('\n');
+    
+    lines.forEach((line, lineIndex) => {
+      if (lineIndex > 0) {
+        // Add line break between lines
+        this.targetLine?.appendChild(document.createElement('br'));
       }
-
-      // Add any text before the word (spaces, punctuation, etc.)
-      const beforeWord = currentText.substring(0, wordStartIndex);
-      if (beforeWord.length > 0) {
-        const textNode = document.createTextNode(beforeWord);
-        this.targetLine.appendChild(textNode);
+      
+      if (line.trim() === '') {
+        // Empty line, skip processing
+        return;
       }
-
-      // Create clickable word span
-      const wordSpan = document.createElement('span');
-      wordSpan.className = 'clickable-word';
-      wordSpan.textContent = word.text;
-
-      // Check if word is in vocabulary and add appropriate class
-      this.checkVocabularyWord(word.text)
-        .then((isVocabularyWord: boolean) => {
-          if (isVocabularyWord) {
-            wordSpan.classList.add('vocabulary-word');
-          }
-        })
-        .catch((error) => {
-          this.logger?.warn('Error checking vocabulary word', {
-            component: ComponentType.SUBTITLE_MANAGER,
-            metadata: {
-              word: word.text,
-              error: error instanceof Error ? error.message : String(error),
-            },
+      
+      // Get words for this line
+      const words = this.segmentWords(line);
+      
+      if (words.length === 0) {
+        // No words found, add the line as text
+        this.targetLine?.appendChild(document.createTextNode(line));
+        return;
+      }
+      
+      // Process words in this line
+      let lastEnd = 0;
+      
+      words.forEach((word) => {
+        const wordStart = line.indexOf(word.text, lastEnd);
+        
+        if (wordStart === -1) {
+          // Word not found, skip
+          return;
+        }
+        
+        // Add any text before this word
+        if (wordStart > lastEnd) {
+          const beforeText = line.substring(lastEnd, wordStart);
+          this.targetLine?.appendChild(document.createTextNode(beforeText));
+        }
+        
+        // Create clickable word span
+        const wordSpan = document.createElement('span');
+        wordSpan.className = 'clickable-word';
+        wordSpan.textContent = word.text;
+        
+        // Check if word is in vocabulary and add appropriate class
+        this.checkVocabularyWord(word.text)
+          .then((isVocabularyWord: boolean) => {
+            if (isVocabularyWord) {
+              wordSpan.classList.add('vocabulary-word');
+            }
+          })
+          .catch((error) => {
+            this.logger?.warn('Error checking vocabulary word', {
+              component: ComponentType.SUBTITLE_MANAGER,
+              metadata: {
+                word: word.text,
+                error: error instanceof Error ? error.message : String(error),
+              },
+            });
           });
+        
+        wordSpan.addEventListener('click', (event) => {
+          this.logger?.debug('Word clicked', {
+            component: ComponentType.SUBTITLE_MANAGER,
+            metadata: { word: word.text },
+          });
+          this.handleWordClick(word.text, event);
         });
-
-      wordSpan.addEventListener('click', (event) => {
-        this.logger?.debug('Word clicked', {
-          component: ComponentType.SUBTITLE_MANAGER,
-          metadata: { word: word.text },
-        });
-        this.handleWordClick(word.text, event);
+        
+        this.targetLine?.appendChild(wordSpan);
+        lastEnd = wordStart + word.text.length;
       });
-
-      this.targetLine.appendChild(wordSpan);
-
-      // Move to the next part of the text
-      currentText = currentText.substring(wordStartIndex + word.text.length);
-      wordIndex++;
-    }
-
-    // Add any remaining text
-    if (currentText.length > 0) {
-      const textNode = document.createTextNode(currentText);
-      this.targetLine.appendChild(textNode);
-    }
+      
+      // Add any remaining text in this line
+      if (lastEnd < line.length) {
+        const remainingText = line.substring(lastEnd);
+        this.targetLine?.appendChild(document.createTextNode(remainingText));
+      }
+    });
 
     this.logger?.debug('Rendered clickable words', {
       component: ComponentType.SUBTITLE_MANAGER,
-      metadata: { wordCount: words.length },
+      metadata: { lineCount: lines.length },
     });
   }
 

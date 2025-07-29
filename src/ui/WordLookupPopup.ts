@@ -2521,7 +2521,15 @@ export class WordLookupPopup {
     const actionButtons = this.popupContainer.querySelectorAll('[data-action]');
     actionButtons.forEach((button) => {
       button.addEventListener('click', (event) => {
-        const action = (event.target as HTMLElement).getAttribute('data-action');
+        // Use currentTarget first (the button itself), then fallback to target
+        const currentTarget = event.currentTarget as HTMLElement;
+        const target = event.target as HTMLElement;
+        
+        const action = currentTarget.getAttribute('data-action') || 
+                      target.getAttribute('data-action') ||
+                      target.closest('[data-action]')?.getAttribute('data-action') ||
+                      null;
+        
         this.handleAction(action);
       });
     });

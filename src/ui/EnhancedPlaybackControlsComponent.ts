@@ -262,13 +262,8 @@ const CONTROLS_STYLES = `
     --controls-opacity: 0.9;
     --controls-transition: all 0.3s ease;
     
-    /* Container positioning */
-    position: absolute;
-    bottom: 60px; /* Above YouTube controls */
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 2147483646; /* Just below subtitles */
-    font-family: 'YouTube Sans', 'Roboto', ns-serif;
+    /* Basic styling - positioning handled by controls-container */
+    font-family: 'YouTube Sans', 'Roboto', sans-serif;
     font-size: 14px;
     pointer-events: none;
   }
@@ -281,12 +276,15 @@ const CONTROLS_STYLES = `
     border-radius: var(--controls-border-radius);
     padding: var(--controls-padding);
     opacity: var(--controls-opacity);
-    transition: var(--controls-transition);
     pointer-events: auto;
     backdrop-filter: blur(4px);
     border: 1px solid rgba(255, 255, 255, 0.1);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-    position: relative;
+    position: absolute;
+    bottom: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2147483646;
   }
 
   .controls-container.compact {
@@ -306,6 +304,15 @@ const CONTROLS_STYLES = `
     right: 20px;
     left: auto;
     transform: none;
+  }
+
+  .controls-container.position-top {
+    bottom: auto;
+    top: 20px;
+  }
+
+  .controls-container.position-bottom {
+    /* Default positioning - no override needed */
   }
 
   /* Control Groups */
@@ -678,11 +685,7 @@ const CONTROLS_STYLES = `
 
   /* Fullscreen Mode Support */
   :host(.fullscreen-mode) {
-    position: fixed !important;
-    bottom: 80px !important;
-    left: 50% !important;
-    transform: translateX(-50%) !important;
-    z-index: 2147483647 !important; /* Higher than YouTube's fullscreen controls */
+    /* Fullscreen styling handled by JavaScript positioning */
   }
 
   :host(.fullscreen-mode) .controls-container {
@@ -705,63 +708,6 @@ const CONTROLS_STYLES = `
     height: 32px;
     font-size: 13px;
     padding: 0 10px;
-  }
-
-  :host(.fullscreen-mode) .action-toast {
-    font-size: 14px;
-    padding: 10px 16px;
-    top: -60px;
-  }
-
-  :host(.fullscreen-mode) .state-indicators {
-    top: -10px;
-    right: 10px;
-  }
-
-  :host(.fullscreen-mode) .state-dot {
-    width: 8px;
-    height: 8px;
-  }
-
-  /* Fullscreen compact mode */
-  :host(.fullscreen-mode) .controls-container.compact {
-    padding: 10px;
-    gap: 8px;
-  }
-
-  :host(.fullscreen-mode) .controls-container.compact .control-button {
-    width: 36px;
-    height: 36px;
-    font-size: 16px;
-  }
-
-  /* Fullscreen mobile adjustments */
-  @media (max-width: 768px) {
-    :host(.fullscreen-mode) {
-      bottom: 60px !important;
-    }
-    
-    :host(.fullscreen-mode) .controls-container {
-      padding: 10px;
-      gap: 8px;
-    }
-    
-    :host(.fullscreen-mode) .control-button {
-      width: 36px;
-      height: 36px;
-      font-size: 16px;
-    }
-    
-    :host(.fullscreen-mode) .speed-button {
-      min-width: 48px;
-      height: 28px;
-      font-size: 12px;
-    }
-
-    :host(.fullscreen-mode) .action-toast {
-      font-size: 12px;
-      padding: 8px 12px;
-    }
   }
 
   /* Accessibility */
@@ -974,6 +920,12 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
 
       // Update initial visual feedback state
       this.updateStateIndicators();
+
+      // Ensure controls are initially visible and properly trigger auto-hide system
+      this.show();
+      if (this.config.autoHide) {
+        this.resetAutoHide();
+      }
 
       this.isInitialized = true;
       this.logger?.info('Initialized successfully', {
@@ -1544,22 +1496,22 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
   }
 
   private updateControlsPosition(): void {
-    if (!this.shadowRoot) return;
+    if (!this.controlsContainer) return;
 
-    const root = this.shadowRoot.host as HTMLElement;
+    // Reset all position classes
+    this.controlsContainer.classList.remove('floating', 'position-top', 'position-bottom');
 
+    // Apply position class based on config
     switch (this.config.position) {
       case 'top':
-        root.style.bottom = 'auto';
-        root.style.top = '20px';
+        this.controlsContainer.classList.add('position-top');
         break;
       case 'floating':
-        this.controlsContainer?.classList.add('floating');
+        this.controlsContainer.classList.add('floating');
         break;
       case 'bottom':
       default:
-        root.style.top = 'auto';
-        root.style.bottom = '60px';
+        this.controlsContainer.classList.add('position-bottom');
         break;
     }
   }
@@ -2108,7 +2060,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       this.adjustSpeed(-0.25);
     });
 
-    this.keyboardShortcuts.set('KeyL', () => {
+    this.keyboardShortcuts.set('KeyN', () => {
       this.toggleLoop();
     });
 
@@ -2263,14 +2215,14 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
   // ========================================
 
   public show(): void {
-    if (!this.controlsContainer || this.isVisible) return;
+    if (!this.controlsContainer) return;
 
     this.isVisible = true;
     this.controlsContainer.classList.remove('hidden');
   }
 
   public hide(): void {
-    if (!this.controlsContainer || !this.isVisible) return;
+    if (!this.controlsContainer) return;
 
     this.isVisible = false;
     this.controlsContainer.classList.add('hidden');
@@ -2873,6 +2825,15 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     } else {
       this.container.classList.remove('fullscreen-mode');
 
+      // Reset inline styles set during fullscreen
+      if (this.controlsContainer) {
+        this.controlsContainer.style.position = '';
+        this.controlsContainer.style.bottom = '';
+        this.controlsContainer.style.left = '';
+        this.controlsContainer.style.transform = '';
+        this.controlsContainer.style.zIndex = '';
+      }
+
       // Reset to normal positioning
       this.updateControlsPosition();
 
@@ -2882,15 +2843,14 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
   }
 
   private adjustFullscreenPosition(): void {
-    if (!this.container || !this.isFullscreenMode) return;
+    if (!this.controlsContainer || !this.isFullscreenMode) return;
 
-    // Ensure controls are properly positioned in fullscreen
-    const style = this.container.style;
-    style.position = 'fixed';
-    style.bottom = '80px';
-    style.left = '50%';
-    style.transform = 'translateX(-50%)';
-    style.zIndex = '2147483647';
+    // In fullscreen, override positioning with fixed positioning
+    this.controlsContainer.style.position = 'fixed';
+    this.controlsContainer.style.bottom = '80px';
+    this.controlsContainer.style.left = '50%';
+    this.controlsContainer.style.transform = 'translateX(-50%)';
+    this.controlsContainer.style.zIndex = '2147483647';
   }
 
   private removeFullscreenObserver(): void {
