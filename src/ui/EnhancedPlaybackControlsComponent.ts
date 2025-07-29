@@ -43,6 +43,7 @@ export interface EnhancedControlsState {
   readonly speed: number;
   readonly loop: LoopSegment | null;
   readonly vocabularyMode: boolean;
+  readonly vocabularyListVisible: boolean;
   readonly lastVideoId: string | null;
   readonly lastPosition: number;
   readonly sessionStartTime: number;
@@ -71,6 +72,7 @@ export interface ControlsEventData {
     | 'loop_toggle'
     | 'sentence_nav'
     | 'vocabulary_mode'
+    | 'vocabulary_list'
     | 'fullscreen_change';
   readonly value: any;
   readonly timestamp: number;
@@ -764,6 +766,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
   private currentSpeed: number = 1.0;
   private currentLoop: LoopSegment | null = null;
   private vocabularyModeActive: boolean = false;
+  private vocabularyListVisible: boolean = false;
 
   // State management
   private currentState: EnhancedControlsState;
@@ -803,6 +806,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       speed: 1.0,
       loop: null,
       vocabularyMode: false,
+      vocabularyListVisible: false,
       lastVideoId: null,
       lastPosition: 0,
       sessionStartTime: Date.now(),
@@ -1183,10 +1187,17 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
 
     // Vocabulary mode toggle
     const vocabBtn = document.createElement('button');
-    vocabBtn.className = 'control-button';
+    vocabBtn.className = 'control-button vocabulary-mode-btn';
     vocabBtn.innerHTML = '📚';
     vocabBtn.title = 'Toggle Vocabulary Mode';
     vocabBtn.addEventListener('click', () => this.toggleVocabularyMode());
+
+    // Vocabulary list toggle
+    const vocabListBtn = document.createElement('button');
+    vocabListBtn.className = 'control-button vocabulary-list-btn';
+    vocabListBtn.innerHTML = '📝';
+    vocabListBtn.title = 'Toggle Vocabulary List';
+    vocabListBtn.addEventListener('click', () => this.toggleVocabularyList());
 
     // Vocabulary indicator
     const vocabIndicator = document.createElement('div');
@@ -1194,6 +1205,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     vocabIndicator.textContent = 'Normal';
 
     group.appendChild(vocabBtn);
+    group.appendChild(vocabListBtn);
     group.appendChild(vocabIndicator);
 
     return group;
@@ -1864,11 +1876,33 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     });
   }
 
+  private toggleVocabularyList(): void {
+    this.vocabularyListVisible = !this.vocabularyListVisible;
+    this.updateVocabularyListDisplay();
+
+    // Update state tracking
+    this.updateCurrentState();
+
+    // Show visual feedback
+    this.showActionToast(
+      `Vocabulary List: ${this.vocabularyListVisible ? 'VISIBLE' : 'HIDDEN'}`,
+      'success',
+      1500,
+    );
+    this.updateStateIndicators();
+
+    this.emitEvent({
+      type: 'vocabulary_list',
+      value: this.vocabularyListVisible,
+      timestamp: Date.now(),
+    });
+  }
+
   private updateVocabularyDisplay(): void {
     if (!this.shadowRoot) return;
 
     const vocabIndicator = this.shadowRoot.querySelector('.vocabulary-indicator');
-    const vocabBtn = this.shadowRoot.querySelector('.vocabulary-mode .control-button');
+    const vocabBtn = this.shadowRoot.querySelector('.vocabulary-mode .vocabulary-mode-btn');
 
     if (vocabIndicator && vocabBtn) {
       if (this.vocabularyModeActive) {
@@ -1879,6 +1913,20 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
         vocabIndicator.textContent = 'Normal';
         vocabIndicator.classList.remove('active');
         vocabBtn.classList.remove('active');
+      }
+    }
+  }
+
+  private updateVocabularyListDisplay(): void {
+    if (!this.shadowRoot) return;
+
+    const vocabListBtn = this.shadowRoot.querySelector('.vocabulary-mode .vocabulary-list-btn');
+
+    if (vocabListBtn) {
+      if (this.vocabularyListVisible) {
+        vocabListBtn.classList.add('active');
+      } else {
+        vocabListBtn.classList.remove('active');
       }
     }
   }
@@ -1976,6 +2024,10 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       this.toggleVocabularyMode();
     });
 
+    this.keyboardShortcuts.set('KeyL', () => {
+      this.toggleVocabularyList();
+    });
+
     this.keyboardShortcuts.set('KeyR', () => {
       this.resetSpeed();
     });
@@ -2032,14 +2084,8 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     // Only handle shortcuts when controls are visible and not in input fields
     if (!this.isVisible || !this.isInitialized) return;
 
-    const activeElement = document.activeElement;
-    const isInputField =
-      activeElement &&
-      (activeElement.tagName === 'INPUT' ||
-        activeElement.tagName === 'TEXTAREA' ||
-        (activeElement as HTMLElement).contentEditable === 'true');
-
-    if (isInputField) return;
+    // Check if user is typing in any input field (including shadow DOM)
+    if (this.isUserTypingInInputField(event)) return;
 
     // Build shortcut key from event
     let shortcutKey = '';
@@ -2059,6 +2105,69 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       event.stopPropagation();
       handler();
     }
+  }
+
+  private isUserTypingInInputField(event: KeyboardEvent): boolean {
+    // Check document activeElement first
+    const activeElement = document.activeElement;
+    
+    // Check for standard input fields
+    if (activeElement) {
+      if (activeElement.tagName === 'INPUT' ||
+          activeElement.tagName === 'TEXTAREA' ||
+          (activeElement as HTMLElement).contentEditable === 'true') {
+        return true;
+      }
+      
+      // Check if activeElement is a shadow host that might contain input fields
+      const shadowRoot = (activeElement as any).shadowRoot;
+      if (shadowRoot) {
+        const shadowActiveElement = shadowRoot.activeElement;
+        if (shadowActiveElement &&
+            (shadowActiveElement.tagName === 'INPUT' ||
+             shadowActiveElement.tagName === 'TEXTAREA' ||
+             (shadowActiveElement as HTMLElement).contentEditable === 'true')) {
+          return true;
+        }
+      }
+    }
+    
+    // Check event target as well
+    const target = event.target as HTMLElement;
+    if (target &&
+        (target.tagName === 'INPUT' ||
+         target.tagName === 'TEXTAREA' ||
+         target.contentEditable === 'true')) {
+      return true;
+    }
+    
+    // Check if we're inside vocabulary list container (which might use shadow DOM)
+    const vocabularyContainer = document.getElementById('linguatube-vocabulary-list-container');
+    if (vocabularyContainer && vocabularyContainer.contains(target)) {
+      // If event is happening inside vocabulary list, check if it's from an input
+      const inputs = vocabularyContainer.querySelectorAll('input, textarea, [contenteditable="true"]');
+      for (const input of inputs) {
+        if (input === target || input.contains(target)) {
+          return true;
+        }
+      }
+      
+      // Also check shadow DOM within vocabulary list
+      const shadowHosts = vocabularyContainer.querySelectorAll('*');
+      for (const host of shadowHosts) {
+        const shadowRoot = (host as any).shadowRoot;
+        if (shadowRoot) {
+          const shadowInputs = shadowRoot.querySelectorAll('input, textarea, [contenteditable="true"]');
+          for (const shadowInput of shadowInputs) {
+            if (shadowInput === target || shadowInput.contains(target)) {
+              return true;
+            }
+          }
+        }
+      }
+    }
+    
+    return false;
   }
 
   private removeKeyboardShortcuts(): void {
@@ -2414,6 +2523,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     currentSpeed: number;
     currentLoop: LoopSegment | null;
     vocabularyModeActive: boolean;
+    vocabularyListVisible: boolean;
     config: EnhancedControlsConfig;
   } {
     return {
@@ -2422,6 +2532,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       currentSpeed: this.currentSpeed,
       currentLoop: this.currentLoop,
       vocabularyModeActive: this.vocabularyModeActive,
+      vocabularyListVisible: this.vocabularyListVisible,
       config: this.getConfig(),
     };
   }
@@ -2490,6 +2601,12 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
         this.setVocabularyModeState(savedState.vocabularyMode);
       }
 
+      // Restore vocabulary list visibility
+      if (savedState.vocabularyListVisible !== this.vocabularyListVisible) {
+        this.vocabularyListVisible = savedState.vocabularyListVisible;
+        this.updateVocabularyListDisplay();
+      }
+
       // Restore loop if it exists and is valid
       if (savedState.loop && this.isValidLoopSegment(savedState.loop)) {
         this.currentLoop = savedState.loop;
@@ -2524,6 +2641,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       speed: this.currentSpeed,
       loop: this.currentLoop,
       vocabularyMode: this.vocabularyModeActive,
+      vocabularyListVisible: this.vocabularyListVisible,
       lastVideoId: videoId,
       lastPosition: currentTime,
       totalWatchTime:
@@ -2604,6 +2722,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
         speed: 1.0,
         loop: null,
         vocabularyMode: false,
+        vocabularyListVisible: false,
         lastVideoId: currentVideoId,
         lastPosition: 0,
         sessionStartTime: Date.now(),

@@ -9,6 +9,7 @@ import { VocabularyManager } from '../vocabulary/VocabularyManager';
 import { vocabularyObserver } from '../vocabulary/VocabularyObserver';
 import { VocabularyListManager } from '../ui/VocabularyListManager';
 import { EnhancedPlaybackControlsComponent, ControlsEventData, ControlsEventCallback } from '../ui/EnhancedPlaybackControlsComponent';
+import { VocabularyItem } from '../storage/types';
 import { PlayerInteractionService } from '../youtube/PlayerInteractionService';
 import { SubtitleDiscoveryEvent } from '../youtube/types';
 import { storageService } from '../storage';
@@ -311,6 +312,9 @@ class LinguaTubeContentScript {
 
     // Set up vocabulary mode communication bridge
     this.setupVocabularyModeBridge();
+
+    // Set up vocabulary list communication bridge  
+    this.setupVocabularyListBridge();
   }
 
   // ========================================
@@ -755,6 +759,467 @@ class LinguaTubeContentScript {
     });
   }
 
+  private setupVocabularyListBridge(): void {
+    // Create communication bridge between Enhanced Playback Controls and VocabularyListManager
+    if (!this.state.components.playbackControls || !this.state.components.vocabularyListManager) {
+      this.logger?.warn('Cannot setup vocabulary list bridge - components not available', {
+        component: ComponentType.CONTENT_SCRIPT,
+        metadata: {
+          hasPlaybackControls: !!this.state.components.playbackControls,
+          hasVocabularyListManager: !!this.state.components.vocabularyListManager,
+        },
+      });
+      return;
+    }
+
+    // Create a container for the vocabulary list positioned relative to the playback controls
+    this.createVocabularyListContainer();
+
+    // Set up custom word selection handler for subtitle navigation
+    this.setupVocabularyWordNavigation();
+
+    // Listen for vocabulary list events from Enhanced Playback Controls
+    this.state.components.playbackControls.addEventListener((event) => {
+      if (event.type === 'vocabulary_list') {
+        const isVisible = Boolean(event.value);
+        
+        this.logger?.debug('Vocabulary list event received - updating visibility', {
+          component: ComponentType.CONTENT_SCRIPT,
+          metadata: {
+            visible: isVisible,
+            timestamp: event.timestamp,
+          },
+        });
+
+        // Show or hide the vocabulary list
+        if (isVisible) {
+          this.showVocabularyList();
+        } else {
+          this.hideVocabularyList();
+        }
+      }
+    });
+
+    this.logger?.debug('Vocabulary list communication bridge established', {
+      component: ComponentType.CONTENT_SCRIPT,
+      action: 'vocabulary_list_bridge_ready',
+    });
+  }
+
+  private vocabularyListContainer: HTMLElement | null = null;
+
+  private createVocabularyListContainer(): void {
+    // Create container for vocabulary list with responsive positioning
+    this.vocabularyListContainer = document.createElement('div');
+    this.vocabularyListContainer.id = 'linguatube-vocabulary-list-container';
+    
+    // Apply initial responsive styling
+    this.applyResponsiveVocabularyListStyling();
+    
+    // Add media query listener for responsive updates
+    this.setupVocabularyListResponsiveListeners();
+
+    document.body.appendChild(this.vocabularyListContainer);
+
+    this.logger?.debug('Responsive vocabulary list container created', {
+      component: ComponentType.CONTENT_SCRIPT,
+      action: 'vocabulary_list_container_created',
+      metadata: {
+        initialScreenWidth: window.innerWidth,
+        initialScreenHeight: window.innerHeight,
+      },
+    });
+  }
+
+  private applyResponsiveVocabularyListStyling(): void {
+    if (!this.vocabularyListContainer) return;
+
+    const screenWidth = window.innerWidth;
+    const screenHeight = window.innerHeight;
+    const isSmallScreen = screenWidth < 1024;
+    const isVerySmallScreen = screenWidth < 768;
+    const isLandscape = screenWidth > screenHeight;
+
+    // Determine responsive dimensions and positioning
+    let width: string;
+    let maxHeight: string;
+    let position: { [key: string]: string };
+
+    if (isVerySmallScreen) {
+      // Mobile: Use bottom overlay
+      width = 'calc(100vw - 20px)';
+      maxHeight = '50vh';
+      position = {
+        position: 'fixed',
+        bottom: '80px',
+        left: '10px',
+        right: '10px',
+        top: 'auto',
+        transform: 'none',
+      };
+    } else if (isSmallScreen) {
+      // Small screens: Use narrower sidebar
+      width = '320px';
+      maxHeight = '70vh';
+      position = {
+        position: 'fixed',
+        top: '50%',
+        right: '10px',
+        transform: 'translateY(-50%)',
+      };
+    } else {
+      // Large screens: Use full sidebar
+      width = '400px';
+      maxHeight = '80vh';
+      position = {
+        position: 'fixed',
+        top: '50%',
+        right: '20px',
+        transform: 'translateY(-50%)',
+      };
+    }
+
+    // Apply styles with responsive calculations
+    this.vocabularyListContainer.style.cssText = `
+      ${Object.entries(position).map(([key, value]) => `${key}: ${value}`).join('; ')};
+      width: ${width};
+      max-height: ${maxHeight};
+      z-index: 2147483647;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out, transform 0.3s ease-in-out;
+      pointer-events: none;
+      box-sizing: border-box;
+    `;
+
+    this.logger?.debug('Applied responsive vocabulary list styling', {
+      component: ComponentType.CONTENT_SCRIPT,
+      metadata: {
+        screenWidth,
+        screenHeight,
+        isSmallScreen,
+        isVerySmallScreen,
+        isLandscape,
+        appliedWidth: width,
+        appliedMaxHeight: maxHeight,
+      },
+    });
+  }
+
+  private vocabularyListResizeHandler: (() => void) | null = null;
+  private vocabularyListFullscreenHandler: (() => void) | null = null;
+
+  private setupVocabularyListResponsiveListeners(): void {
+    // Debounced resize handler
+    let resizeTimeout: number;
+    this.vocabularyListResizeHandler = () => {
+      clearTimeout(resizeTimeout);
+      resizeTimeout = window.setTimeout(() => {
+        this.applyResponsiveVocabularyListStyling();
+        this.adjustVocabularyListForPlayerMode();
+      }, 250);
+    };
+
+    // Fullscreen change handler
+    this.vocabularyListFullscreenHandler = () => {
+      // Small delay to allow DOM to update
+      setTimeout(() => {
+        this.adjustVocabularyListForPlayerMode();
+      }, 100);
+    };
+
+    // Add event listeners
+    window.addEventListener('resize', this.vocabularyListResizeHandler);
+    document.addEventListener('fullscreenchange', this.vocabularyListFullscreenHandler);
+    document.addEventListener('webkitfullscreenchange', this.vocabularyListFullscreenHandler);
+    document.addEventListener('mozfullscreenchange', this.vocabularyListFullscreenHandler);
+
+    this.logger?.debug('Vocabulary list responsive listeners setup complete', {
+      component: ComponentType.CONTENT_SCRIPT,
+      action: 'responsive_listeners_ready',
+    });
+  }
+
+  private adjustVocabularyListForPlayerMode(): void {
+    if (!this.vocabularyListContainer) return;
+
+    // Detect YouTube player modes
+    const isFullscreen = !!(
+      document.fullscreenElement ||
+      (document as any).webkitFullscreenElement ||
+      (document as any).mozFullScreenElement
+    );
+    
+    const theaterModeElement = document.querySelector('#player-theater-container, .ytp-size-large');
+    const isTheaterMode = !!theaterModeElement;
+    
+    // Apply mode-specific adjustments
+    if (isFullscreen) {
+      // Fullscreen mode: Position relative to fullscreen container
+      this.vocabularyListContainer.style.position = 'fixed';
+      this.vocabularyListContainer.style.top = '50%';
+      this.vocabularyListContainer.style.right = '20px';
+      this.vocabularyListContainer.style.transform = 'translateY(-50%)';
+      this.vocabularyListContainer.style.maxHeight = '90vh';
+      this.vocabularyListContainer.style.width = '380px';
+    } else if (isTheaterMode) {
+      // Theater mode: Adjust for wider player
+      this.vocabularyListContainer.style.position = 'fixed';
+      this.vocabularyListContainer.style.top = '50%';
+      this.vocabularyListContainer.style.right = '15px';
+      this.vocabularyListContainer.style.transform = 'translateY(-50%)';
+      this.vocabularyListContainer.style.maxHeight = '75vh';
+    } else {
+      // Normal mode: Reapply responsive styling
+      this.applyResponsiveVocabularyListStyling();
+    }
+
+    this.logger?.debug('Adjusted vocabulary list for player mode', {
+      component: ComponentType.CONTENT_SCRIPT,
+      metadata: {
+        isFullscreen,
+        isTheaterMode,
+        screenWidth: window.innerWidth,
+        screenHeight: window.innerHeight,
+      },
+    });
+  }
+
+  private async showVocabularyList(): Promise<void> {
+    if (!this.vocabularyListContainer || !this.state.components.vocabularyListManager) {
+      return;
+    }
+
+    try {
+      // Show the vocabulary list using the manager
+      await this.state.components.vocabularyListManager.show(this.vocabularyListContainer);
+
+      // Make container visible with smooth transition
+      this.vocabularyListContainer.style.opacity = '1';
+      this.vocabularyListContainer.style.visibility = 'visible';
+      this.vocabularyListContainer.style.pointerEvents = 'auto';
+
+      this.logger?.debug('Vocabulary list shown', {
+        component: ComponentType.CONTENT_SCRIPT,
+        action: 'vocabulary_list_shown',
+      });
+    } catch (error) {
+      this.logger?.error('Failed to show vocabulary list', {
+        component: ComponentType.CONTENT_SCRIPT,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+    }
+  }
+
+  private hideVocabularyList(): void {
+    if (!this.vocabularyListContainer || !this.state.components.vocabularyListManager) {
+      return;
+    }
+
+    try {
+      // Hide the vocabulary list using the manager
+      this.state.components.vocabularyListManager.hide();
+
+      // Hide container with smooth transition
+      this.vocabularyListContainer.style.opacity = '0';
+      this.vocabularyListContainer.style.visibility = 'hidden';
+      this.vocabularyListContainer.style.pointerEvents = 'none';
+
+      this.logger?.debug('Vocabulary list hidden', {
+        component: ComponentType.CONTENT_SCRIPT,
+        action: 'vocabulary_list_hidden',
+      });
+    } catch (error) {
+      this.logger?.error('Failed to hide vocabulary list', {
+        component: ComponentType.CONTENT_SCRIPT,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+    }
+  }
+
+  private setupVocabularyWordNavigation(): void {
+    if (!this.state.components.vocabularyListManager || !this.state.components.playerService) {
+      this.logger?.warn('Cannot setup vocabulary word navigation - components not available', {
+        component: ComponentType.CONTENT_SCRIPT,
+        metadata: {
+          hasVocabularyListManager: !!this.state.components.vocabularyListManager,
+          hasPlayerService: !!this.state.components.playerService,
+        },
+      });
+      return;
+    }
+
+    // Set up custom word selection handler for navigation
+    this.state.components.vocabularyListManager.setWordSelectHandler((word) => {
+      this.handleVocabularyWordSelect(word);
+    });
+
+    // Set up vocabulary change synchronization
+    this.setupVocabularyChangeSynchronization();
+
+    this.logger?.debug('Vocabulary word navigation setup complete', {
+      component: ComponentType.CONTENT_SCRIPT,
+      action: 'vocabulary_word_navigation_ready',
+    });
+  }
+
+  private vocabularyChangeHandler: (() => void) | null = null;
+
+  private setupVocabularyChangeSynchronization(): void {
+    // Set up listener for vocabulary changes to keep the list synchronized
+    this.vocabularyChangeHandler = () => {
+      this.syncVocabularyListWithManager();
+    };
+
+    // Listen for vocabulary changes from the vocabulary observer
+    try {
+      const vocabularyObserver = (window as any).linguaTubeVocabularyObserver;
+      if (vocabularyObserver && typeof vocabularyObserver.addListener === 'function') {
+        vocabularyObserver.addListener(this.vocabularyChangeHandler);
+        
+        this.logger?.debug('Vocabulary change synchronization setup complete', {
+          component: ComponentType.CONTENT_SCRIPT,
+          action: 'vocabulary_sync_ready',
+        });
+      } else {
+        this.logger?.warn('Vocabulary observer not available for synchronization', {
+          component: ComponentType.CONTENT_SCRIPT,
+        });
+      }
+    } catch (error) {
+      this.logger?.error('Failed to setup vocabulary change synchronization', {
+        component: ComponentType.CONTENT_SCRIPT,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+    }
+  }
+
+  private async syncVocabularyListWithManager(): Promise<void> {
+    // Refresh the vocabulary list when vocabulary data changes
+    if (!this.state.components.vocabularyListManager || !this.vocabularyListContainer) {
+      return;
+    }
+
+    try {
+      // Only refresh if the vocabulary list is currently visible
+      if (this.vocabularyListContainer.style.opacity === '1') {
+        const activeComponent = (this.state.components.vocabularyListManager as any).state?.activeComponent;
+        if (activeComponent && typeof activeComponent.refresh === 'function') {
+          await activeComponent.refresh();
+          
+          this.logger?.debug('Vocabulary list refreshed due to vocabulary changes', {
+            component: ComponentType.CONTENT_SCRIPT,
+            action: 'vocabulary_list_synchronized',
+          });
+        }
+      }
+    } catch (error) {
+      this.logger?.error('Failed to synchronize vocabulary list with manager', {
+        component: ComponentType.CONTENT_SCRIPT,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+    }
+  }
+
+  private handleVocabularyWordSelect(word: VocabularyItem): void {
+    if (!this.state.components.playerService) {
+      this.logger?.warn('Cannot navigate to word - player service not available', {
+        component: ComponentType.CONTENT_SCRIPT,
+        metadata: { word: word.word },
+      });
+      return;
+    }
+
+    this.logger?.info('Vocabulary word selected - seeking to timestamp', {
+      component: ComponentType.CONTENT_SCRIPT,
+      metadata: {
+        word: word.word,
+        timestamp: word.timestamp,
+        videoId: word.videoId,
+        context: word.context,
+      },
+    });
+
+    try {
+      // Seek to the timestamp where this vocabulary word was found
+      this.state.components.playerService.seek(word.timestamp);
+
+      // Show visual feedback
+      this.showWordNavigationFeedback(word);
+    } catch (error) {
+      this.logger?.error('Failed to seek to vocabulary word timestamp', {
+        component: ComponentType.CONTENT_SCRIPT,
+        metadata: {
+          word: word.word,
+          timestamp: word.timestamp,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+    }
+  }
+
+  private showWordNavigationFeedback(word: VocabularyItem): void {
+    // Create a temporary feedback element to show which word was navigated to
+    const feedback = document.createElement('div');
+    feedback.style.cssText = `
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.9);
+      color: white;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 14px;
+      z-index: 2147483647;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s ease-in-out;
+    `;
+
+    const minutes = Math.floor(word.timestamp / 60);
+    const seconds = Math.floor(word.timestamp % 60);
+    const timeStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    
+    feedback.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span>📍</span>
+        <span>Navigated to "<strong>${word.word}</strong>" at ${timeStr}</span>
+      </div>
+    `;
+
+    document.body.appendChild(feedback);
+
+    // Animate in
+    requestAnimationFrame(() => {
+      feedback.style.opacity = '1';
+    });
+
+    // Remove after 3 seconds
+    setTimeout(() => {
+      feedback.style.opacity = '0';
+      setTimeout(() => {
+        if (feedback.parentNode) {
+          feedback.parentNode.removeChild(feedback);
+        }
+      }, 200);
+    }, 3000);
+
+    this.logger?.debug('Word navigation feedback shown', {
+      component: ComponentType.CONTENT_SCRIPT,
+      metadata: { word: word.word, timestamp: word.timestamp },
+    });
+  }
+
   // ========================================
   // Utility Methods
   // ========================================
@@ -809,6 +1274,8 @@ class LinguaTubeContentScript {
     return match ? match[1] : null;
   }
 
+  private vocabularyListWasVisibleBeforeVideoChange: boolean = false;
+
   private handleVideoChange(newVideoId: string | null): void {
     this.state.currentVideoId = newVideoId;
     this.logger?.info('Video changed', {
@@ -817,9 +1284,93 @@ class LinguaTubeContentScript {
       metadata: { newVideoId },
     });
 
+    // Handle vocabulary list state during video transitions
+    this.handleVocabularyListStateOnVideoChange();
+
     // Notify components about video change if they support it
     // Note: This is simplified - in a full implementation,
     // components would have standardized video change handlers
+  }
+
+  private handleVocabularyListStateOnVideoChange(): void {
+    if (!this.vocabularyListContainer || !this.state.components.vocabularyListManager) {
+      return;
+    }
+
+    // Remember if vocabulary list was visible before video change
+    this.vocabularyListWasVisibleBeforeVideoChange = 
+      this.vocabularyListContainer.style.opacity === '1';
+
+    // Temporarily hide vocabulary list during video transition
+    if (this.vocabularyListWasVisibleBeforeVideoChange) {
+      this.hideVocabularyList();
+
+      this.logger?.debug('Vocabulary list hidden during video change', {
+        component: ComponentType.CONTENT_SCRIPT,
+        metadata: {
+          wasVisible: this.vocabularyListWasVisibleBeforeVideoChange,
+          newVideoId: this.state.currentVideoId,
+        },
+      });
+
+      // Set up restoration after video loads
+      this.scheduleVocabularyListRestoration();
+    }
+  }
+
+  private vocabularyListRestorationTimeout: number | null = null;
+
+  private scheduleVocabularyListRestoration(): void {
+    // Clear any existing restoration timeout
+    if (this.vocabularyListRestorationTimeout) {
+      clearTimeout(this.vocabularyListRestorationTimeout);
+    }
+
+    // Schedule restoration after video loading completes (with enhanced state)
+    this.vocabularyListRestorationTimeout = window.setTimeout(() => {
+      this.attemptVocabularyListRestoration();
+    }, 2000); // Wait 2 seconds for video to load
+
+    this.logger?.debug('Vocabulary list restoration scheduled', {
+      component: ComponentType.CONTENT_SCRIPT,
+      action: 'vocabulary_restoration_scheduled',
+    });
+  }
+
+  private async attemptVocabularyListRestoration(): Promise<void> {
+    // Only restore if it was visible before the video change and toggle is still active
+    if (!this.vocabularyListWasVisibleBeforeVideoChange || 
+        !this.state.components.playbackControls) {
+      return;
+    }
+
+    try {
+      // Check if vocabulary list toggle is still active in playback controls
+      const controlsState = this.state.components.playbackControls.getState();
+      if (controlsState.vocabularyListVisible) {
+        await this.showVocabularyList();
+        
+        this.logger?.debug('Vocabulary list restored after video change', {
+          component: ComponentType.CONTENT_SCRIPT,
+          action: 'vocabulary_restoration_completed',
+          metadata: {
+            newVideoId: this.state.currentVideoId,
+          },
+        });
+      }
+    } catch (error) {
+      this.logger?.error('Failed to restore vocabulary list after video change', {
+        component: ComponentType.CONTENT_SCRIPT,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+          newVideoId: this.state.currentVideoId,
+        },
+      });
+    }
+
+    // Reset the flag
+    this.vocabularyListWasVisibleBeforeVideoChange = false;
+    this.vocabularyListRestorationTimeout = null;
   }
 
   // ========================================
@@ -854,6 +1405,46 @@ class LinguaTubeContentScript {
         component: ComponentType.CONTENT_SCRIPT,
         action: 'cleanup_warning',
       });
+    }
+
+    // Clean up vocabulary list container
+    if (this.vocabularyListContainer && this.vocabularyListContainer.parentNode) {
+      this.vocabularyListContainer.parentNode.removeChild(this.vocabularyListContainer);
+      this.vocabularyListContainer = null;
+    }
+
+    // Clean up vocabulary list responsive listeners
+    if (this.vocabularyListResizeHandler) {
+      window.removeEventListener('resize', this.vocabularyListResizeHandler);
+      this.vocabularyListResizeHandler = null;
+    }
+
+    if (this.vocabularyListFullscreenHandler) {
+      document.removeEventListener('fullscreenchange', this.vocabularyListFullscreenHandler);
+      document.removeEventListener('webkitfullscreenchange', this.vocabularyListFullscreenHandler);
+      document.removeEventListener('mozfullscreenchange', this.vocabularyListFullscreenHandler);
+      this.vocabularyListFullscreenHandler = null;
+    }
+
+    // Clean up vocabulary change synchronization
+    if (this.vocabularyChangeHandler) {
+      try {
+        const vocabularyObserver = (window as any).linguaTubeVocabularyObserver;
+        if (vocabularyObserver && typeof vocabularyObserver.removeListener === 'function') {
+          vocabularyObserver.removeListener(this.vocabularyChangeHandler);
+        }
+      } catch (error) {
+        this.logger?.warn('Error cleaning up vocabulary change handler', {
+          component: ComponentType.CONTENT_SCRIPT,
+        });
+      }
+      this.vocabularyChangeHandler = null;
+    }
+
+    // Clean up vocabulary list restoration timeout
+    if (this.vocabularyListRestorationTimeout) {
+      clearTimeout(this.vocabularyListRestorationTimeout);
+      this.vocabularyListRestorationTimeout = null;
     }
 
     // Stop subtitle discovery

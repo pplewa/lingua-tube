@@ -46,7 +46,7 @@ export const DEFAULT_MANAGER_CONFIG: VocabularyListManagerConfig = {
   autoShow: false,
   showOnHover: false,
   hideOnClickOutside: true,
-  enableKeyboardShortcuts: true,
+  enableKeyboardShortcuts: true, // Re-enable so users can reopen with Ctrl+Shift+V
   keyboardShortcut: 'Ctrl+Shift+V',
   listConfig: {
     maxHeight: 500,
@@ -79,6 +79,7 @@ export class VocabularyListManager {
   private keyboardHandler: ((event: KeyboardEvent) => void) | null = null;
   private clickOutsideHandler: ((event: Event) => void) | null = null;
   private resizeHandler: ((event: Event) => void) | null = null;
+  private customWordSelectHandler: ((word: VocabularyItem) => void) | null = null;
   private readonly logger = Logger.getInstance();
 
   private constructor(config: Partial<VocabularyListManagerConfig> = {}) {
@@ -137,10 +138,18 @@ export class VocabularyListManager {
    * Show the vocabulary list
    */
   public async show(container?: HTMLElement): Promise<void> {
-    if (this.state.isVisible) return;
-
     try {
+      // REAL FIX: Work with ContentScript's container system properly
       const targetContainer = container || this.createContainer();
+      
+      // If we already have a component and the same container, just make it visible
+      if (this.state.activeComponent && this.state.currentContainer === targetContainer) {
+        if (targetContainer.style.display === 'none') {
+          targetContainer.style.display = 'block';
+        }
+        this.state = { ...this.state, isVisible: true };
+        return;
+      }
 
       // Create and initialize component
       const component = new VocabularyListComponent(this.config.listConfig);
@@ -184,22 +193,24 @@ export class VocabularyListManager {
     if (!this.state.isVisible) return;
 
     try {
-      if (this.state.activeComponent) {
-        this.state.activeComponent.destroy();
-      }
-
-      if (this.state.currentContainer && this.config.position === 'popup') {
-        document.body.removeChild(this.state.currentContainer);
+      // REAL FIX: Don't destroy the component if using ContentScript's container
+      // Just hide it so we can reopen properly
+      if (this.state.currentContainer) {
+        if (this.state.currentContainer.id === 'linguatube-vocabulary-list-container') {
+          // This is ContentScript's container - just hide it
+          this.state.currentContainer.style.display = 'none';
+        } else {
+          // This is our popup container - remove it  
+          if (this.state.activeComponent) {
+            this.state.activeComponent.destroy();
+          }
+          document.body.removeChild(this.state.currentContainer);
+          this.state = { ...this.state, currentContainer: null, activeComponent: null };
+        }
       }
 
       this.removeContainerInteractions();
-
-      this.state = {
-        ...this.state,
-        isVisible: false,
-        currentContainer: null,
-        activeComponent: null,
-      };
+      this.state = { ...this.state, isVisible: false };
 
       this.logger?.info('Vocabulary list hidden', {
         component: ComponentType.WORD_LOOKUP,
@@ -307,6 +318,11 @@ export class VocabularyListManager {
         document.addEventListener('click', this.clickOutsideHandler!);
       }, 100);
     }
+
+    // REAL FIX: Set up dragging for ALL containers, not just popups
+    if (this.state.currentContainer) {
+      this.makeDraggable(this.state.currentContainer);
+    }
   }
 
   private removeContainerInteractions(): void {
@@ -323,11 +339,83 @@ export class VocabularyListManager {
     this.applyContainerStyles(container);
 
     if (this.config.position === 'popup') {
+      // Add draggable functionality for popup
+      this.makeDraggable(container);
       document.body.appendChild(container);
       this.positionPopup(container);
     }
 
     return container;
+  }
+
+  private makeDraggable(container: HTMLElement): void {
+    let isDragging = false;
+    let dragOffset = { x: 0, y: 0 };
+
+    const onMouseDown = (e: MouseEvent) => {
+      // REAL FIX: Use composedPath to find shadow DOM elements
+      const path = e.composedPath();
+      const shadowHost = path.find(node => 
+        (node as Element)?.classList?.contains('vocabulary-list-host')
+      );
+      
+      if (!shadowHost) return;
+
+      // Look for the header in the composed path
+      const header = path.find(node => 
+        (node as Element)?.classList?.contains('vocabulary-header')
+      );
+      
+      if (!header) return;
+
+      isDragging = true;
+      const rect = container.getBoundingClientRect();
+      dragOffset.x = e.clientX - rect.left;
+      dragOffset.y = e.clientY - rect.top;
+      
+      container.style.cursor = 'grabbing';
+      document.body.style.cursor = 'grabbing';
+      document.body.style.userSelect = 'none';
+      
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isDragging) return;
+
+      const x = e.clientX - dragOffset.x;
+      const y = e.clientY - dragOffset.y;
+      
+      const maxX = window.innerWidth - container.offsetWidth;
+      const maxY = window.innerHeight - container.offsetHeight;
+      
+      const boundedX = Math.max(0, Math.min(x, maxX));
+      const boundedY = Math.max(0, Math.min(y, maxY));
+
+      container.style.left = `${boundedX}px`;
+      container.style.top = `${boundedY}px`;
+      container.style.transform = 'none';
+      
+      e.preventDefault();
+    };
+
+    const onMouseUp = () => {
+      isDragging = false;
+      container.style.cursor = '';
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    document.addEventListener('mousedown', onMouseDown, true);
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+
+    (container as any)._dragCleanup = () => {
+      document.removeEventListener('mousedown', onMouseDown, true);
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
   }
 
   private applyContainerStyles(container: HTMLElement): void {
@@ -455,15 +543,30 @@ export class VocabularyListManager {
     });
   }
 
+  /**
+   * Set a custom handler for word selection events
+   */
+  public setWordSelectHandler(handler: (word: VocabularyItem) => void): void {
+    this.customWordSelectHandler = handler;
+  }
+
   private handleWordSelect(word: VocabularyItem): void {
+    // Handle close button click
+    if (word.word === 'close') {
+      this.hide();
+      return;
+    }
+
     this.logger?.info('Word selected', {
       component: ComponentType.WORD_LOOKUP,
       metadata: {
         word: word.word,
-        wordId: word.id,
+        language: word.sourceLanguage,
+        hasTranslation: !!word.translation,
       },
     });
-    // Could emit custom events or trigger other actions
+
+    this.customWordSelectHandler?.(word);
   }
 
   private async handleWordEdit(word: VocabularyItem): Promise<void> {
@@ -592,15 +695,103 @@ export class VocabularyListManager {
   }
 
   private async handleImportRequest(format: 'json' | 'csv' | 'anki'): Promise<void> {
-    this.logger?.info('Import completed', {
+    this.logger?.info('Import requested', {
       component: ComponentType.WORD_LOOKUP,
       metadata: {
         format: format,
       },
     });
-    // The actual import is handled by the VocabularyListComponent
-    // This is just for logging and potential additional actions
-    await this.refresh();
+
+    try {
+      // Create a file input for importing
+      const fileInput = document.createElement('input');
+      fileInput.type = 'file';
+      fileInput.accept = format === 'json' ? '.json' : format === 'csv' ? '.csv' : '.txt';
+      
+      fileInput.onchange = async (event) => {
+        const file = (event.target as HTMLInputElement).files?.[0];
+        if (file) {
+          try {
+            const content = await this.readFileContent(file);
+            const words = await this.parseImportContent(content, format);
+            
+                         // Import the words
+             let successCount = 0;
+             for (const word of words) {
+               try {
+                 // Validate required fields
+                 if (!word.word || !word.translation || !word.context || !word.sourceLanguage || !word.targetLanguage) {
+                   this.logger?.warn('Skipping word with missing required fields', {
+                     component: ComponentType.WORD_LOOKUP,
+                     metadata: { word: word.word || 'unknown' },
+                   });
+                   continue;
+                 }
+                 
+                 await this.vocabularyManager.saveWord(
+                   word.word,
+                   word.translation,
+                   word.context,
+                   {
+                     sourceLanguage: word.sourceLanguage,
+                     targetLanguage: word.targetLanguage,
+                     videoId: word.videoId,
+                     videoTitle: word.videoTitle,
+                     timestamp: word.timestamp,
+                   }
+                 );
+                 successCount++;
+               } catch (error) {
+                 this.logger?.warn('Failed to import word', {
+                   component: ComponentType.WORD_LOOKUP,  
+                   metadata: {
+                     word: word.word || 'unknown',
+                     error: error instanceof Error ? error.message : String(error),
+                   },
+                 });
+               }
+             }
+            
+            this.logger?.info('Import completed', {
+              component: ComponentType.WORD_LOOKUP,
+              metadata: {
+                format: format,
+                totalWords: words.length,
+                successCount: successCount,
+              },
+            });
+            
+            // Refresh the list to show imported words
+            await this.refresh();
+            
+            // Show success message to user
+            alert(`Successfully imported ${successCount} out of ${words.length} words.`);
+            
+          } catch (error) {
+            this.logger?.error('Import failed', {
+              component: ComponentType.WORD_LOOKUP,
+              metadata: {
+                error: error instanceof Error ? error.message : String(error),
+                format: format,
+              },
+            });
+            alert(`Import failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          }
+        }
+      };
+      
+      // Trigger file selection
+      fileInput.click();
+      
+    } catch (error) {
+      this.logger?.error('Error starting import', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+          format: format,
+        },
+      });
+    }
   }
 
   private async handleExportRequest(format: 'json' | 'csv' | 'anki'): Promise<void> {
@@ -612,23 +803,47 @@ export class VocabularyListManager {
     });
 
     try {
-      const result = await this.vocabularyManager.exportVocabulary(format);
+      // Get vocabulary data directly since exportVocabulary doesn't exist
+      const result = await this.vocabularyManager.getVocabulary();
       if (result.success && result.data) {
-        const filename = `vocabulary-export.${format}`;
-        const mimeType = format === 'json' ? 'application/json' : 'text/plain';
-        this.downloadFile(result.data, filename, mimeType);
+        let exportData: string;
+        let filename: string;
+        let mimeType: string;
+
+        switch (format) {
+          case 'json':
+            exportData = JSON.stringify(result.data, null, 2);
+            filename = 'vocabulary-export.json';
+            mimeType = 'application/json';
+            break;
+          case 'csv':
+            exportData = this.convertToCSV(result.data);
+            filename = 'vocabulary-export.csv';
+            mimeType = 'text/csv';
+            break;
+          case 'anki':
+            exportData = this.convertToAnki(result.data);
+            filename = 'vocabulary-export.txt';
+            mimeType = 'text/plain';
+            break;
+          default:
+            throw new Error(`Unsupported export format: ${format}`);
+        }
+
+        this.downloadFile(exportData, filename, mimeType);
         this.logger?.info('Export completed', {
           component: ComponentType.WORD_LOOKUP,
           metadata: {
             filename: filename,
             format: format,
+            wordCount: result.data.length,
           },
         });
       } else {
-        this.logger?.error('Export failed', {
+        this.logger?.error('Export failed - no vocabulary data', {
           component: ComponentType.WORD_LOOKUP,
           metadata: {
-            error: result.error?.message || 'Unknown error',
+            error: result.error?.message || 'No vocabulary data available',
             format: format,
           },
         });
@@ -647,19 +862,39 @@ export class VocabularyListManager {
   private handleKeyboardShortcut(event: KeyboardEvent): void {
     if (!this.config.keyboardShortcut) return;
 
+    // Don't interfere if user is typing in input fields
+    const target = event.target as HTMLElement;
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+      return;
+    }
+
+    // Only respond to specific modifier key combinations to avoid conflicts
     const shortcut = this.config.keyboardShortcut.toLowerCase();
-    const pressed = [];
+    
+    // Parse the expected shortcut (e.g., "Ctrl+Shift+V")
+    const expectedKeys = shortcut.split('+').map(k => k.trim().toLowerCase());
+    const actualKeys: string[] = [];
+    
+    if (event.ctrlKey) actualKeys.push('ctrl');
+    if (event.shiftKey) actualKeys.push('shift');
+    if (event.altKey) actualKeys.push('alt');
+    if (event.metaKey) actualKeys.push('meta');
+    actualKeys.push(event.key.toLowerCase());
 
-    if (event.ctrlKey) pressed.push('ctrl');
-    if (event.shiftKey) pressed.push('shift');
-    if (event.altKey) pressed.push('alt');
-    pressed.push(event.key.toLowerCase());
+    // Check if pressed combination matches expected
+    const matches = expectedKeys.length === actualKeys.length && 
+                   expectedKeys.every(key => actualKeys.includes(key));
 
-    const pressedShortcut = pressed.join('+');
-
-    if (pressedShortcut === shortcut) {
+    if (matches) {
       event.preventDefault();
-      this.toggle();
+      event.stopPropagation();
+      
+      // Toggle visibility - this now works properly with the fixed container system
+      if (this.state.isVisible) {
+        this.hide();
+      } else {
+        this.show();
+      }
     }
   }
 
@@ -687,6 +922,108 @@ export class VocabularyListManager {
 
   private detectTheme(): 'light' | 'dark' {
     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+
+  private convertToCSV(words: VocabularyItem[]): string {
+    const headers = ['Word', 'Translation', 'Context', 'Source Language', 'Target Language', 'Video Title', 'Timestamp', 'Created At'];
+    const csvRows = [headers.join(',')];
+    
+    for (const word of words) {
+      const row = [
+        `"${word.word.replace(/"/g, '""')}"`,
+        `"${word.translation.replace(/"/g, '""')}"`,
+        `"${word.context.replace(/"/g, '""')}"`,
+        `"${word.sourceLanguage}"`,
+        `"${word.targetLanguage}"`,
+        `"${word.videoTitle || ''}"`,
+        `"${word.timestamp || ''}"`,
+        `"${new Date(word.createdAt).toISOString()}"`,
+      ];
+      csvRows.push(row.join(','));
+    }
+    
+    return csvRows.join('\n');
+  }
+
+  private convertToAnki(words: VocabularyItem[]): string {
+    // Anki format: Front\tBack\tExtra
+    const ankiRows = [];
+    
+    for (const word of words) {
+      const front = word.word;
+      const back = word.translation;
+      const extra = `${word.context}${word.videoTitle ? ` (from: ${word.videoTitle})` : ''}`;
+      ankiRows.push(`${front}\t${back}\t${extra}`);
+    }
+    
+    return ankiRows.join('\n');
+  }
+
+  private readFileContent(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        resolve(event.target?.result as string);
+      };
+      reader.onerror = () => {
+        reject(new Error('Failed to read file'));
+      };
+      reader.readAsText(file);
+    });
+  }
+
+  private async parseImportContent(content: string, format: 'json' | 'csv' | 'anki'): Promise<Partial<VocabularyItem>[]> {
+    switch (format) {
+      case 'json':
+        try {
+          const parsed = JSON.parse(content);
+          return Array.isArray(parsed) ? parsed : [parsed];
+        } catch (error) {
+          throw new Error('Invalid JSON format');
+        }
+      
+      case 'csv':
+        const lines = content.split('\n').filter(line => line.trim());
+        if (lines.length < 2) throw new Error('CSV file must have headers and at least one data row');
+        
+        const headers = lines[0].split(',').map(h => h.replace(/"/g, '').trim());
+        const words: Partial<VocabularyItem>[] = [];
+        
+        for (let i = 1; i < lines.length; i++) {
+          const values = lines[i].split(',').map(v => v.replace(/"/g, '').trim());
+          if (values.length >= 5) {
+            words.push({
+              word: values[0],
+              translation: values[1],
+              context: values[2],
+              sourceLanguage: values[3],
+              targetLanguage: values[4],
+              videoTitle: values[5] || undefined,
+              timestamp: values[6] ? parseFloat(values[6]) : undefined,
+            });
+          }
+        }
+        return words;
+      
+      case 'anki':
+        const ankiLines = content.split('\n').filter(line => line.trim());
+        return ankiLines.map(line => {
+          const parts = line.split('\t');
+          if (parts.length >= 2) {
+            return {
+              word: parts[0],
+              translation: parts[1],
+              context: parts[2] || '',
+              sourceLanguage: 'en', // Default
+              targetLanguage: 'es', // Default
+            };
+          }
+          return null;
+        }).filter(Boolean) as Partial<VocabularyItem>[];
+      
+      default:
+        throw new Error(`Unsupported import format: ${format}`);
+    }
   }
 
   private downloadFile(content: string, filename: string, mimeType: string): void {
