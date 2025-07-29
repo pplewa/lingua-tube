@@ -8,7 +8,7 @@ import { DualSubtitleManager } from '../ui/DualSubtitleManager';
 import { VocabularyManager } from '../vocabulary/VocabularyManager';
 import { vocabularyObserver } from '../vocabulary/VocabularyObserver';
 import { VocabularyListManager } from '../ui/VocabularyListManager';
-import { EnhancedPlaybackControlsComponent } from '../ui/EnhancedPlaybackControlsComponent';
+import { EnhancedPlaybackControlsComponent, ControlsEventData, ControlsEventCallback } from '../ui/EnhancedPlaybackControlsComponent';
 import { PlayerInteractionService } from '../youtube/PlayerInteractionService';
 import { SubtitleDiscoveryEvent } from '../youtube/types';
 import { storageService } from '../storage';
@@ -308,6 +308,9 @@ class LinguaTubeContentScript {
         },
       );
     }
+
+    // Set up vocabulary mode communication bridge
+    this.setupVocabularyModeBridge();
   }
 
   // ========================================
@@ -705,6 +708,51 @@ class LinguaTubeContentScript {
 
     // Check for navigation changes every 2 seconds
     setInterval(checkForNavigation, 2000);
+  }
+
+  private setupVocabularyModeBridge(): void {
+    // Create communication bridge between Enhanced Playback Controls and DualSubtitleComponent
+    if (!this.state.components.playbackControls || !this.state.components.subtitleManager) {
+      this.logger?.warn('Cannot setup vocabulary mode bridge - components not available', {
+        component: ComponentType.CONTENT_SCRIPT,
+        metadata: {
+          hasPlaybackControls: !!this.state.components.playbackControls,
+          hasSubtitleManager: !!this.state.components.subtitleManager,
+        },
+      });
+      return;
+    }
+
+    const subtitleComponent = this.state.components.subtitleManager.getSubtitleComponent();
+    if (!subtitleComponent) {
+      this.logger?.warn('Cannot setup vocabulary mode bridge - subtitle component not available', {
+        component: ComponentType.CONTENT_SCRIPT,
+      });
+      return;
+    }
+
+    // Listen for vocabulary mode events from Enhanced Playback Controls
+    this.state.components.playbackControls.addEventListener((event) => {
+      if (event.type === 'vocabulary_mode') {
+        const isEnabled = Boolean(event.value);
+        
+        this.logger?.debug('Vocabulary mode event received - updating subtitle component', {
+          component: ComponentType.CONTENT_SCRIPT,
+          metadata: {
+            enabled: isEnabled,
+            timestamp: event.timestamp,
+          },
+        });
+
+        // Update DualSubtitleComponent vocabulary mode
+        subtitleComponent.setVocabularyMode(isEnabled);
+      }
+    });
+
+    this.logger?.debug('Vocabulary mode communication bridge established', {
+      component: ComponentType.CONTENT_SCRIPT,
+      action: 'vocabulary_bridge_ready',
+    });
   }
 
   // ========================================

@@ -215,12 +215,22 @@ const SUBTITLE_CONTAINER_STYLES = `
     border: 1px solid #ffc107;
     box-shadow: 0 0 4px rgba(255, 193, 7, 0.5);
     font-weight: 600;
+    transition: all 0.2s ease-in-out;
+    border-radius: 3px;
+    outline: none;
   }
 
   .clickable-word.vocabulary-word:hover {
     background-color: rgba(255, 193, 7, 0.9) !important;
-    box-shadow: 0 0 6px rgba(255, 193, 7, 0.7);
+    box-shadow: 0 0 8px rgba(255, 193, 7, 0.8);
     transform: scale(1.02);
+    border-color: #ff9800;
+  }
+
+  .clickable-word.vocabulary-word:focus {
+    outline: 2px solid #2196f3;
+    outline-offset: 2px;
+    box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.3), 0 0 8px rgba(255, 193, 7, 0.8);
   }
 
   .clickable-word.vocabulary-word::after {
@@ -237,6 +247,42 @@ const SUBTITLE_CONTAINER_STYLES = `
     align-items: center;
     justify-content: center;
     border: 1px solid #ffc107;
+    pointer-events: none;
+    transition: all 0.2s ease-in-out;
+    z-index: 1;
+  }
+
+  .clickable-word.vocabulary-word:hover::after {
+    background: rgba(255, 152, 0, 0.95);
+    border-color: #ff9800;
+    transform: scale(1.1);
+  }
+
+  /* Screen reader support - hide decorative icon from screen readers */
+  .clickable-word.vocabulary-word::after {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    user-select: none;
+  }
+
+  /* High contrast mode icon */
+  @media (prefers-contrast: high) {
+    .clickable-word.vocabulary-word::after {
+      background: #000000 !important;
+      color: #ffffff;
+      border: 2px solid #ffffff !important;
+    }
+  }
+
+  /* Reduced motion for icon */
+  @media (prefers-reduced-motion: reduce) {
+    .clickable-word.vocabulary-word::after {
+      transition: none !important;
+    }
+    
+    .clickable-word.vocabulary-word:hover::after {
+      transform: none !important;
+    }
   }
 
   /* High contrast mode for vocabulary words */
@@ -244,20 +290,62 @@ const SUBTITLE_CONTAINER_STYLES = `
     .clickable-word.vocabulary-word {
       background-color: #ffff00 !important;
       color: #000000 !important;
-      border: 2px solid #000000;
+      border: 3px solid #000000 !important;
+      box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px #000000;
+    }
+    
+    .clickable-word.vocabulary-word:hover {
+      background-color: #ffeb3b !important;
+    }
+    
+    .clickable-word.vocabulary-word:focus {
+      outline: 3px solid #0000ff !important;
+      outline-offset: 3px;
+      box-shadow: 0 0 0 2px #ffffff, 0 0 0 5px #0000ff;
     }
   }
 
   /* Reduced motion for vocabulary highlighting */
   @media (prefers-reduced-motion: reduce) {
     .clickable-word.vocabulary-word {
-      transition: none;
-      transform: none;
+      transition: none !important;
+      transform: none !important;
     }
     
     .clickable-word.vocabulary-word:hover {
-      transform: none;
+      transform: none !important;
     }
+    
+    .clickable-word.vocabulary-word:focus {
+      transform: none !important;
+    }
+  }
+
+  /* Dark mode optimization for vocabulary words */
+  @media (prefers-color-scheme: dark) {
+    .clickable-word.vocabulary-word {
+      background-color: rgba(255, 193, 7, 0.9) !important;
+      color: #000000 !important;
+      border: 1px solid #ffb300;
+    }
+    
+    .clickable-word.vocabulary-word:hover {
+      background-color: rgba(255, 235, 59, 0.95) !important;
+      border-color: #ffc107;
+    }
+  }
+
+  /* Screen reader only content - accessible but visually hidden */
+  .sr-only {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    padding: 0 !important;
+    margin: -1px !important;
+    overflow: hidden !important;
+    clip: rect(0, 0, 0, 0) !important;
+    white-space: nowrap !important;
+    border: 0 !important;
   }
 
   .subtitle-container.compact .subtitle-line.native {
@@ -371,8 +459,12 @@ export class DualSubtitleComponent {
   private lastPlayerSize: { width: number; height: number } = { width: 0, height: 0 };
 
   private subtitleSyncHandler: (event: SubtitleSyncEvent) => void;
-  private vocabularyCache: Map<string, string> = new Map();
+  private vocabularyCache: Map<string, boolean> = new Map();
+  private readonly MAX_CACHE_SIZE = 1000; // Prevent unlimited growth
   private vocabularyEventUnsubscribers: (() => void)[] = [];
+  private vocabularyModeEnabled: boolean = false;
+  private vocabularyUpdateTimeout: number | null = null;
+  private readonly VOCABULARY_UPDATE_DEBOUNCE_MS = 300; // Debounce rapid vocabulary changes
   private readonly logger = Logger.getInstance();
 
   constructor(
@@ -563,6 +655,12 @@ export class DualSubtitleComponent {
       // Clear vocabulary cache
       this.vocabularyCache.clear();
 
+      // Clear vocabulary update timeout
+      if (this.vocabularyUpdateTimeout !== null) {
+        window.clearTimeout(this.vocabularyUpdateTimeout);
+        this.vocabularyUpdateTimeout = null;
+      }
+
       this.isInitialized = false;
       this.logger?.info('Destroyed successfully', {
         component: ComponentType.SUBTITLE_MANAGER,
@@ -640,9 +738,16 @@ export class DualSubtitleComponent {
     this.nativeLine = document.createElement('div');
     this.nativeLine.className = 'subtitle-line native';
 
+    // Create vocabulary word description for screen readers
+    const vocabularyDescription = document.createElement('div');
+    vocabularyDescription.id = 'vocabulary-word-description';
+    vocabularyDescription.className = 'sr-only';
+    vocabularyDescription.textContent = 'This word is in your vocabulary list. The book icon indicates it has been saved for study.';
+
     // Assemble structure
     this.subtitleContainer.appendChild(this.targetLine);
     this.subtitleContainer.appendChild(this.nativeLine);
+    this.subtitleContainer.appendChild(vocabularyDescription);
     this.shadowRoot.appendChild(this.subtitleContainer);
   }
 
@@ -991,11 +1096,20 @@ export class DualSubtitleComponent {
         wordSpan.className = 'clickable-word';
         wordSpan.textContent = word.text;
         
-        // Check if word is in vocabulary and add appropriate class
+        // Add accessibility attributes
+        wordSpan.setAttribute('role', 'button');
+        wordSpan.setAttribute('tabindex', '0');
+        wordSpan.setAttribute('aria-label', `Click to translate word: ${word.text}`);
+        
+        // Check if word is in vocabulary and add appropriate class (only when vocabulary mode is enabled)
         this.checkVocabularyWord(word.text)
           .then((isVocabularyWord: boolean) => {
-            if (isVocabularyWord) {
+            if (isVocabularyWord && this.vocabularyModeEnabled) {
               wordSpan.classList.add('vocabulary-word');
+              wordSpan.setAttribute('aria-label', `Vocabulary word: ${word.text}. Click to translate.`);
+              wordSpan.setAttribute('aria-describedby', 'vocabulary-word-description');
+            } else {
+              wordSpan.setAttribute('aria-label', `Click to translate word: ${word.text}`);
             }
           })
           .catch((error) => {
@@ -1008,12 +1122,26 @@ export class DualSubtitleComponent {
             });
           });
         
+        // Add click event listener
         wordSpan.addEventListener('click', (event) => {
           this.logger?.debug('Word clicked', {
             component: ComponentType.SUBTITLE_MANAGER,
             metadata: { word: word.text },
           });
           this.handleWordClick(word.text, event);
+        });
+        
+        // Add keyboard support for accessibility
+        wordSpan.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            event.stopPropagation();
+            this.logger?.debug('Word activated via keyboard', {
+              component: ComponentType.SUBTITLE_MANAGER,
+              metadata: { word: word.text, key: event.key },
+            });
+            this.handleWordClick(word.text, event as any);
+          }
         });
         
         this.targetLine?.appendChild(wordSpan);
@@ -1257,7 +1385,7 @@ export class DualSubtitleComponent {
   }
 
   private handleVocabularyChange(): void {
-    this.logger?.debug('Vocabulary change detected - refreshing highlights', {
+    this.logger?.debug('Vocabulary change detected - debouncing highlights refresh', {
       component: ComponentType.SUBTITLE_MANAGER,
       metadata: { 
         isVisible: this.isVisible,
@@ -1266,13 +1394,32 @@ export class DualSubtitleComponent {
       },
     });
 
-    // Clear vocabulary cache to force refresh
-    this.vocabularyCache.clear();
-
-    // Re-render current subtitles with updated highlighting
-    if (this.isVisible && this.currentCues.length > 0) {
-      this.updateSubtitleDisplay();
+    // Clear any existing timeout
+    if (this.vocabularyUpdateTimeout !== null) {
+      window.clearTimeout(this.vocabularyUpdateTimeout);
     }
+
+    // Debounce vocabulary updates to prevent excessive re-rendering
+    this.vocabularyUpdateTimeout = window.setTimeout(() => {
+      this.logger?.debug('Executing debounced vocabulary update', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: { 
+          isVisible: this.isVisible,
+          currentCuesCount: this.currentCues.length,
+          cacheSize: this.vocabularyCache.size
+        },
+      });
+
+      // Clear vocabulary cache to force refresh
+      this.vocabularyCache.clear();
+
+      // Re-render current subtitles with updated highlighting
+      if (this.isVisible && this.currentCues.length > 0) {
+        this.updateSubtitleDisplay();
+      }
+
+      this.vocabularyUpdateTimeout = null;
+    }, this.VOCABULARY_UPDATE_DEBOUNCE_MS);
   }
 
   // ========================================
@@ -1361,7 +1508,7 @@ export class DualSubtitleComponent {
   }
 
   /**
-   * Highlight all vocabulary words in current subtitles
+   * Highlight all vocabulary words in current subtitles (only when vocabulary mode is enabled)
    */
   public async highlightVocabularyWords(): Promise<void> {
     if (!this.targetLine) return;
@@ -1372,7 +1519,7 @@ export class DualSubtitleComponent {
       const word = span.textContent?.replace(/[^\w]/g, '') || '';
       if (word) {
         const isVocabularyWord = await this.checkVocabularyWord(word);
-        if (isVocabularyWord) {
+        if (isVocabularyWord && this.vocabularyModeEnabled) {
           span.classList.add('vocabulary-word');
         } else {
           span.classList.remove('vocabulary-word');
@@ -1393,10 +1540,47 @@ export class DualSubtitleComponent {
     });
   }
 
+  /**
+   * Set vocabulary mode state - controls whether vocabulary words are highlighted
+   * @param enabled - Whether vocabulary mode should be enabled
+   */
+  public setVocabularyMode(enabled: boolean): void {
+    if (this.vocabularyModeEnabled !== enabled) {
+      this.vocabularyModeEnabled = enabled;
+      
+      this.logger?.debug('Vocabulary mode state changed', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: { 
+          enabled: this.vocabularyModeEnabled,
+          isVisible: this.isVisible,
+          currentCuesCount: this.currentCues.length,
+          cacheSize: this.vocabularyCache.size
+        },
+      });
+
+      // Clear vocabulary cache to force re-evaluation of highlighting
+      this.vocabularyCache.clear();
+
+      // Re-render current subtitles with updated highlighting logic
+      // Only re-render if component is visible and has content to avoid unnecessary work
+      if (this.isVisible && this.currentCues.length > 0 && this.targetLine) {
+        this.updateSubtitleDisplay();
+      }
+    }
+  }
+
+  /**
+   * Get current vocabulary mode state
+   * @returns Whether vocabulary mode is currently enabled
+   */
+  public getVocabularyMode(): boolean {
+    return this.vocabularyModeEnabled;
+  }
+
   private async checkVocabularyWord(word: string): Promise<boolean> {
-    // Use boolean cache instead of string cache for better performance
+    // Use boolean cache for better performance
     if (this.vocabularyCache.has(word)) {
-      return this.vocabularyCache.get(word) === 'true';
+      return this.vocabularyCache.get(word) || false;
     }
 
     try {
@@ -1422,8 +1606,17 @@ export class DualSubtitleComponent {
         }
       }
 
-      // Cache the result as a string to maintain compatibility with existing code
-      this.vocabularyCache.set(word, isVocabularyWord.toString());
+      // Cache the result and manage cache size
+      this.vocabularyCache.set(word, isVocabularyWord);
+      
+      // Prevent cache from growing indefinitely
+      if (this.vocabularyCache.size > this.MAX_CACHE_SIZE) {
+        const firstKey = this.vocabularyCache.keys().next().value;
+        if (firstKey) {
+          this.vocabularyCache.delete(firstKey);
+        }
+      }
+      
       return isVocabularyWord;
     } catch (error) {
       this.logger?.warn('Error checking vocabulary word', {

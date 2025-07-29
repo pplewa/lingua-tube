@@ -25,7 +25,6 @@ export interface EnhancedControlsConfig {
   readonly showLoopControl: boolean;
   readonly showSentenceNavigation: boolean;
   readonly showVocabularyMode: boolean;
-  readonly showTimeDisplay: boolean;
   readonly compactMode: boolean;
   readonly position: 'bottom' | 'top' | 'floating';
   readonly theme: 'dark' | 'light' | 'auto';
@@ -228,7 +227,6 @@ const DEFAULT_CONFIG: EnhancedControlsConfig = {
   showLoopControl: true,
   showSentenceNavigation: true,
   showVocabularyMode: true,
-  showTimeDisplay: true,
   compactMode: false,
   position: 'bottom',
   theme: 'dark',
@@ -281,7 +279,7 @@ const CONTROLS_STYLES = `
     border: 1px solid rgba(255, 255, 255, 0.1);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     position: absolute;
-    bottom: 60px;
+    top: 10px;
     left: 50%;
     transform: translateX(-50%);
     z-index: 2147483646;
@@ -477,17 +475,6 @@ const CONTROLS_STYLES = `
     100% { transform: scale(1); background: var(--controls-accent-color); }
   }
 
-  /* Time Display */
-  .time-display {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    font-family: 'Courier New', monospace;
-    font-size: 12px;
-    color: var(--controls-text-color);
-    min-width: 80px;
-  }
-
   /* Navigation Controls */
   .nav-control {
     display: flex;
@@ -581,22 +568,6 @@ const CONTROLS_STYLES = `
   .action-toast.error {
     background: rgba(244, 67, 54, 0.9);
     border-color: rgba(244, 67, 54, 0.4);
-  }
-
-  /* Progress Indicator */
-  .progress-indicator {
-    position: absolute;
-    bottom: -2px;
-    left: 0;
-    height: 2px;
-    background: var(--controls-accent-color);
-    border-radius: 1px;
-    transition: width 0.3s ease;
-    opacity: 0;
-  }
-
-  .progress-indicator.show {
-    opacity: 1;
   }
 
   /* State Indicator Dots */
@@ -1077,10 +1048,6 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       this.controlsContainer.appendChild(this.createVocabularyControl());
     }
 
-    if (this.config.showTimeDisplay) {
-      this.controlsContainer.appendChild(this.createTimeDisplay());
-    }
-
     // Create visual feedback elements
     this.createFeedbackElements();
 
@@ -1232,27 +1199,6 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     return group;
   }
 
-  private createTimeDisplay(): HTMLElement {
-    const timeDisplay = document.createElement('div');
-    timeDisplay.className = 'control-group time-display';
-
-    const currentTime = document.createElement('span');
-    currentTime.className = 'current-time';
-    currentTime.textContent = '0:00';
-
-    const separator = document.createElement('span');
-    separator.textContent = ' / ';
-
-    const totalTime = document.createElement('span');
-    totalTime.className = 'total-time';
-    totalTime.textContent = '0:00';
-
-    timeDisplay.appendChild(currentTime);
-    timeDisplay.appendChild(separator);
-    timeDisplay.appendChild(totalTime);
-
-    return timeDisplay;
-  }
 
   private createFeedbackElements(): void {
     if (!this.controlsContainer) return;
@@ -1261,11 +1207,6 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     const actionToast = document.createElement('div');
     actionToast.className = 'action-toast';
     this.controlsContainer.appendChild(actionToast);
-
-    // Create progress indicator
-    const progressIndicator = document.createElement('div');
-    progressIndicator.className = 'progress-indicator';
-    this.controlsContainer.appendChild(progressIndicator);
 
     // Create state indicator dots
     const stateIndicators = document.createElement('div');
@@ -1421,20 +1362,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     }
   }
 
-  private showProgressIndicator(percentage: number): void {
-    if (!this.shadowRoot) return;
 
-    const progressIndicator = this.shadowRoot.querySelector('.progress-indicator') as HTMLElement;
-    if (!progressIndicator) return;
-
-    progressIndicator.style.width = `${Math.max(0, Math.min(100, percentage))}%`;
-    progressIndicator.classList.add('show');
-
-    // Hide after a short delay
-    setTimeout(() => {
-      progressIndicator.classList.remove('show');
-    }, 1000);
-  }
 
   // ========================================
   // Configuration and Settings
@@ -1955,31 +1883,11 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     }
   }
 
-  private updateTimeDisplay(): void {
-    if (!this.shadowRoot) return;
-
-    try {
-      const currentTime = this.playerService.getCurrentTime();
-      const duration = this.playerService.getDuration();
-
-      const timeDisplay = this.shadowRoot.querySelector('.time-display span');
-      if (timeDisplay) {
-        timeDisplay.textContent = `${this.formatTime(currentTime)} / ${this.formatTime(duration)}`;
-      }
-    } catch (error) {
-      // Silently fail for time display updates
-    }
-  }
-
   // ========================================
   // Event Handling and Player Integration
   // ========================================
 
   private setupPlayerEventHandlers(): void {
-    this.playerEventHandlers.set('timeupdate', () => {
-      this.updateTimeDisplay();
-    });
-
     this.playerEventHandlers.set('ratechange', () => {
       this.currentSpeed = this.playerService.getPlaybackRate();
       this.updateSpeedDisplay();
