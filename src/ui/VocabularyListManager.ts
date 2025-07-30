@@ -170,6 +170,17 @@ export class VocabularyListManager {
    */
   public async show(container?: HTMLElement): Promise<void> {
     try {
+      this.logger?.debug('Vocabulary list show requested', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: {
+          hasProvidedContainer: !!container,
+          providedContainerId: container?.id,
+          currentlyVisible: this.state.isVisible,
+          hasActiveComponent: !!this.state.activeComponent,
+          hasCurrentContainer: !!this.state.currentContainer,
+        },
+      });
+
       // CRITICAL FIX: Prevent multiple instances by checking for existing active component
       if (this.state.isVisible && this.state.activeComponent && this.state.currentContainer) {
         this.logger?.info('Vocabulary list already visible, bringing to front', {
@@ -183,6 +194,9 @@ export class VocabularyListManager {
 
       // CRITICAL FIX: Clean up any existing instances before creating new one
       if (this.state.activeComponent && this.state.currentContainer) {
+        this.logger?.debug('Cleaning up existing vocabulary component', {
+          component: ComponentType.WORD_LOOKUP,
+        });
         this.state.activeComponent.destroy();
         if (this.state.currentContainer.parentNode) {
           this.state.currentContainer.parentNode.removeChild(this.state.currentContainer);
@@ -194,16 +208,38 @@ export class VocabularyListManager {
         };
       }
 
-      // CRITICAL FIX: Remove any existing vocabulary containers from DOM
-      const existingContainers = document.querySelectorAll('.vocabulary-list-manager-container, [id*="vocabulary"], .vocabulary-list-host');
+      // CRITICAL FIX: Only remove our own vocabulary containers, not content script containers
+      const existingContainers = document.querySelectorAll('.vocabulary-list-manager-container, .vocabulary-list-host');
+      this.logger?.debug('Found existing containers to clean', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: {
+          containerCount: existingContainers.length,
+          containerIds: Array.from(existingContainers).map(el => el.id).filter(Boolean),
+        },
+      });
+      
       existingContainers.forEach(el => {
-        if (el.parentNode) {
+        // Don't remove the content script's vocabulary container
+        if (el.id !== 'linguatube-vocabulary-list-container' && el.parentNode) {
+          this.logger?.debug('Removing old vocabulary container', {
+            component: ComponentType.WORD_LOOKUP,
+            metadata: { containerId: el.id, className: el.className },
+          });
           el.parentNode.removeChild(el);
         }
       });
 
       // Use provided container or create new one
       const targetContainer = container || this.createContainer();
+      
+      this.logger?.debug('Using target container', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: {
+          containerId: targetContainer.id,
+          containerClass: targetContainer.className,
+          isProvidedContainer: !!container,
+        },
+      });
       
       // Create and initialize component
       const component = new VocabularyListComponent(this.config.listConfig);
@@ -221,12 +257,13 @@ export class VocabularyListManager {
       this.setupContainerInteractions();
       this.applyTheme();
 
-      this.logger?.info('Vocabulary list shown', {
+      this.logger?.info('Vocabulary list shown successfully', {
         component: ComponentType.WORD_LOOKUP,
         metadata: {
           position: this.config.position,
           hasContainer: !!container,
           isNewContainer: !container,
+          finalContainerId: targetContainer.id,
         },
       });
     } catch (error) {
@@ -235,6 +272,7 @@ export class VocabularyListManager {
         metadata: {
           error: error instanceof Error ? error.message : String(error),
           position: this.config.position,
+          hasProvidedContainer: !!container,
         },
       });
       throw error;
@@ -265,9 +303,10 @@ export class VocabularyListManager {
       }
 
       // CRITICAL FIX: Also remove any lingering vocabulary containers from DOM
-      const allVocabContainers = document.querySelectorAll('.vocabulary-list-manager-container, .vocabulary-list-host, [id*="vocabulary"]');
+      const allVocabContainers = document.querySelectorAll('.vocabulary-list-manager-container, .vocabulary-list-host');
       allVocabContainers.forEach(el => {
-        if (el.parentNode) {
+        // Don't remove the content script's vocabulary container
+        if (el.id !== 'linguatube-vocabulary-list-container' && el.parentNode) {
           el.parentNode.removeChild(el);
         }
       });

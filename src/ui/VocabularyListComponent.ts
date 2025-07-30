@@ -643,10 +643,27 @@ export class VocabularyListComponent {
   // ========================================
 
   public async initialize(container: HTMLElement): Promise<void> {
+    this.logger?.debug('VocabularyListComponent initialization started', {
+      component: ComponentType.WORD_LOOKUP,
+      metadata: {
+        containerId: container.id,
+        containerClass: container.className,
+      },
+    });
+
     this.container = container;
     this.createShadowDOM();
     this.render();
     await this.loadVocabulary();
+    
+    this.logger?.debug('VocabularyListComponent initialization completed', {
+      component: ComponentType.WORD_LOOKUP,
+      metadata: {
+        wordsLoaded: this.state.words.length,
+        hasError: !!this.state.error,
+        error: this.state.error,
+      },
+    });
   }
 
   public async refresh(): Promise<void> {
