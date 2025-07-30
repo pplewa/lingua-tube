@@ -103,6 +103,7 @@ export interface UISettings {
   readonly showTooltips: boolean;
   readonly animationsEnabled: boolean;
   readonly keyboardShortcuts: KeyboardShortcuts;
+  readonly vocabularyList: VocabularyListSettings; // CRITICAL FIX: Add vocabulary list preferences
 }
 
 /**
@@ -115,6 +116,33 @@ export interface KeyboardShortcuts {
   readonly replay: string;
   readonly saveWord: string;
   readonly showDefinition: string;
+  readonly toggleVocabularyList?: string; // CRITICAL FIX: Add vocabulary list toggle shortcut
+}
+
+/**
+ * Vocabulary list UI preferences and state
+ */
+export interface VocabularyListSettings {
+  readonly sortBy: 'dateAdded' | 'alphabetical' | 'frequency' | 'reviewCount';
+  readonly sortOrder: 'asc' | 'desc';
+  readonly filterBy: 'all' | 'currentVideo' | 'unreviewed' | 'starred';
+  readonly viewMode: 'list' | 'grid' | 'compact';
+  readonly panelSize: {
+    readonly width: number;
+    readonly height: number;
+  };
+  readonly position: {
+    readonly x: number;
+    readonly y: number;
+  };
+  readonly visibility: {
+    readonly rememberState: boolean;
+    readonly lastVisible: boolean;
+  };
+  readonly enableKeyboardNavigation: boolean;
+  readonly showDefinitions: boolean;
+  readonly showReviewCount: boolean;
+  readonly autoFocusOnOpen: boolean;
 }
 
 /**

@@ -8,6 +8,7 @@ import { VocabularyObserver, VocabularyEventType } from '../vocabulary/Vocabular
 import { VocabularyItem } from '../storage/types';
 import { Logger } from '../logging/Logger';
 import { ComponentType } from '../logging/types';
+import { storageService, VocabularyListSettings } from '../storage'; // CRITICAL FIX: Add StorageService for persistence
 
 // ========================================
 // Types and Interfaces
@@ -41,6 +42,7 @@ export interface VocabularyListEvents {
   onFilterChange: (filters: any) => void;
   onImportRequest: (format: 'json' | 'csv' | 'anki') => void;
   onExportRequest: (format: 'json' | 'csv' | 'anki') => void;
+  onVocabularyLoaded?: (words: VocabularyItem[]) => void; // New event for vocabulary loading
 }
 
 export interface ListState {
@@ -157,16 +159,87 @@ const VOCABULARY_LIST_STYLES = `
   }
 
   .vocabulary-controls {
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+  }
+
+  .controls-toggle {
     display: flex;
-    gap: 12px;
     align-items: center;
-    flex-wrap: wrap;
+    justify-content: space-between;
+    padding: 12px 16px;
+    cursor: pointer;
+    border-bottom: 1px solid #e2e8f0;
+    transition: background-color 0.2s;
+  }
+
+  .controls-toggle:hover {
+    background: #edf2f7;
+  }
+
+  .controls-toggle-text {
+    font-size: 14px;
+    font-weight: 500;
+    color: #4a5568;
+  }
+
+  .controls-toggle-icon {
+    font-size: 12px;
+    color: #718096;
+    transition: transform 0.2s;
+  }
+
+  .controls-toggle-icon.expanded {
+    transform: rotate(180deg);
+  }
+
+  .controls-content {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+    transition: max-height 0.3s ease-out, opacity 0.2s ease-out;
+    overflow: hidden;
+  }
+
+  .controls-content.collapsed {
+    max-height: 0;
+    padding: 0 16px;
+    opacity: 0;
+  }
+
+  .controls-content:not(.collapsed) {
+    max-height: 200px;
+    opacity: 1;
   }
 
   .search-container {
     position: relative;
-    flex: 1;
-    min-width: 200px;
+    width: 100%;
+    background: #ffffff;
+    border-bottom: 1px solid #e2e8f0;
+  }
+
+  .filter-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+  }
+
+  .filter-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: #4a5568;
+    min-width: 50px;
+    flex-shrink: 0;
+  }
+
+  .controls-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
   }
 
   .search-input {
@@ -177,6 +250,7 @@ const VOCABULARY_LIST_STYLES = `
     font-size: 14px;
     background: #ffffff;
     transition: border-color 0.2s;
+    box-sizing: border-box;
   }
 
   .search-input:focus {
@@ -201,6 +275,24 @@ const VOCABULARY_LIST_STYLES = `
     font-size: 14px;
     background: #ffffff;
     cursor: pointer;
+    min-width: 160px;
+    flex: 1;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+    background-position: right 8px center;
+    background-repeat: no-repeat;
+    background-size: 16px 16px;
+    padding-right: 32px;
+  }
+
+  .filter-select:focus {
+    outline: none;
+    border-color: #4299e1;
+    box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+  }
+
+  .filter-select option:disabled {
+    color: #a0aec0;
   }
 
   .sort-button {
@@ -317,6 +409,52 @@ const VOCABULARY_LIST_STYLES = `
   .list-item.selected {
     background: #ebf8ff;
     border-left: 3px solid #4299e1;
+  }
+
+  /* CRITICAL FIX: Add keyboard focus styling for accessibility */
+  .list-item.keyboard-focus {
+    background: #fef5e7;
+    border: 2px solid #f6ad55;
+    box-shadow: 0 0 0 2px rgba(246, 173, 85, 0.2);
+    outline: none;
+  }
+
+  /* Combined states: selected and keyboard focused */
+  .list-item.selected.keyboard-focus {
+    background: #e6fffa;
+    border: 2px solid #38b2ac;
+    border-left: 3px solid #4299e1;
+    box-shadow: 0 0 0 2px rgba(56, 178, 172, 0.2);
+  }
+
+  /* CRITICAL FIX: Vocabulary mode active styling */
+  .vocabulary-mode-active .list-item {
+    transition: all 0.2s ease-in-out;
+  }
+
+  .vocabulary-mode-active .list-item .item-word {
+    font-weight: 600;
+    color: #2d3748;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  }
+
+  .vocabulary-mode-active .list-item:hover .item-word {
+    color: #4299e1;
+    transform: translateX(2px);
+  }
+
+  .vocabulary-mode-active .list-item .item-translation {
+    font-style: italic;
+    color: #4a5568;
+  }
+
+  .vocabulary-mode-active .vocabulary-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+  }
+
+  .vocabulary-mode-active .vocabulary-title {
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
   }
 
   .item-checkbox {
@@ -584,18 +722,11 @@ export class VocabularyListComponent {
   private events: { [K in keyof VocabularyListEvents]?: VocabularyListEvents[K] } = {};
   private readonly logger = Logger.getInstance();
 
-  private state: ListState = {
-    words: [],
-    filteredWords: [],
-    selectedWords: new Set(),
-    searchQuery: '',
-    sortBy: 'dateAdded',
-    sortOrder: 'desc',
-    currentPage: 0,
-    isLoading: false,
-    error: null,
-  };
-
+  private state: ListState;
+  private eventListenersAttached: boolean = false; // CRITICAL FIX: Track event listener attachment
+  private currentFocusIndex: number = -1; // Track currently focused item for keyboard navigation
+  private currentVideoFilter: 'all' | 'current' = 'current'; // Track video filter mode - default to current video
+  private controlsCollapsed: boolean = true; // Controls are collapsed by default to save space
   private searchTimeout: ReturnType<typeof setTimeout> | null = null;
   private virtualScrollOffset = 0;
   private visibleRange = { start: 0, end: 0 };
@@ -605,8 +736,120 @@ export class VocabularyListComponent {
     this.vocabularyManager = VocabularyManager.getInstance();
     this.vocabularyObserver = VocabularyObserver.getInstance();
 
+    // Initialize state
+    this.state = {
+      words: [],
+      filteredWords: [],
+      selectedWords: new Set(),
+      searchQuery: '',
+      sortBy: 'dateAdded',
+      sortOrder: 'desc',
+      currentPage: 0,
+      isLoading: false,
+      error: null,
+    };
+
     this.setupEventListeners();
     this.setupVideoChangeListener();
+  }
+
+  /**
+   * Focus the vocabulary list for keyboard navigation
+   */
+  public focus(): void {
+    if (this.shadowRoot) {
+      const container = this.shadowRoot.querySelector('.vocabulary-list-container') as HTMLElement;
+      if (container) {
+        container.focus();
+        // Reset focus index when manually focusing
+        this.currentFocusIndex = -1;
+        this.updateFocusHighlight();
+      }
+    }
+  }
+
+  /**
+   * Load vocabulary list preferences from Chrome Storage
+   */
+  private async loadPreferences(): Promise<void> {
+    try {
+      const result = await storageService.getSettings();
+      if (result.success && result.data) {
+        const preferences = result.data.ui.vocabularyList;
+        
+        // Apply loaded preferences to component state
+        this.updateState({
+          sortBy: preferences.sortBy,
+          sortOrder: preferences.sortOrder,
+        });
+
+        this.logger?.debug('Vocabulary list preferences loaded and applied', {
+          component: ComponentType.VOCABULARY_LIST,
+          metadata: {
+            sortBy: preferences.sortBy,
+            sortOrder: preferences.sortOrder,
+            filterBy: preferences.filterBy,
+            enableKeyboardNavigation: preferences.enableKeyboardNavigation,
+          },
+        });
+      }
+    } catch (error) {
+      this.logger?.warn('Failed to load vocabulary list preferences', {
+        component: ComponentType.VOCABULARY_LIST,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+    }
+  }
+
+  /**
+   * Save vocabulary list preferences to Chrome Storage
+   */
+  private async savePreferences(updates: Partial<VocabularyListSettings>): Promise<void> {
+    try {
+      // Get current settings
+      const result = await storageService.getSettings();
+      if (!result.success || !result.data) {
+        this.logger?.warn('Failed to get current settings for saving preferences', {
+          component: ComponentType.VOCABULARY_LIST,
+        });
+        return;
+      }
+
+      // Update vocabulary list settings
+      const updatedSettings = {
+        ...result.data,
+        ui: {
+          ...result.data.ui,
+          vocabularyList: {
+            ...result.data.ui.vocabularyList,
+            ...updates,
+          },
+        },
+      };
+
+      // Save updated settings
+      const saveResult = await storageService.saveSettings(updatedSettings);
+      if (saveResult.success) {
+        this.logger?.debug('Vocabulary list preferences saved', {
+          component: ComponentType.VOCABULARY_LIST,
+          metadata: { updates },
+        });
+      } else {
+        this.logger?.warn('Failed to save vocabulary list preferences', {
+          component: ComponentType.VOCABULARY_LIST,
+          metadata: { error: saveResult.error?.message },
+        });
+      }
+    } catch (error) {
+      this.logger?.error('Error saving vocabulary list preferences', {
+        component: ComponentType.VOCABULARY_LIST,  
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+    }
   }
 
   /**
@@ -620,7 +863,7 @@ export class VocabularyListComponent {
       const newVideoId = this.getCurrentVideoId();
       if (newVideoId !== currentVideoId) {
         this.logger?.debug('Video changed, refreshing vocabulary list', {
-          component: ComponentType.WORD_LOOKUP,
+          component: ComponentType.VOCABULARY_LIST,
           metadata: {
             oldVideoId: currentVideoId,
             newVideoId: newVideoId,
@@ -644,20 +887,27 @@ export class VocabularyListComponent {
 
   public async initialize(container: HTMLElement): Promise<void> {
     this.logger?.debug('VocabularyListComponent initialization started', {
-      component: ComponentType.WORD_LOOKUP,
+      component: ComponentType.VOCABULARY_LIST,
       metadata: {
         containerId: container.id,
         containerClass: container.className,
       },
     });
 
+    // CRITICAL FIX: Reset event listener flag to ensure clean initialization
+    this.eventListenersAttached = false;
+
     this.container = container;
     this.createShadowDOM();
     this.render();
+    
+    // CRITICAL FIX: Load preferences before loading vocabulary
+    await this.loadPreferences();
+    
     await this.loadVocabulary();
     
     this.logger?.debug('VocabularyListComponent initialization completed', {
-      component: ComponentType.WORD_LOOKUP,
+      component: ComponentType.VOCABULARY_LIST,
       metadata: {
         wordsLoaded: this.state.words.length,
         hasError: !!this.state.error,
@@ -670,6 +920,92 @@ export class VocabularyListComponent {
     await this.loadVocabulary();
   }
 
+  /**
+   * Handle keyboard navigation within the vocabulary list
+   */
+  private handleKeyboardNavigation(event: KeyboardEvent): void {
+    const target = event.target as HTMLElement;
+    
+    // Don't interfere with typing in search input
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+      if (event.key === 'Escape') {
+        // Allow escape to close the list even from input fields
+        this.handleAction('close', '');
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      return;
+    }
+
+    const filteredWords = this.state.filteredWords;
+    
+    switch (event.key) {
+      case 'ArrowDown':
+        event.preventDefault();
+        this.currentFocusIndex = Math.min(this.currentFocusIndex + 1, filteredWords.length - 1);
+        this.updateFocusHighlight();
+        break;
+        
+      case 'ArrowUp':
+        event.preventDefault();
+        this.currentFocusIndex = Math.max(this.currentFocusIndex - 1, -1);
+        this.updateFocusHighlight();
+        break;
+        
+      case 'Enter':
+        event.preventDefault();
+        if (this.currentFocusIndex >= 0 && this.currentFocusIndex < filteredWords.length) {
+          const word = filteredWords[this.currentFocusIndex];
+          this.handleAction('navigate', word.id);
+        }
+        break;
+        
+      case 'Escape':
+        event.preventDefault();
+        event.stopPropagation();
+        this.handleAction('close', '');
+        break;
+        
+      case 'Home':
+        event.preventDefault();
+        this.currentFocusIndex = filteredWords.length > 0 ? 0 : -1;
+        this.updateFocusHighlight();
+        break;
+        
+      case 'End':
+        event.preventDefault();
+        this.currentFocusIndex = filteredWords.length - 1;
+        this.updateFocusHighlight();
+        break;
+    }
+  }
+
+  /**
+   * Update visual focus highlight for keyboard navigation
+   */
+  private updateFocusHighlight(): void {
+    if (!this.shadowRoot) return;
+
+    // Remove existing focus highlights
+    const existingHighlights = this.shadowRoot.querySelectorAll('.list-item.keyboard-focus');
+    existingHighlights.forEach(item => item.classList.remove('keyboard-focus'));
+
+    // Add focus to current item
+    if (this.currentFocusIndex >= 0) {
+      const items = this.shadowRoot.querySelectorAll('.list-item');
+      const targetItem = items[this.currentFocusIndex];
+      if (targetItem) {
+        targetItem.classList.add('keyboard-focus');
+        // Scroll item into view if needed
+        targetItem.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'nearest',
+          inline: 'nearest'
+        });
+      }
+    }
+  }
+
   public destroy(): void {
     if (this.searchTimeout) {
       clearTimeout(this.searchTimeout);
@@ -680,6 +1016,9 @@ export class VocabularyListComponent {
     this.vocabularyObserver.off(VocabularyEventType.WORD_REMOVED);
     this.vocabularyObserver.off(VocabularyEventType.WORD_UPDATED);
     this.vocabularyObserver.off(VocabularyEventType.VOCABULARY_CLEARED);
+
+    // CRITICAL FIX: Reset event listener flag to allow reattachment if component is recreated
+    this.eventListenersAttached = false;
 
     if (this.container && this.shadowRoot) {
       this.container.removeChild(this.shadowRoot.host);
@@ -711,20 +1050,176 @@ export class VocabularyListComponent {
   }
 
   public search(query: string): void {
+    this.updateState({ searchQuery: query });
+    
     if (this.searchTimeout) {
       clearTimeout(this.searchTimeout);
     }
-
+    
     this.searchTimeout = setTimeout(() => {
-      this.updateState({ searchQuery: query, currentPage: 0 });
-      this.filterAndSort();
-      this.events.onSearchChange?.(query);
-    }, this.config.searchDebounceMs);
+      this.logger?.debug('search timeout executing, calling applyFiltersAndSearch()', {
+        component: ComponentType.VOCABULARY_LIST,
+      });
+      this.applyFiltersAndSearch();
+    }, 300);
   }
 
-  public sort(sortBy: string, sortOrder: 'asc' | 'desc' = 'asc'): void {
+  /**
+   * Apply both search and video filtering
+   */
+  private applyFiltersAndSearch(): void {
+    let filteredWords = this.state.words;
+    const currentVideoId = this.getCurrentVideoId();
+
+    this.logger?.debug('Applying filters and search', {
+      component: ComponentType.VOCABULARY_LIST,
+      metadata: {
+        totalWords: this.state.words.length,
+        currentVideoFilter: this.currentVideoFilter,
+        currentVideoId,
+        searchQuery: this.state.searchQuery,
+        sampleWords: this.state.words.slice(0, 3).map(w => ({ word: w.word, videoId: w.videoId })),
+      },
+    });
+
+    // Apply video filtering first if enabled
+    if (this.currentVideoFilter === 'current') {
+      if (currentVideoId) {
+        const wordsForVideo = filteredWords.filter(word => {
+          const matches = word.videoId === currentVideoId;
+          if (!matches && filteredWords.length <= 5) {
+            // Only log when there are few words to avoid spam
+            this.logger?.debug('Word video ID mismatch', {
+              component: ComponentType.VOCABULARY_LIST,
+              metadata: {
+                wordVideoId: word.videoId,
+                currentVideoId,
+                word: word.word,
+              },
+            });
+          }
+          return matches;
+        });
+        this.logger?.debug('Video filtering result', {
+          component: ComponentType.VOCABULARY_LIST,
+          metadata: {
+            beforeFilter: filteredWords.length,
+            afterFilter: wordsForVideo.length,
+            currentVideoId,
+            matchingWords: wordsForVideo.slice(0, 3).map(w => ({ word: w.word, videoId: w.videoId })),
+            nonMatchingVideoIds: filteredWords.filter(w => w.videoId !== currentVideoId).slice(0, 3).map(w => w.videoId),
+          },
+        });
+        filteredWords = wordsForVideo;
+      } else {
+        this.logger?.debug('No current video ID - showing no words', {
+          component: ComponentType.VOCABULARY_LIST,
+        });
+        filteredWords = []; // No current video, show nothing
+      }
+    }
+
+    // Apply search filtering
+    const query = this.state.searchQuery;
+    if (query) {
+      filteredWords = filteredWords.filter((word) =>
+        word.word.toLowerCase().includes(query.toLowerCase()) ||
+        word.translation.toLowerCase().includes(query.toLowerCase())
+      );
+    }
+
+    // Apply sorting
+    filteredWords.sort((a, b) => {
+      let aValue: any, bValue: any;
+
+      switch (this.state.sortBy) {
+        case 'word':
+          aValue = a.word.toLowerCase();
+          bValue = b.word.toLowerCase();
+          break;
+        case 'translation':
+          aValue = a.translation.toLowerCase();
+          bValue = b.translation.toLowerCase();
+          break;
+        case 'dateAdded':
+          aValue = a.createdAt;
+          bValue = b.createdAt;
+          break;
+        case 'reviewCount':
+          aValue = a.reviewCount || 0;
+          bValue = b.reviewCount || 0;
+          break;
+        default:
+          return 0;
+      }
+
+      if (aValue < bValue) return this.state.sortOrder === 'asc' ? -1 : 1;
+      if (aValue > bValue) return this.state.sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    this.logger?.debug('Final filtered and sorted result', {
+      component: ComponentType.VOCABULARY_LIST,
+      metadata: {
+        finalCount: filteredWords.length,
+        sampleFiltered: filteredWords.slice(0, 3).map(w => ({ word: w.word, videoId: w.videoId })),
+        sortBy: this.state.sortBy,
+        sortOrder: this.state.sortOrder,
+      },
+    });
+
+    this.updateState({ filteredWords });
+    // Reset keyboard navigation focus when search results change
+    this.currentFocusIndex = -1;
+    this.updateFocusHighlight();
+    
+    // CRITICAL FIX: Re-render to show the filtered results
+    this.render();
+  }
+
+  /**
+   * Toggle the controls section visibility
+   */
+  private toggleControls(): void {
+    this.controlsCollapsed = !this.controlsCollapsed;
+    this.render(); // Re-render to update the UI
+    
+    this.logger?.debug('Controls toggled', {
+      component: ComponentType.VOCABULARY_LIST,
+      metadata: {
+        collapsed: this.controlsCollapsed,
+      },
+    });
+  }
+
+  /**
+   * Set the video filter mode and apply filters
+   */
+  private setVideoFilter(filterMode: 'all' | 'current'): void {
+    this.currentVideoFilter = filterMode;
+    this.applyFiltersAndSearch();
+    
+    this.logger?.debug('Video filter changed', {
+      component: ComponentType.VOCABULARY_LIST,
+      metadata: {
+        filterMode,
+        currentVideoId: this.getCurrentVideoId(),
+        totalWords: this.state.words.length,
+        filteredWords: this.state.filteredWords.length,
+      },
+    });
+  }
+
+  public sort(sortBy: string, sortOrder: 'asc' | 'desc'): void {
+    // CRITICAL FIX: Save preferences when sorting changes
+    this.savePreferences({ 
+      sortBy: sortBy as VocabularyListSettings['sortBy'], 
+      sortOrder: sortOrder 
+    });
+
     this.updateState({ sortBy, sortOrder });
-    this.filterAndSort();
+    // Use the new filter method that includes video filtering and renders
+    this.applyFiltersAndSearch();
   }
 
   // ========================================
@@ -793,58 +1288,72 @@ export class VocabularyListComponent {
 
     try {
       this.logger?.debug('Loading vocabulary data...', {
-        component: ComponentType.WORD_LOOKUP,
+        component: ComponentType.VOCABULARY_LIST,
         action: 'vocabulary_load_start',
       });
 
-      // CRITICAL FIX: Get current video ID for filtering
-      const currentVideoId = this.getCurrentVideoId();
-      
-      // Apply video filter if we have a current video ID
-      const filters = currentVideoId ? { videoId: currentVideoId } : undefined;
-      
-      const result = await this.vocabularyManager.getVocabulary(filters);
+      // CRITICAL FIX: Load all vocabulary by default, not filtered by current video
+      const result = await this.vocabularyManager.getVocabulary();
       
       this.logger?.debug('Vocabulary manager returned result', {
-        component: ComponentType.WORD_LOOKUP,
+        component: ComponentType.VOCABULARY_LIST,
         metadata: {
           success: result.success,
           hasData: !!result.data,
           dataLength: result.data?.length || 0,
+          sampleData: result.data ? result.data.slice(0, 3).map(w => ({ word: w.word, videoId: w.videoId })) : null,
           error: result.error?.message,
-          currentVideoId: currentVideoId,
-          filteredByVideo: !!currentVideoId,
         },
       });
 
+      // DEBUG: Also check what's actually in Chrome storage
+      try {
+        const rawStorageData = await chrome.storage.local.get(['lingua_vocabulary']);
+        this.logger?.debug('Raw Chrome storage vocabulary data', {
+          component: ComponentType.VOCABULARY_LIST,
+          metadata: {
+            hasStorageData: !!rawStorageData.lingua_vocabulary,
+            storageLength: rawStorageData.lingua_vocabulary?.length || 0,
+            storageSample: rawStorageData.lingua_vocabulary?.slice(0, 3) || null,
+          },
+        });
+      } catch (storageError) {
+        this.logger?.warn('Failed to check raw storage', {
+          component: ComponentType.VOCABULARY_LIST,
+          metadata: { error: storageError },
+        });
+      }
+
       if (result.success && result.data) {
-        this.updateState({
-          words: result.data,
-          isLoading: false,
+        const words = Array.isArray(result.data) ? result.data : [];
+        this.updateState({ 
+          words,
+          filteredWords: words,
+          isLoading: false, 
+          error: null 
         });
         
-        this.filterAndSort();
+        // Apply any active filters to the loaded vocabulary
+        this.applyFiltersAndSearch();
         
-        this.logger?.debug('Vocabulary loaded successfully', {
-          component: ComponentType.WORD_LOOKUP,
+        // COMPREHENSIVE DEBUG: Show what video IDs are in the vocabulary
+        const uniqueVideoIds = [...new Set(words.map(w => w.videoId))];
+        this.logger?.debug('Unique video IDs in vocabulary', {
+          component: ComponentType.VOCABULARY_LIST,
           metadata: {
-            wordCount: this.state.words.length,
-            currentVideoId: currentVideoId,
-            filteredByVideo: !!currentVideoId,
+            uniqueVideoIds,
+            currentVideoId: this.getCurrentVideoId(),
+            currentFilterMode: this.currentVideoFilter,
           },
         });
+        
+        this.events.onVocabularyLoaded?.(words);
       } else {
-        const errorMsg = result.error?.message || 'Failed to load vocabulary';
-        this.updateState({
-          error: errorMsg,
-          isLoading: false,
-        });
-        
-        this.logger?.warn('Failed to load vocabulary', {
-          component: ComponentType.WORD_LOOKUP,
-          metadata: {
-            error: errorMsg,
-          },
+        this.updateState({ 
+          words: [],
+          filteredWords: [],
+          isLoading: false, 
+          error: result.error?.message || 'Failed to load vocabulary' 
         });
       }
     } catch (error) {
@@ -855,7 +1364,7 @@ export class VocabularyListComponent {
       });
       
       this.logger?.error('Error loading vocabulary', {
-        component: ComponentType.WORD_LOOKUP,
+        component: ComponentType.VOCABULARY_LIST,
         metadata: {
           error: errorMsg,
         },
@@ -869,8 +1378,23 @@ export class VocabularyListComponent {
   private getCurrentVideoId(): string | null {
     try {
       const url = new URL(window.location.href);
-      return url.searchParams.get('v');
-    } catch {
+      const videoId = url.searchParams.get('v');
+      this.logger?.debug('Getting current video ID', {
+        component: ComponentType.VOCABULARY_LIST,
+        metadata: {
+          url: window.location.href,
+          videoId,
+        },
+      });
+      return videoId;
+    } catch (error) {
+      this.logger?.warn('Failed to parse URL for video ID', {
+        component: ComponentType.VOCABULARY_LIST,
+        metadata: {
+          url: window.location.href,
+          error: String(error),
+        },
+      });
       return null;
     }
   }
@@ -944,6 +1468,9 @@ export class VocabularyListComponent {
       // Update the container content
       existingContainer.innerHTML = this.renderContent();
       
+      // CRITICAL FIX: Reset event listeners flag since DOM was rebuilt
+      this.eventListenersAttached = false;
+      
       // Restore search input state if it existed
       if (existingSearchInput && searchValue) {
         const newSearchInput = existingContainer.querySelector('.search-input') as HTMLInputElement;
@@ -963,6 +1490,7 @@ export class VocabularyListComponent {
       // Create the container if it doesn't exist
       const containerDiv = document.createElement('div');
       containerDiv.className = 'vocabulary-list-container';
+      containerDiv.setAttribute('tabindex', '0'); // CRITICAL FIX: Make focusable for keyboard navigation
       containerDiv.innerHTML = this.renderContent();
       this.shadowRoot.appendChild(containerDiv);
       this.attachEventHandlers();
@@ -972,6 +1500,7 @@ export class VocabularyListComponent {
   private renderContent(): string {
     return `
       ${this.renderHeader()}
+      ${this.config.enableSearch ? this.renderSearch() : ''}
       ${this.renderControls()}
       ${this.renderList()}
       ${this.renderBulkActions()}
@@ -982,8 +1511,7 @@ export class VocabularyListComponent {
     const totalWords = this.state.words.length;
     const filteredWords = this.state.filteredWords.length;
     const selectedCount = this.state.selectedWords.size;
-    const currentVideoId = this.getCurrentVideoId();
-    const isFilteredByVideo = !!currentVideoId;
+    const isFilteredByVideo = this.currentVideoFilter === 'current';
 
     return `
       <div class="vocabulary-header">
@@ -1027,9 +1555,23 @@ export class VocabularyListComponent {
 
     return `
       <div class="vocabulary-controls">
-        ${this.config.enableSearch ? this.renderSearch() : ''}
-        ${this.config.enableSorting ? this.renderSortControls() : ''}
-        ${this.config.enableImport || this.config.enableExport ? this.renderImportExport() : ''}
+        <div class="controls-toggle" data-action="toggle-controls">
+          <span class="controls-toggle-text">Options</span>
+          <span class="controls-toggle-icon ${this.controlsCollapsed ? '' : 'expanded'}">▼</span>
+        </div>
+        <div class="controls-content ${this.controlsCollapsed ? 'collapsed' : ''}">
+          ${this.config.enableFilters || this.config.enableSorting ? `
+            <div class="controls-row">
+              ${this.config.enableFilters ? this.renderVideoFilter() : ''}
+              ${this.config.enableSorting ? this.renderSortControls() : ''}
+            </div>
+          ` : ''}
+          ${this.config.enableImport || this.config.enableExport ? `
+            <div class="controls-row">
+              ${this.renderImportExport()}
+            </div>
+          ` : ''}
+        </div>
       </div>
     `;
   }
@@ -1048,6 +1590,21 @@ export class VocabularyListComponent {
     `;
   }
 
+  private renderVideoFilter(): string {
+    const currentVideoId = this.getCurrentVideoId();
+    const hasCurrentVideo = !!currentVideoId;
+
+    return `
+      <div class="filter-container">
+        <label class="filter-label">Show:</label>
+        <select class="filter-select" data-action="filter-by-video">
+          <option value="all" ${this.currentVideoFilter === 'all' ? 'selected' : ''}>All Videos</option>
+          <option value="current" ${this.currentVideoFilter === 'current' ? 'selected' : ''} ${!hasCurrentVideo ? 'disabled' : ''}>Current Video Only</option>
+        </select>
+      </div>
+    `;
+  }
+
   private renderSortControls(): string {
     const sortOptions = [
       { value: 'dateAdded', label: 'Date Added' },
@@ -1057,20 +1614,23 @@ export class VocabularyListComponent {
     ];
 
     return `
-      <select class="filter-select sort-select">
-        ${sortOptions
-          .map(
-            (option) => `
-          <option value="${option.value}" ${option.value === this.state.sortBy ? 'selected' : ''}>
-            ${option.label}
-          </option>
-        `,
-          )
-          .join('')}
-      </select>
-      <button class="sort-button" data-action="toggle-sort-order">
-        ${this.state.sortOrder === 'asc' ? '↑' : '↓'}
-      </button>
+      <div class="filter-container">
+        <label class="filter-label">Sort:</label>
+        <select class="filter-select sort-select">
+          ${sortOptions
+            .map(
+              (option) => `
+            <option value="${option.value}" ${option.value === this.state.sortBy ? 'selected' : ''}>
+              ${option.label}
+            </option>
+          `,
+            )
+            .join('')}
+        </select>
+        <button class="sort-button" data-action="toggle-sort-order" title="Toggle sort direction">
+          ${this.state.sortOrder === 'asc' ? '↑' : '↓'}
+        </button>
+      </div>
     `;
   }
 
@@ -1213,34 +1773,95 @@ export class VocabularyListComponent {
   }
 
   private attachEventHandlers(): void {
+    if (this.eventListenersAttached) return; // Prevent multiple attachments
+
     if (!this.shadowRoot) return;
 
     // Search input
     const searchInput = this.shadowRoot.querySelector('.search-input') as HTMLInputElement;
+    this.logger?.debug('Search input found:', {
+      component: ComponentType.VOCABULARY_LIST,
+      metadata: {
+        searchInput: !!searchInput,
+      },
+    });
+      
     if (searchInput) {
+      this.logger?.debug('Adding search input listener', {
+        component: ComponentType.VOCABULARY_LIST,
+        metadata: {
+          searchInput: !!searchInput,
+        },
+      });
       searchInput.addEventListener('input', (e) => {
-        this.search((e.target as HTMLInputElement).value);
+        const query = (e.target as HTMLInputElement).value;
+        this.logger?.debug('Search input changed:', {
+          component: ComponentType.VOCABULARY_LIST,
+          metadata: {
+            searchInput: query,
+          },
+        });
+        this.search(query);
+      });
+    } else {
+      this.logger?.warn('Search input not found in shadow DOM', {
+        component: ComponentType.VOCABULARY_LIST,
+        metadata: {
+          searchInput: !!searchInput,
+        },
       });
     }
 
-    // Sort controls
-    const sortSelect = this.shadowRoot.querySelector('.sort-select') as HTMLSelectElement;
-    if (sortSelect) {
-      sortSelect.addEventListener('change', (e) => {
-        this.sort((e.target as HTMLSelectElement).value, this.state.sortOrder);
-      });
-    }
+    // Unified change event handler for all selects
+    this.shadowRoot.addEventListener('change', (e) => {
+      const target = e.target as HTMLSelectElement;
+      
+      // Sort controls
+      if (target.classList.contains('sort-select')) {
+        this.logger?.debug('Sort changed to:', {
+          component: ComponentType.VOCABULARY_LIST,
+          metadata: {
+            sort: target.value,
+          },
+        });
+        this.sort(target.value, this.state.sortOrder);
+      }
+      
+      // Video filter
+      if (target.hasAttribute('data-action') && target.getAttribute('data-action') === 'filter-by-video') {
+        const selectedFilter = target.value as 'all' | 'current';
+        this.logger?.debug('Video filter changed to:', {
+          component: ComponentType.VOCABULARY_LIST,
+          metadata: {
+            videoFilter: selectedFilter,
+          },
+        });
+        this.setVideoFilter(selectedFilter);
+      }
+    });
 
     // Action buttons
     this.shadowRoot.addEventListener('click', (e) => {
       const target = e.target as HTMLElement;
-      const action = target.getAttribute('data-action');
-      const wordId = target.getAttribute('data-word-id');
-      const format = target.getAttribute('data-format') as 'json' | 'csv' | 'anki';
+      const actionElement = target.closest('[data-action]') as HTMLElement;
+      const action = actionElement?.getAttribute('data-action');
+      const wordId = actionElement?.getAttribute('data-word-id');
+      const format = actionElement?.getAttribute('data-format') as 'json' | 'csv' | 'anki';
+      
+      this.logger?.debug('Click detected:', {
+        component: ComponentType.VOCABULARY_LIST,
+        metadata: {
+          target: target.tagName,
+          action,
+          hasActionElement: !!actionElement,
+        },
+      });
 
-      // REAL FIX: Handle close action separately without requiring wordId
+      // REAL FIX: Handle actions that don't need wordId
       if (action === 'close') {
         this.handleAction('close', ''); // Close doesn't need wordId
+      } else if (action === 'toggle-controls') {
+        this.handleAction('toggle-controls', ''); // Toggle controls doesn't need wordId
       } else if (action && wordId) {
         this.handleAction(action, wordId);
       } else if (action === 'import' && format) {
@@ -1266,6 +1887,13 @@ export class VocabularyListComponent {
         }
       }
     });
+
+    // CRITICAL FIX: Add keyboard navigation support
+    this.shadowRoot.addEventListener('keydown', (e) => {
+      this.handleKeyboardNavigation(e as KeyboardEvent);
+    });
+
+    this.eventListenersAttached = true; // Mark as attached
   }
 
   private handleAction(action: string, wordId: string): void {
@@ -1279,7 +1907,7 @@ export class VocabularyListComponent {
       case 'navigate':
         if (word) {
           this.logger?.info('Vocabulary word clicked for navigation', {
-            component: ComponentType.WORD_LOOKUP,
+            component: ComponentType.VOCABULARY_LIST,
             metadata: {
               word: word.word,
               wordId: word.id,
@@ -1298,6 +1926,9 @@ export class VocabularyListComponent {
         break;
       case 'toggle-sort-order':
         this.sort(this.state.sortBy, this.state.sortOrder === 'asc' ? 'desc' : 'asc');
+        break;
+      case 'toggle-controls':
+        this.toggleControls();
         break;
     }
   }
@@ -1378,7 +2009,7 @@ export class VocabularyListComponent {
         let message = '';
         if (result.successful.length > 0) {
           this.logger?.info(`Successfully imported ${result.successful.length} words`, {
-            component: ComponentType.WORD_LOOKUP,
+            component: ComponentType.VOCABULARY_LIST,
             metadata: {
               importedCount: result.successful.length,
               format: format,
@@ -1390,7 +2021,7 @@ export class VocabularyListComponent {
 
         if (result.failed.length > 0) {
           this.logger?.warn(`Failed to import ${result.failed.length} words`, {
-            component: ComponentType.WORD_LOOKUP,
+            component: ComponentType.VOCABULARY_LIST,
             metadata: {
               failedCount: result.failed.length,
               format: format,
@@ -1410,7 +2041,7 @@ export class VocabularyListComponent {
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
         this.logger?.error('Import error', {
-          component: ComponentType.WORD_LOOKUP,
+          component: ComponentType.VOCABULARY_LIST,
           metadata: {
             error: errorMsg,
             format: format,
@@ -1446,7 +2077,7 @@ export class VocabularyListComponent {
         URL.revokeObjectURL(url);
 
         this.logger?.info(`Successfully exported ${this.state.words.length} words`, {
-          component: ComponentType.WORD_LOOKUP,
+          component: ComponentType.VOCABULARY_LIST,
           metadata: {
             format: format,
             filename: filename,
@@ -1455,7 +2086,7 @@ export class VocabularyListComponent {
         });
       } else {
         this.logger?.error('Export failed', {
-          component: ComponentType.WORD_LOOKUP,
+          component: ComponentType.VOCABULARY_LIST,
           metadata: {
             error: result.error?.message || 'Unknown error',
             format: format,
@@ -1464,7 +2095,7 @@ export class VocabularyListComponent {
       }
     } catch (error) {
       this.logger?.error('Export error', {
-        component: ComponentType.WORD_LOOKUP,
+        component: ComponentType.VOCABULARY_LIST,
         metadata: {
           error: error instanceof Error ? error.message : String(error),
           format: format,

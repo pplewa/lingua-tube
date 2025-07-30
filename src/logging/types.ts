@@ -68,6 +68,7 @@ export enum ComponentType {
   STORAGE_SERVICE = 'storage_service',
   YOUTUBE_INTEGRATION = 'youtube_integration',
   ERROR_HANDLER = 'error_handler',
+  VOCABULARY_LIST = 'vocabulary_list',
 }
 
 /**
@@ -316,7 +317,7 @@ export interface UserNotification {
  */
 export const DEFAULT_LOGGER_CONFIG: LoggerConfig = {
   enabled: true,
-  minLevel: LogLevel.ERROR,
+  minLevel: LogLevel.INFO,
   maxStorageSize: 5 * 1024 * 1024, // 5MB
   maxEntries: 10000,
   retentionDays: 7,

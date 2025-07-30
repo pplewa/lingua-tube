@@ -12,6 +12,7 @@ import {
 import { StorageService } from '../storage';
 import { UserSettings } from '../storage/types';
 import { VocabularyManager } from '../vocabulary/VocabularyManager';
+import { VocabularyListManager } from './VocabularyListManager';
 import { SentenceLoopingService, SentenceLoop, LoopEvent } from './SentenceLoopingService';
 import { Logger } from '../logging';
 import { ComponentType } from '../logging/types';
@@ -73,9 +74,12 @@ export interface ControlsEventData {
     | 'sentence_nav'
     | 'vocabulary_mode'
     | 'vocabulary_list'
+    | 'vocabulary_navigation' // New event type for vocabulary-specific navigation
+    | 'subtitle_highlight'    // New event type for subtitle highlighting
     | 'fullscreen_change';
   readonly value: any;
   readonly timestamp: number;
+  readonly metadata?: Record<string, any>; // Additional event metadata
 }
 
 export type ControlsEventCallback = (event: ControlsEventData) => void;
@@ -203,6 +207,25 @@ export interface EnhancedPlaybackControlsAPI {
   toggleVocabularyModeState(): boolean;
 
   // ========================================
+  // Vocabulary List Management
+  // ========================================
+
+  /** Check if vocabulary list is currently visible */
+  isVocabularyListVisible(): boolean;
+
+  /** Show the vocabulary list */
+  showVocabularyList(): Promise<boolean>;
+
+  /** Hide the vocabulary list */
+  hideVocabularyList(): void;
+
+  /** Toggle vocabulary list visibility */
+  toggleVocabularyList(): void;
+
+  /** Get vocabulary list manager instance for advanced operations */
+  getVocabularyListManager(): VocabularyListManager;
+
+  // ========================================
   // Event System
   // ========================================
 
@@ -218,6 +241,33 @@ export interface EnhancedPlaybackControlsAPI {
 
   /** Destroy the component and clean up resources */
   destroy(): Promise<void>;
+
+  // ========================================
+  // Enhanced Navigation for Vocabulary Integration
+  // ========================================
+
+  /** Get current video time for enhanced navigation calculations */
+  getCurrentVideoTime(): number;
+
+  /** Get video duration for enhanced navigation calculations */
+  getVideoDuration(): number;
+
+  /** Get current video ID for navigation validation */
+  getVideoId(): string | undefined;
+
+  /** Enhanced subtitle navigation with sentence context and optional auto-loop */
+  jumpToSubtitleWithContext(subtitleId: string, options?: {
+    bufferTime?: number;
+    highlightDuration?: number;
+    enableAutoLoop?: boolean;
+  }): boolean;
+
+  /** Navigate to the sentence containing a specific vocabulary word */
+  jumpToVocabularyWord(word: string, options?: {
+    caseSensitive?: boolean;
+    wholeWord?: boolean;
+    bufferTime?: number;
+  }): boolean;
 }
 
 // ========================================
@@ -761,6 +811,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
   private playerService: PlayerInteractionService;
   private storageService: StorageService;
   private vocabularyManager: VocabularyManager;
+  private vocabularyListManager: VocabularyListManager;
   private sentenceLoopingService: SentenceLoopingService;
 
   private currentSpeed: number = 1.0;
@@ -798,6 +849,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     this.playerService = playerService;
     this.storageService = storageService;
     this.vocabularyManager = VocabularyManager.getInstance();
+    this.vocabularyListManager = VocabularyListManager.getInstance();
     this.sentenceLoopingService = new SentenceLoopingService(playerService, storageService);
     this.keyboardEventHandler = this.handleKeyboardEvent.bind(this);
 
@@ -886,6 +938,11 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       // Set up sentence looping event listeners
       this.setupSentenceLoopingListeners();
 
+      // Initialize vocabulary list manager
+      await this.vocabularyListManager.initialize();
+      this.vocabularyListManager.setEnhancedPlaybackControls(this);
+      this.vocabularyListManager.setupCrossComponentSync();
+
       // Set up keyboard shortcuts
       this.setupKeyboardShortcuts();
 
@@ -959,6 +1016,11 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
 
       // Clean up keyboard shortcuts
       this.removeKeyboardShortcuts();
+
+      // Clean up vocabulary list manager
+      if (this.vocabularyListManager) {
+        this.vocabularyListManager.hide();
+      }
 
       // Stop state tracking and save final state
       this.stopStateTracking();
@@ -1783,44 +1845,130 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
   private navigateToSubtitle(subtitleId: string): void {
     try {
       if (!this.sentenceLoopingService || !this.isInitialized) {
-        this.logger?.warn('Sentence looping service not available', {
+        this.logger?.warn('Sentence looping service not available for subtitle navigation', {
           component: ComponentType.YOUTUBE_INTEGRATION,
-          metadata: {},
+          metadata: { subtitleId },
         });
+        this.showActionToast('Navigation service unavailable', 'error', 2000);
+        return;
+      }
+
+      if (!subtitleId || subtitleId.trim() === '') {
+        this.logger?.warn('Invalid subtitle ID provided', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: { subtitleId },
+        });
+        this.showActionToast('Invalid subtitle ID', 'error', 1500);
         return;
       }
 
       const sentences = this.sentenceLoopingService.getAvailableSentences();
+      if (sentences.length === 0) {
+        this.logger?.warn('No sentences available for navigation', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: { subtitleId },
+        });
+        this.showActionToast('No subtitles available', 'warning', 2000);
+        return;
+      }
+
+      // Find sentence containing the target subtitle segment
       const targetSentence = sentences.find((sentence) =>
         sentence.segments.some((segment) => segment.id === subtitleId),
       );
 
-      if (targetSentence && targetSentence.segments.length > 0) {
-        const currentTime = this.playerService.getCurrentTime();
-        const targetTime = targetSentence.segments[0].startTime;
-
-        this.playerService.seek(targetTime);
-
-        this.emitEvent({
-          type: 'sentence_nav',
-          value: {
-            direction: targetTime > currentTime ? 'next' : 'previous',
-            fromTime: currentTime,
-            toTime: targetTime,
-            sentence: targetSentence.combinedText,
-            subtitleId: subtitleId,
+      if (!targetSentence || targetSentence.segments.length === 0) {
+        this.logger?.warn('Target subtitle not found in available sentences', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: { 
+            subtitleId,
+            availableSentenceCount: sentences.length,
+            totalSegments: sentences.reduce((sum, s) => sum + s.segments.length, 0)
           },
-          timestamp: Date.now(),
         });
+        this.showActionToast('Subtitle not found', 'error', 1500);
+        return;
       }
+
+      // Find the specific segment within the sentence for precise timing
+      const targetSegment = targetSentence.segments.find((segment) => segment.id === subtitleId);
+      const currentTime = this.playerService.getCurrentTime();
+      
+      // Use segment start time if found, otherwise use sentence start time
+      const baseTargetTime = targetSegment ? targetSegment.startTime : targetSentence.segments[0].startTime;
+      
+      // Apply buffer time to ensure context is visible (0.5 seconds before segment start)
+      const bufferTime = Math.min(0.5, baseTargetTime * 0.1); // Dynamic buffer, max 0.5s
+      const targetTime = Math.max(0, baseTargetTime - bufferTime);
+
+      // Validate target time is within video duration
+      const videoDuration = this.playerService.getDuration();
+      if (targetTime >= videoDuration) {
+        this.logger?.warn('Target time exceeds video duration', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: { 
+            subtitleId, 
+            targetTime, 
+            videoDuration,
+            segmentStartTime: baseTargetTime
+          },
+        });
+        this.showActionToast('Subtitle beyond video end', 'warning', 2000);
+        return;
+      }
+
+      // Perform the seek operation
+      this.playerService.seek(targetTime);
+
+      // Show success feedback with context information
+      const navigationDirection = targetTime > currentTime ? 'forward' : 'backward';
+      const timeDifference = Math.abs(targetTime - currentTime);
+      
+      this.showActionToast(
+        `Jumped ${navigationDirection} ${Math.round(timeDifference)}s`,
+        'success',
+        1500
+      );
+
+      // Emit navigation event with detailed information
+      this.emitEvent({
+        type: 'sentence_nav',
+        value: {
+          direction: navigationDirection,
+          fromTime: currentTime,
+          toTime: targetTime,
+          sentence: targetSentence.combinedText,
+          subtitleId: subtitleId,
+          bufferApplied: bufferTime,
+          segmentFound: !!targetSegment,
+          totalSentenceSegments: targetSentence.segments.length,
+        },
+        timestamp: Date.now(),
+      });
+
+      this.logger?.info('Successfully navigated to subtitle', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          subtitleId,
+          fromTime: currentTime,
+          toTime: targetTime,
+          bufferApplied: bufferTime,
+          sentence: targetSentence.combinedText.substring(0, 50) + '...',
+          navigationDirection,
+          timeDifference: Math.round(timeDifference * 100) / 100,
+        },
+      });
+
     } catch (error) {
       this.logger?.error('Failed to navigate to subtitle', {
         component: ComponentType.YOUTUBE_INTEGRATION,
         metadata: {
           subtitleId,
           error: error instanceof Error ? error.message : String(error),
+          currentTime: this.playerService.getCurrentTime(),
         },
       });
+      this.showActionToast('Navigation failed', 'error', 2000);
     }
   }
 
@@ -1854,6 +2002,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
   }
 
   private toggleVocabularyMode(): void {
+    console.log('[EnhancedPlaybackControls] toggleVocabularyMode() called - vocabulary highlighting mode'); // DEBUG
     this.vocabularyModeActive = !this.vocabularyModeActive;
     this.updateVocabularyDisplay();
 
@@ -1876,7 +2025,8 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     });
   }
 
-  private toggleVocabularyList(): void {
+  public toggleVocabularyList(): void {
+    console.log('[EnhancedPlaybackControls] toggleVocabularyList() called - vocabulary list visibility'); // DEBUG
     this.vocabularyListVisible = !this.vocabularyListVisible;
     this.updateVocabularyListDisplay();
 
@@ -1925,8 +2075,34 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     if (vocabListBtn) {
       if (this.vocabularyListVisible) {
         vocabListBtn.classList.add('active');
+        vocabListBtn.setAttribute('title', 'Hide Vocabulary List');
+        
+        // Show the vocabulary list with smooth animation
+        this.vocabularyListManager.show().then(() => {
+          this.logger?.debug('Vocabulary list shown successfully', {
+            component: ComponentType.YOUTUBE_INTEGRATION,
+          });
+        }).catch((error) => {
+          this.logger?.warn('Failed to show vocabulary list', {
+            component: ComponentType.YOUTUBE_INTEGRATION,
+            metadata: {
+              error: error instanceof Error ? error.message : String(error),
+            },
+          });
+          // Revert the state if showing failed
+          this.vocabularyListVisible = false;
+          vocabListBtn.classList.remove('active');
+          vocabListBtn.setAttribute('title', 'Show Vocabulary List');
+        });
       } else {
         vocabListBtn.classList.remove('active');
+        vocabListBtn.setAttribute('title', 'Show Vocabulary List');
+        
+        // Hide the vocabulary list with smooth animation
+        this.vocabularyListManager.hide();
+        this.logger?.debug('Vocabulary list hidden', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+        });
       }
     }
   }
@@ -2024,6 +2200,16 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       this.toggleVocabularyMode();
     });
 
+    // CRITICAL FIX: Add Ctrl+V/Cmd+V shortcut to toggle vocabulary list
+    this.keyboardShortcuts.set('Ctrl+KeyV', () => {
+      this.toggleVocabularyList();
+    });
+
+    // Mac support (Cmd+V maps to metaKey)
+    this.keyboardShortcuts.set('Meta+KeyV', () => {
+      this.toggleVocabularyList();
+    });
+
     this.keyboardShortcuts.set('KeyL', () => {
       this.toggleVocabularyList();
     });
@@ -2093,6 +2279,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     if (event.ctrlKey) shortcutKey += 'Ctrl+';
     if (event.altKey) shortcutKey += 'Alt+';
     if (event.shiftKey) shortcutKey += 'Shift+';
+    if (event.metaKey) shortcutKey += 'Meta+'; // Mac Cmd key support
 
     shortcutKey += event.code;
 
@@ -2101,6 +2288,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       this.keyboardShortcuts.get(shortcutKey) || this.keyboardShortcuts.get(event.code);
 
     if (handler) {
+      console.log('[EnhancedPlaybackControls] Keyboard shortcut triggered:', { shortcutKey, eventCode: event.code, key: event.key }); // DEBUG
       event.preventDefault();
       event.stopPropagation();
       handler();
@@ -2502,6 +2690,40 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
   }
 
   // ========================================
+  // Public Vocabulary List Management API
+  // ========================================
+
+  public isVocabularyListVisible(): boolean {
+    return this.vocabularyListVisible;
+  }
+
+  public async showVocabularyList(): Promise<boolean> {
+    try {
+      await this.vocabularyListManager.show();
+      this.vocabularyListVisible = true;
+      this.updateVocabularyListDisplay();
+      return true;
+    } catch (error) {
+      this.logger?.warn('Failed to show vocabulary list', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+      return false;
+    }
+  }
+
+  public hideVocabularyList(): void {
+    this.vocabularyListVisible = false;
+    this.updateVocabularyListDisplay();
+  }
+
+  public getVocabularyListManager(): VocabularyListManager {
+    return this.vocabularyListManager;
+  }
+
+  // ========================================
   // Public State Query API
   // ========================================
 
@@ -2601,11 +2823,11 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
         this.setVocabularyModeState(savedState.vocabularyMode);
       }
 
-      // Restore vocabulary list visibility
-      if (savedState.vocabularyListVisible !== this.vocabularyListVisible) {
-        this.vocabularyListVisible = savedState.vocabularyListVisible;
-        this.updateVocabularyListDisplay();
-      }
+      // DO NOT restore vocabulary list visibility - it should always start closed
+      // Users must explicitly open vocabulary list when they want it
+      // This prevents auto-opening vocabulary list when starting videos
+      this.vocabularyListVisible = false;
+      this.updateVocabularyListDisplay();
 
       // Restore loop if it exists and is valid
       if (savedState.loop && this.isValidLoopSegment(savedState.loop)) {
@@ -2891,6 +3113,291 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     if (this.fullscreenObserver) {
       this.fullscreenObserver.disconnect();
       this.fullscreenObserver = null;
+    }
+  }
+
+  // ========================================
+  // Enhanced Navigation for Vocabulary Integration
+  // ========================================
+
+  /**
+   * Get current video time for enhanced navigation calculations
+   */
+  public getCurrentVideoTime(): number {
+    try {
+      return this.playerService.getCurrentTime();
+    } catch (error) {
+      this.logger?.warn('Failed to get current video time', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: { error: error instanceof Error ? error.message : String(error) },
+      });
+      return 0;
+    }
+  }
+
+  /**
+   * Get video duration for enhanced navigation calculations
+   */
+  public getVideoDuration(): number {
+    try {
+      return this.playerService.getDuration();
+    } catch (error) {
+      this.logger?.warn('Failed to get video duration', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: { error: error instanceof Error ? error.message : String(error) },
+      });
+      return 300; // Fallback duration
+    }
+  }
+
+  /**
+   * Get current video ID for navigation validation
+   */
+  public getVideoId(): string | undefined {
+    try {
+      const url = new URL(window.location.href);
+      return url.searchParams.get('v') || undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * Enhanced subtitle navigation with sentence context and optional auto-loop
+   */
+  public jumpToSubtitleWithContext(subtitleId: string, options?: {
+    bufferTime?: number;
+    highlightDuration?: number;
+    enableAutoLoop?: boolean;
+  }): boolean {
+    try {
+      const { bufferTime = 0.5, highlightDuration = 2000, enableAutoLoop = false } = options || {};
+
+      if (!this.sentenceLoopingService || !this.isInitialized) {
+        this.logger?.warn('Sentence looping service not available for context navigation', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: { subtitleId },
+        });
+        return false;
+      }
+
+      const sentences = this.sentenceLoopingService.getAvailableSentences();
+      const targetSentence = sentences.find((sentence) =>
+        sentence.segments.some((segment) => segment.id === subtitleId),
+      );
+
+      if (!targetSentence || targetSentence.segments.length === 0) {
+        this.logger?.warn('Target sentence not found for context navigation', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: { subtitleId },
+        });
+        return false;
+      }
+
+      // Find the specific segment for precise timing
+      const targetSegment = targetSentence.segments.find((segment) => segment.id === subtitleId);
+      const baseTargetTime = targetSegment ? targetSegment.startTime : targetSentence.segments[0].startTime;
+      const targetTime = Math.max(0, baseTargetTime - bufferTime);
+
+      // Perform navigation
+      this.playerService.seek(targetTime);
+
+      // Provide enhanced visual feedback
+      this.showActionToast(
+        `Jumped to: "${targetSentence.combinedText.substring(0, 30)}..."`,
+        'success',
+        highlightDuration
+      );
+
+      // Emit vocabulary navigation event for cross-component coordination
+      this.emitEvent({
+        type: 'vocabulary_navigation',
+        value: {
+          subtitleId: subtitleId,
+          targetTime: targetTime,
+          bufferTime: bufferTime,
+          sentenceText: targetSentence.combinedText,
+          navigationMethod: 'subtitle_mapping',
+        },
+        timestamp: Date.now(),
+        metadata: {
+          enableAutoLoop: enableAutoLoop,
+          highlightDuration: highlightDuration,
+          segmentCount: targetSentence.segments.length,
+        },
+      });
+
+      // Emit subtitle highlight event for DualSubtitleManager
+      this.emitEvent({
+        type: 'subtitle_highlight',
+        value: {
+          subtitleId: subtitleId,
+          startTime: targetSentence.segments[0].startTime,
+          endTime: targetSentence.segments[targetSentence.segments.length - 1].endTime,
+          text: targetSentence.combinedText,
+          highlight: true,
+          duration: highlightDuration,
+        },
+        timestamp: Date.now(),
+        metadata: {
+          source: 'vocabulary_navigation',
+          bufferApplied: bufferTime,
+        },
+      });
+
+      this.logger?.info('Successfully navigated to subtitle with context', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          subtitleId,
+          targetTime,
+          bufferTime,
+          sentenceText: targetSentence.combinedText.substring(0, 50),
+          enableAutoLoop,
+        },
+      });
+
+      return true;
+    } catch (error) {
+      this.logger?.error('Failed to navigate to subtitle with context', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          subtitleId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+      return false;
+    }
+  }
+
+  /**
+   * Navigate to the sentence containing a specific vocabulary word
+   */
+  public jumpToVocabularyWord(word: string, options?: {
+    caseSensitive?: boolean;
+    wholeWord?: boolean;
+    bufferTime?: number;
+  }): boolean {
+    try {
+      const { caseSensitive = false, wholeWord = true, bufferTime = 0.5 } = options || {};
+
+      if (!this.sentenceLoopingService || !this.isInitialized) {
+        this.logger?.warn('Sentence looping service not available for vocabulary navigation', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: { word },
+        });
+        return false;
+      }
+
+      const sentences = this.sentenceLoopingService.getAvailableSentences();
+      
+      // Find sentence containing the vocabulary word
+      const targetSentence = sentences.find((sentence) => {
+        const text = caseSensitive ? sentence.combinedText : sentence.combinedText.toLowerCase();
+        const searchWord = caseSensitive ? word : word.toLowerCase();
+        
+        // CRITICAL FIX: Improve matching for Thai and other non-space-separated languages
+        if (wholeWord) {
+          // For Thai and similar languages, word boundaries (\b) don't work well
+          // Use a more flexible approach that works for both English and Thai
+          const isThai = /[\u0E00-\u0E7F]/.test(searchWord);
+          
+          if (isThai) {
+            // For Thai, just check if the word appears in the text (no word boundaries needed)
+            return text.includes(searchWord);
+          } else {
+            // For English and other space-separated languages, use word boundaries
+            const regex = new RegExp(`\\b${searchWord.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
+            return regex.test(text);
+          }
+        } else {
+          return text.includes(searchWord);
+        }
+      });
+
+      if (!targetSentence || targetSentence.segments.length === 0) {
+        // CRITICAL FIX: Enhanced debugging for failed word search
+        this.logger?.warn('No sentence found containing vocabulary word', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: { 
+            word, 
+            caseSensitive, 
+            wholeWord,
+            availableSentencesCount: sentences.length,
+            isThai: /[\u0E00-\u0E7F]/.test(word),
+            // Log first few sentences for debugging (truncated)
+            sampleSentences: sentences.slice(0, 3).map(s => s.combinedText.substring(0, 50) + '...'),
+          },
+        });
+        return false;
+      }
+
+      // Navigate to the sentence
+      const targetTime = Math.max(0, targetSentence.segments[0].startTime - bufferTime);
+      this.playerService.seek(targetTime);
+
+      // Show feedback
+      this.showActionToast(
+        `Found "${word}" in: "${targetSentence.combinedText.substring(0, 30)}..."`,
+        'success',
+        2500
+      );
+
+      // Emit vocabulary navigation event for cross-component coordination
+      this.emitEvent({
+        type: 'vocabulary_navigation',
+        value: {
+          vocabularyWord: word,
+          targetTime: targetTime,
+          bufferTime: bufferTime,
+          sentenceText: targetSentence.combinedText,
+          navigationMethod: 'word_search',
+        },
+        timestamp: Date.now(),
+        metadata: {
+          caseSensitive: caseSensitive,
+          wholeWord: wholeWord,
+          segmentCount: targetSentence.segments.length,
+        },
+      });
+
+      // Emit subtitle highlight event for the found sentence
+      this.emitEvent({
+        type: 'subtitle_highlight',
+        value: {
+          startTime: targetSentence.segments[0].startTime,
+          endTime: targetSentence.segments[targetSentence.segments.length - 1].endTime,
+          text: targetSentence.combinedText,
+          highlight: true,
+          duration: 2500,
+          vocabularyWord: word,
+        },
+        timestamp: Date.now(),
+        metadata: {
+          source: 'vocabulary_word_search',
+          searchOptions: { caseSensitive, wholeWord },
+          bufferApplied: bufferTime,
+        },
+      });
+
+      this.logger?.info('Successfully navigated to vocabulary word', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          word,
+          targetTime,
+          sentenceText: targetSentence.combinedText.substring(0, 50),
+        },
+      });
+
+      return true;
+    } catch (error) {
+      this.logger?.error('Failed to navigate to vocabulary word', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          word,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+      return false;
     }
   }
 }

@@ -15,6 +15,7 @@ import {
   KeyboardShortcuts,
   StorageSchema,
   STORAGE_CONFIG,
+  VocabularyListSettings,
 } from './types';
 
 // ========================================
@@ -75,12 +76,40 @@ export const DEFAULT_VOCABULARY_SETTINGS: VocabularySettings = {
 // ========================================
 
 export const DEFAULT_KEYBOARD_SHORTCUTS: KeyboardShortcuts = {
-  toggleSubtitles: 'KeyS',
+  toggleSubtitles: 'KeyC',
   slowDown: 'Comma',
   speedUp: 'Period',
   replay: 'KeyR',
-  saveWord: 'KeyW',
+  saveWord: 'KeyS',
   showDefinition: 'KeyD',
+  toggleVocabularyList: 'Ctrl+KeyV', // CRITICAL FIX: Add vocabulary list toggle shortcut
+};
+
+// ========================================
+// Default Vocabulary List Settings
+// ========================================
+
+export const DEFAULT_VOCABULARY_LIST_SETTINGS: VocabularyListSettings = {
+  sortBy: 'dateAdded',
+  sortOrder: 'desc',
+  filterBy: 'all',
+  viewMode: 'list',
+  panelSize: {
+    width: 400,
+    height: 600,
+  },
+  position: {
+    x: -1, // -1 means auto-position
+    y: -1, // -1 means auto-position
+  },
+  visibility: {
+    rememberState: false, // Don't persist visibility by default for better UX
+    lastVisible: false,
+  },
+  enableKeyboardNavigation: true,
+  showDefinitions: true,
+  showReviewCount: true,
+  autoFocusOnOpen: true,
 };
 
 // ========================================
@@ -93,6 +122,7 @@ export const DEFAULT_UI_SETTINGS: UISettings = {
   showTooltips: true,
   animationsEnabled: true,
   keyboardShortcuts: DEFAULT_KEYBOARD_SHORTCUTS,
+  vocabularyList: DEFAULT_VOCABULARY_LIST_SETTINGS, // CRITICAL FIX: Add vocabulary list defaults
 };
 
 // ========================================

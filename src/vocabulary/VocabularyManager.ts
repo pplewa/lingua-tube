@@ -5,6 +5,49 @@
 
 import { VocabularyItem, StorageResult, StorageEventType, storageService } from '../storage';
 
+// ========================================
+// Subtitle Mapping Types
+// ========================================
+
+/**
+ * Extended vocabulary item with subtitle mapping information
+ */
+export interface VocabularyItemWithSubtitle extends VocabularyItem {
+  readonly subtitleData?: VocabularySubtitleMapping;
+}
+
+/**
+ * Subtitle mapping data for vocabulary words
+ */
+export interface VocabularySubtitleMapping {
+  readonly subtitleId: string;
+  readonly startTime: number;
+  readonly endTime: number;
+  readonly sentenceText?: string;
+  readonly segmentIndex?: number;
+  readonly totalSegments?: number;
+  readonly videoPosition?: number; // percentage of video (0-100)
+}
+
+/**
+ * Vocabulary-to-subtitle lookup result
+ */
+export interface VocabularySubtitleLookup {
+  readonly vocabularyItem: VocabularyItemWithSubtitle;
+  readonly subtitleId: string;
+  readonly timestamp: number;
+  readonly context: string;
+}
+
+/**
+ * Subtitle-to-vocabulary lookup result
+ */
+export interface SubtitleVocabularyLookup {
+  readonly subtitleId: string;
+  readonly vocabularyWords: VocabularyItemWithSubtitle[];
+  readonly totalMatches: number;
+}
+
 /**
  * Vocabulary search and filter options
  */
@@ -123,6 +166,354 @@ export class VocabularyManager {
     };
 
     return await storageService.saveWord(vocabularyItem);
+  }
+
+  /**
+   * Save a word with subtitle mapping information
+   */
+  async saveWordWithSubtitle(
+    word: string,
+    translation: string,
+    context: string,
+    options: {
+      sourceLanguage: string;
+      targetLanguage: string;
+      videoId?: string;
+      videoTitle?: string;
+      timestamp?: number;
+      difficulty?: VocabularyItem['difficulty'];
+      subtitleData?: VocabularySubtitleMapping;
+    },
+  ): Promise<StorageResult<VocabularyItemWithSubtitle>> {
+    try {
+      // First save the vocabulary item normally
+      const saveResult = await this.saveWord(word, translation, context, {
+        sourceLanguage: options.sourceLanguage,
+        targetLanguage: options.targetLanguage,
+        videoId: options.videoId,
+        videoTitle: options.videoTitle,
+        timestamp: options.timestamp,
+        difficulty: options.difficulty,
+      });
+
+      if (!saveResult.success || !saveResult.data) {
+        return saveResult as StorageResult<VocabularyItemWithSubtitle>;
+      }
+
+      // Create extended item with subtitle data
+      const extendedItem: VocabularyItemWithSubtitle = {
+        ...saveResult.data,
+        subtitleData: options.subtitleData,
+      };
+
+      // Store subtitle mapping if provided
+      if (options.subtitleData) {
+        await this.storeSubtitleMapping(saveResult.data.id, options.subtitleData);
+      }
+
+      return {
+        success: true,
+        data: extendedItem,
+        timestamp: Date.now(),
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: {
+          code: 'UNKNOWN_ERROR' as any,
+          message: 'Failed to save word with subtitle data',
+          details: { error },
+          timestamp: Date.now(),
+        },
+        timestamp: Date.now(),
+      };
+    }
+  }
+
+  // ========================================
+  // Subtitle Mapping Operations
+  // ========================================
+
+  /**
+   * Store subtitle mapping for a vocabulary word
+   */
+  private async storeSubtitleMapping(
+    vocabularyId: string,
+    subtitleData: VocabularySubtitleMapping,
+  ): Promise<void> {
+    const mappingKey = `subtitle_mapping_${vocabularyId}`;
+    const mappingData = {
+      vocabularyId,
+      subtitleData,
+      createdAt: Date.now(),
+    };
+
+    await storageService.setCache(mappingKey, mappingData, 0); // Store permanently
+  }
+
+  /**
+   * Get subtitle mapping for a vocabulary word
+   */
+  private async getSubtitleMapping(vocabularyId: string): Promise<VocabularySubtitleMapping | null> {
+    try {
+      const mappingKey = `subtitle_mapping_${vocabularyId}`;
+      const result = await storageService.getCache<{
+        vocabularyId: string;
+        subtitleData: VocabularySubtitleMapping;
+        createdAt: number;
+      }>(mappingKey);
+
+      return result.success && result.data ? result.data.subtitleData : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Find vocabulary words associated with a specific subtitle ID
+   */
+  async getVocabularyBySubtitleId(subtitleId: string): Promise<StorageResult<SubtitleVocabularyLookup>> {
+    try {
+      const vocabulary = await this.getVocabularyCached();
+      const matchingWords: VocabularyItemWithSubtitle[] = [];
+
+      // Check each vocabulary word for subtitle mapping
+      for (const word of vocabulary) {
+        const subtitleData = await this.getSubtitleMapping(word.id);
+        if (subtitleData && subtitleData.subtitleId === subtitleId) {
+          matchingWords.push({
+            ...word,
+            subtitleData,
+          });
+        }
+      }
+
+      const lookupResult: SubtitleVocabularyLookup = {
+        subtitleId,
+        vocabularyWords: matchingWords,
+        totalMatches: matchingWords.length,
+      };
+
+      return {
+        success: true,
+        data: lookupResult,
+        timestamp: Date.now(),
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: {
+          code: 'UNKNOWN_ERROR' as any,
+          message: 'Failed to get vocabulary by subtitle ID',
+          details: { error, subtitleId },
+          timestamp: Date.now(),
+        },
+        timestamp: Date.now(),
+      };
+    }
+  }
+
+  /**
+   * Find subtitle segments associated with vocabulary words
+   */
+  async getSubtitlesByVocabularyWords(words: string[]): Promise<StorageResult<VocabularySubtitleLookup[]>> {
+    try {
+      const vocabulary = await this.getVocabularyCached();
+      const results: VocabularySubtitleLookup[] = [];
+
+      for (const searchWord of words) {
+        // Find vocabulary items matching the word
+        const matchingItems = vocabulary.filter(
+          (item) => item.word.toLowerCase() === searchWord.toLowerCase()
+        );
+
+        for (const item of matchingItems) {
+          const subtitleData = await this.getSubtitleMapping(item.id);
+          if (subtitleData) {
+            const lookupResult: VocabularySubtitleLookup = {
+              vocabularyItem: {
+                ...item,
+                subtitleData,
+              },
+              subtitleId: subtitleData.subtitleId,
+              timestamp: subtitleData.startTime,
+              context: item.context,
+            };
+            results.push(lookupResult);
+          }
+        }
+      }
+
+      return {
+        success: true,
+        data: results,
+        timestamp: Date.now(),
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: {
+          code: 'UNKNOWN_ERROR' as any,
+          message: 'Failed to get subtitles by vocabulary words',
+          details: { error, words },
+          timestamp: Date.now(),
+        },
+        timestamp: Date.now(),
+      };
+    }
+  }
+
+  /**
+   * Find vocabulary words within a time range
+   */
+  async getVocabularyByTimeRange(
+    startTime: number,
+    endTime: number,
+    videoId?: string,
+  ): Promise<StorageResult<VocabularyItemWithSubtitle[]>> {
+    try {
+      const vocabulary = await this.getVocabularyCached();
+      const matchingWords: VocabularyItemWithSubtitle[] = [];
+
+      for (const word of vocabulary) {
+        // Filter by video ID if specified
+        if (videoId && word.videoId !== videoId) {
+          continue;
+        }
+
+        const subtitleData = await this.getSubtitleMapping(word.id);
+        if (subtitleData) {
+          // Check if subtitle timing overlaps with the requested range
+          const wordStart = subtitleData.startTime;
+          const wordEnd = subtitleData.endTime;
+          
+          if (
+            (wordStart >= startTime && wordStart <= endTime) ||
+            (wordEnd >= startTime && wordEnd <= endTime) ||
+            (wordStart <= startTime && wordEnd >= endTime)
+          ) {
+            matchingWords.push({
+              ...word,
+              subtitleData,
+            });
+          }
+        }
+      }
+
+      // Sort by subtitle start time
+      matchingWords.sort((a, b) => {
+        const aTime = a.subtitleData?.startTime || 0;
+        const bTime = b.subtitleData?.startTime || 0;
+        return aTime - bTime;
+      });
+
+      return {
+        success: true,
+        data: matchingWords,
+        timestamp: Date.now(),
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: {
+          code: 'UNKNOWN_ERROR' as any,
+          message: 'Failed to get vocabulary by time range',
+          details: { error, startTime, endTime, videoId },
+          timestamp: Date.now(),
+        },
+        timestamp: Date.now(),
+      };
+    }
+  }
+
+  /**
+   * Get all vocabulary words with subtitle mappings
+   */
+  async getVocabularyWithSubtitles(videoId?: string): Promise<StorageResult<VocabularyItemWithSubtitle[]>> {
+    try {
+      const vocabulary = await this.getVocabularyCached();
+      const wordsWithSubtitles: VocabularyItemWithSubtitle[] = [];
+
+      for (const word of vocabulary) {
+        // Filter by video ID if specified
+        if (videoId && word.videoId !== videoId) {
+          continue;
+        }
+
+        const subtitleData = await this.getSubtitleMapping(word.id);
+        if (subtitleData) {
+          wordsWithSubtitles.push({
+            ...word,
+            subtitleData,
+          });
+        }
+      }
+
+      // Sort by subtitle start time
+      wordsWithSubtitles.sort((a, b) => {
+        const aTime = a.subtitleData?.startTime || 0;
+        const bTime = b.subtitleData?.startTime || 0;
+        return aTime - bTime;
+      });
+
+      return {
+        success: true,
+        data: wordsWithSubtitles,
+        timestamp: Date.now(),
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: {
+          code: 'UNKNOWN_ERROR' as any,
+          message: 'Failed to get vocabulary with subtitles',
+          details: { error, videoId },
+          timestamp: Date.now(),
+        },
+        timestamp: Date.now(),
+      };
+    }
+  }
+
+  /**
+   * Remove subtitle mapping when a vocabulary word is deleted
+   */
+  async removeWordWithSubtitleMapping(wordId: string): Promise<StorageResult<boolean>> {
+    try {
+      // Remove the vocabulary word
+      const removeWordResult = await storageService.removeWord(wordId);
+      
+      if (removeWordResult.success) {
+        // Remove the subtitle mapping
+        const mappingKey = `subtitle_mapping_${wordId}`;
+        await storageService.setCache(mappingKey, null, 0);
+        
+        return {
+          success: true,
+          data: true,
+          timestamp: Date.now(),
+        };
+      } else {
+        return {
+          success: false,
+          data: false,
+          error: removeWordResult.error,
+          timestamp: Date.now(),
+        };
+      }
+    } catch (error) {
+      return {
+        success: false,
+        data: false,
+        error: {
+          code: 'UNKNOWN_ERROR' as any,
+          message: 'Failed to remove word with subtitle mapping',
+          details: { error, wordId },
+          timestamp: Date.now(),
+        },
+        timestamp: Date.now(),
+      };
+    }
   }
 
   /**
