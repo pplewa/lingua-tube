@@ -35,6 +35,7 @@ export interface VocabularyListEvents {
   onWordSelect: (word: VocabularyItem) => void;
   onWordEdit: (word: VocabularyItem) => void;
   onWordDelete: (word: VocabularyItem) => void;
+  onWordNavigate?: (word: VocabularyItem) => void; // New navigation event
   onBulkAction: (action: string, words: VocabularyItem[]) => void;
   onSearchChange: (query: string) => void;
   onFilterChange: (filters: any) => void;
@@ -335,6 +336,126 @@ const VOCABULARY_LIST_STYLES = `
     font-size: 16px;
     font-weight: 600;
     color: #2d3748;
+    margin-bottom: 4px;
+    cursor: pointer; /* Make word clickable */
+    transition: all 0.2s ease;
+    padding: 4px 8px;
+    border-radius: 4px;
+    display: inline-block;
+  }
+
+  .item-word:hover {
+    background-color: #e2e8f0;
+    color: #1a365d;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  .item-word:active {
+    transform: translateY(0);
+    background-color: #cbd5e0;
+  }
+
+  .vocabulary-navigation-highlight {
+    background-color: #fbbf24 !important;
+    color: #1f2937 !important;
+    box-shadow: 0 0 0 2px #fbbf24, 0 4px 8px rgba(251, 191, 36, 0.3) !important;
+    transform: translateY(-1px) !important;
+    animation: vocabulary-highlight-pulse 0.6s ease-in-out;
+  }
+
+  @keyframes vocabulary-highlight-pulse {
+    0% {
+      box-shadow: 0 0 0 2px #fbbf24, 0 4px 8px rgba(251, 191, 36, 0.3);
+      transform: translateY(-1px) scale(1);
+    }
+    50% {
+      box-shadow: 0 0 0 4px #fbbf24, 0 6px 12px rgba(251, 191, 36, 0.4);
+      transform: translateY(-2px) scale(1.02);
+    }
+    100% {
+      box-shadow: 0 0 0 2px #fbbf24, 0 4px 8px rgba(251, 191, 36, 0.3);
+      transform: translateY(-1px) scale(1);
+    }
+  }
+
+  /* ========================================
+   * YouTube Player Mode Adaptations
+   * ======================================== */
+
+  .vocabulary-list-manager-container.fullscreenmode .vocabulary-list-container {
+    max-width: 35vw;
+    max-height: 90vh;
+    font-size: 14px;
+  }
+
+  .vocabulary-list-manager-container.fullscreenmode .vocabulary-header {
+    padding: 12px 16px;
+  }
+
+  .vocabulary-list-manager-container.fullscreenmode .vocabulary-title {
+    font-size: 16px;
+  }
+
+  .vocabulary-list-manager-container.fullscreenmode .item-height {
+    min-height: 70px;
+  }
+
+  .vocabulary-list-manager-container.theatermode .vocabulary-list-container {
+    max-width: 400px;
+    max-height: 80vh;
+  }
+
+  .vocabulary-list-manager-container.theatermode .vocabulary-header {
+    padding: 14px 18px;
+  }
+
+  .vocabulary-list-manager-container.miniplayermode .vocabulary-list-container {
+    max-width: 350px;
+    max-height: 400px;
+    font-size: 13px;
+  }
+
+  .vocabulary-list-manager-container.miniplayermode .vocabulary-header {
+    padding: 10px 14px;
+  }
+
+  .vocabulary-list-manager-container.miniplayermode .vocabulary-title {
+    font-size: 16px;
+  }
+
+  .vocabulary-list-manager-container.miniplayermode .item-height {
+    min-height: 65px;
+  }
+
+  .vocabulary-list-manager-container.miniplayermode .search-input,
+  .vocabulary-list-manager-container.miniplayermode .filter-select {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  .vocabulary-list-manager-container.defaultmode .vocabulary-list-container {
+    max-width: 400px;
+    max-height: 600px;
+  }
+
+  /* Responsive adjustments for different screen sizes */
+  @media (max-width: 1200px) {
+    .vocabulary-list-manager-container.theatermode .vocabulary-list-container,
+    .vocabulary-list-manager-container.defaultmode .vocabulary-list-container {
+      max-width: 350px;
+    }
+  }
+
+  @media (max-width: 900px) {
+    .vocabulary-list-manager-container .vocabulary-list-container {
+      max-width: 320px;
+      font-size: 13px;
+    }
+    
+    .vocabulary-list-manager-container .vocabulary-header {
+      padding: 12px 14px;
+    }
   }
 
   .item-translation {
@@ -446,22 +567,6 @@ const VOCABULARY_LIST_STYLES = `
   .close-button:hover {
     color: #718096;
   }
-
-  @media (max-width: 768px) {
-    .vocabulary-controls {
-      flex-direction: column;
-      align-items: stretch;
-    }
-    
-    .search-container {
-      min-width: auto;
-    }
-    
-    .item-meta {
-      flex-direction: column;
-      gap: 4px;
-    }
-  }
 `;
 
 // ========================================
@@ -501,6 +606,36 @@ export class VocabularyListComponent {
     this.vocabularyObserver = VocabularyObserver.getInstance();
 
     this.setupEventListeners();
+    this.setupVideoChangeListener();
+  }
+
+  /**
+   * Set up listener for video changes to refresh vocabulary list
+   */
+  private setupVideoChangeListener(): void {
+    let currentVideoId = this.getCurrentVideoId();
+    
+    // Listen for URL changes (YouTube navigation)
+    const checkVideoChange = () => {
+      const newVideoId = this.getCurrentVideoId();
+      if (newVideoId !== currentVideoId) {
+        this.logger?.debug('Video changed, refreshing vocabulary list', {
+          component: ComponentType.WORD_LOOKUP,
+          metadata: {
+            oldVideoId: currentVideoId,
+            newVideoId: newVideoId,
+          },
+        });
+        currentVideoId = newVideoId;
+        this.loadVocabulary(); // Refresh with new video filter
+      }
+    };
+    
+    // Check for video changes every 2 seconds
+    setInterval(checkVideoChange, 2000);
+    
+    // Also listen for popstate events (back/forward navigation)
+    window.addEventListener('popstate', checkVideoChange);
   }
 
   // ========================================
@@ -645,7 +780,13 @@ export class VocabularyListComponent {
         action: 'vocabulary_load_start',
       });
 
-      const result = await this.vocabularyManager.getVocabulary();
+      // CRITICAL FIX: Get current video ID for filtering
+      const currentVideoId = this.getCurrentVideoId();
+      
+      // Apply video filter if we have a current video ID
+      const filters = currentVideoId ? { videoId: currentVideoId } : undefined;
+      
+      const result = await this.vocabularyManager.getVocabulary(filters);
       
       this.logger?.debug('Vocabulary manager returned result', {
         component: ComponentType.WORD_LOOKUP,
@@ -654,6 +795,8 @@ export class VocabularyListComponent {
           hasData: !!result.data,
           dataLength: result.data?.length || 0,
           error: result.error?.message,
+          currentVideoId: currentVideoId,
+          filteredByVideo: !!currentVideoId,
         },
       });
 
@@ -669,6 +812,8 @@ export class VocabularyListComponent {
           component: ComponentType.WORD_LOOKUP,
           metadata: {
             wordCount: this.state.words.length,
+            currentVideoId: currentVideoId,
+            filteredByVideo: !!currentVideoId,
           },
         });
       } else {
@@ -698,6 +843,18 @@ export class VocabularyListComponent {
           error: errorMsg,
         },
       });
+    }
+  }
+
+  /**
+   * Get current video ID from URL for filtering vocabulary by current video
+   */
+  private getCurrentVideoId(): string | null {
+    try {
+      const url = new URL(window.location.href);
+      return url.searchParams.get('v');
+    } catch {
+      return null;
     }
   }
 
@@ -808,15 +965,18 @@ export class VocabularyListComponent {
     const totalWords = this.state.words.length;
     const filteredWords = this.state.filteredWords.length;
     const selectedCount = this.state.selectedWords.size;
+    const currentVideoId = this.getCurrentVideoId();
+    const isFilteredByVideo = !!currentVideoId;
 
     return `
       <div class="vocabulary-header">
         <h3 class="vocabulary-title">
           <span class="drag-handle" title="Drag to move">⋮⋮</span>
-          Vocabulary List
+          Vocabulary List${isFilteredByVideo ? ' - Current Video' : ''}
           <span class="vocabulary-stats">
             ${filteredWords}${totalWords !== filteredWords ? ` of ${totalWords}` : ''} words
             ${selectedCount > 0 ? ` • ${selectedCount} selected` : ''}
+            ${isFilteredByVideo ? ' • 📺' : ''}
           </span>
           <button class="close-button" data-action="close" title="Close (you can reopen from playback controls)">×</button>
         </h3>
@@ -947,9 +1107,17 @@ export class VocabularyListComponent {
     }
 
     if (this.state.filteredWords.length === 0) {
+      const currentVideoId = this.getCurrentVideoId();
+      const isFilteredByVideo = !!currentVideoId;
+      
       return `
         <div class="empty-state">
-          ${this.state.searchQuery ? 'No words match your search.' : 'No vocabulary words yet.'}
+          ${this.state.searchQuery 
+            ? 'No words match your search.' 
+            : isFilteredByVideo 
+              ? 'No vocabulary words found for this video.<br>Words will appear here as you add them.' 
+              : 'No vocabulary words yet.<br>Start learning to see your saved words here.'
+          }
         </div>
       `;
     }
@@ -987,7 +1155,12 @@ export class VocabularyListComponent {
             : ''
         }
         <div class="item-content">
-          <div class="item-word">${this.escapeHtml(word.word)}</div>
+          <div class="item-word" 
+               data-action="navigate" 
+               data-word-id="${word.id}"
+               title="Click to jump to subtitle">
+            ${this.escapeHtml(word.word)}
+          </div>
           <div class="item-translation">${this.escapeHtml(word.translation)}</div>
           <div class="item-meta">
             <span>Added: ${dateAdded}</span>
@@ -1085,6 +1258,20 @@ export class VocabularyListComponent {
       case 'close':
         // Emit close event for the manager to handle
         this.events.onWordSelect?.({ id: 'close', word: 'close' } as any);
+        break;
+      case 'navigate':
+        if (word) {
+          this.logger?.info('Vocabulary word clicked for navigation', {
+            component: ComponentType.WORD_LOOKUP,
+            metadata: {
+              word: word.word,
+              wordId: word.id,
+              videoId: word.videoId,
+              timestamp: word.timestamp,
+            },
+          });
+          this.events.onWordNavigate?.(word);
+        }
         break;
       case 'edit':
         if (word) this.events.onWordEdit?.(word);
@@ -1298,9 +1485,17 @@ export class VocabularyListComponent {
     }
 
     if (this.state.filteredWords.length === 0) {
+      const currentVideoId = this.getCurrentVideoId();
+      const isFilteredByVideo = !!currentVideoId;
+      
       return `
         <div class="empty-state">
-          ${this.state.searchQuery ? 'No words match your search.' : 'No vocabulary words yet.'}
+          ${this.state.searchQuery 
+            ? 'No words match your search.' 
+            : isFilteredByVideo 
+              ? 'No vocabulary words found for this video.<br>Words will appear here as you add them.' 
+              : 'No vocabulary words yet.<br>Start learning to see your saved words here.'
+          }
         </div>
       `;
     }

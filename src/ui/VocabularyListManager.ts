@@ -8,10 +8,12 @@ import {
   VocabularyListConfig,
   VocabularyListEvents,
 } from './VocabularyListComponent';
-import { VocabularyManager } from '../vocabulary/VocabularyManager';
+import { VocabularyManager, VocabularyItemWithSubtitle } from '../vocabulary/VocabularyManager';
 import { VocabularyItem } from '../storage/types';
 import { Logger } from '../logging/Logger';
 import { ComponentType } from '../logging/types';
+import { EnhancedPlaybackControlsAPI, ControlsEventData } from './EnhancedPlaybackControlsComponent';
+import { DualSubtitleManager } from './DualSubtitleManager';
 
 // ========================================
 // Types and Interfaces
@@ -34,6 +36,31 @@ export interface ManagerState {
   readonly isInitialized: boolean;
   readonly currentContainer: HTMLElement | null;
   readonly activeComponent: VocabularyListComponent | null;
+}
+
+// ========================================
+// Enhanced YouTube Player Context Types
+// ========================================
+
+export interface PlayerModeInfo {
+  readonly mode: 'default' | 'theater' | 'fullscreen' | 'mini-player';
+  readonly dimensions: {
+    readonly width: number;
+    readonly height: number;
+    readonly top: number;
+    readonly left: number;
+  };
+  readonly controls: {
+    readonly bottom: number;
+    readonly top: number;
+  };
+}
+
+export interface YouTubeUIElement {
+  readonly rect: DOMRect;
+  readonly priority: number;
+  readonly type: 'player' | 'controls' | 'sidebar' | 'header' | 'other';
+  readonly mode?: string;
 }
 
 // ========================================
@@ -80,11 +107,15 @@ export class VocabularyListManager {
   private clickOutsideHandler: ((event: Event) => void) | null = null;
   private resizeHandler: ((event: Event) => void) | null = null;
   private customWordSelectHandler: ((word: VocabularyItem) => void) | null = null;
+  private enhancedPlaybackControls: EnhancedPlaybackControlsAPI | null = null;
+  private dualSubtitleManager: DualSubtitleManager | null = null;
   private readonly logger = Logger.getInstance();
+  private playerStateListeners: Array<() => void> = [];
 
   private constructor(config: Partial<VocabularyListManagerConfig> = {}) {
     this.config = { ...DEFAULT_MANAGER_CONFIG, ...config };
     this.vocabularyManager = VocabularyManager.getInstance();
+    this.setupPlayerStateListeners();
   }
 
   /**
@@ -139,18 +170,41 @@ export class VocabularyListManager {
    */
   public async show(container?: HTMLElement): Promise<void> {
     try {
-      // REAL FIX: Work with ContentScript's container system properly
-      const targetContainer = container || this.createContainer();
-      
-      // If we already have a component and the same container, just make it visible
-      if (this.state.activeComponent && this.state.currentContainer === targetContainer) {
-        if (targetContainer.style.display === 'none') {
-          targetContainer.style.display = 'block';
-        }
-        this.state = { ...this.state, isVisible: true };
+      // CRITICAL FIX: Prevent multiple instances by checking for existing active component
+      if (this.state.isVisible && this.state.activeComponent && this.state.currentContainer) {
+        this.logger?.info('Vocabulary list already visible, bringing to front', {
+          component: ComponentType.WORD_LOOKUP,
+        });
+        // Just ensure it's visible and bring to front
+        this.state.currentContainer.style.display = 'block';
+        this.state.currentContainer.style.zIndex = '2147483647';
         return;
       }
 
+      // CRITICAL FIX: Clean up any existing instances before creating new one
+      if (this.state.activeComponent && this.state.currentContainer) {
+        this.state.activeComponent.destroy();
+        if (this.state.currentContainer.parentNode) {
+          this.state.currentContainer.parentNode.removeChild(this.state.currentContainer);
+        }
+        this.state = {
+          ...this.state,
+          activeComponent: null,
+          currentContainer: null,
+        };
+      }
+
+      // CRITICAL FIX: Remove any existing vocabulary containers from DOM
+      const existingContainers = document.querySelectorAll('.vocabulary-list-manager-container, [id*="vocabulary"], .vocabulary-list-host');
+      existingContainers.forEach(el => {
+        if (el.parentNode) {
+          el.parentNode.removeChild(el);
+        }
+      });
+
+      // Use provided container or create new one
+      const targetContainer = container || this.createContainer();
+      
       // Create and initialize component
       const component = new VocabularyListComponent(this.config.listConfig);
       this.setupComponentEvents(component);
@@ -172,6 +226,7 @@ export class VocabularyListManager {
         metadata: {
           position: this.config.position,
           hasContainer: !!container,
+          isNewContainer: !container,
         },
       });
     } catch (error) {
@@ -193,26 +248,40 @@ export class VocabularyListManager {
     if (!this.state.isVisible) return;
 
     try {
-      // REAL FIX: Don't destroy the component if using ContentScript's container
-      // Just hide it so we can reopen properly
+      // CRITICAL FIX: Always destroy the component and remove container completely
+      if (this.state.activeComponent) {
+        this.state.activeComponent.destroy();
+      }
+
       if (this.state.currentContainer) {
-        if (this.state.currentContainer.id === 'linguatube-vocabulary-list-container') {
-          // This is ContentScript's container - just hide it
-          this.state.currentContainer.style.display = 'none';
-        } else {
-          // This is our popup container - remove it  
-          if (this.state.activeComponent) {
-            this.state.activeComponent.destroy();
-          }
-          document.body.removeChild(this.state.currentContainer);
-          this.state = { ...this.state, currentContainer: null, activeComponent: null };
+        if (this.state.currentContainer.parentNode) {
+          this.state.currentContainer.parentNode.removeChild(this.state.currentContainer);
+        }
+        
+        // Clean up drag handlers if they exist
+        if ((this.state.currentContainer as any)._dragCleanup) {
+          (this.state.currentContainer as any)._dragCleanup();
         }
       }
 
-      this.removeContainerInteractions();
-      this.state = { ...this.state, isVisible: false };
+      // CRITICAL FIX: Also remove any lingering vocabulary containers from DOM
+      const allVocabContainers = document.querySelectorAll('.vocabulary-list-manager-container, .vocabulary-list-host, [id*="vocabulary"]');
+      allVocabContainers.forEach(el => {
+        if (el.parentNode) {
+          el.parentNode.removeChild(el);
+        }
+      });
 
-      this.logger?.info('Vocabulary list hidden', {
+      this.removeContainerInteractions();
+      
+      this.state = { 
+        ...this.state, 
+        isVisible: false,
+        currentContainer: null,
+        activeComponent: null,
+      };
+
+      this.logger?.info('Vocabulary list hidden and cleaned up', {
         component: ComponentType.WORD_LOOKUP,
       });
     } catch (error) {
@@ -284,6 +353,375 @@ export class VocabularyListManager {
     };
     VocabularyListManager.instance = null;
   }
+
+  // ========================================
+  // Public Communication Methods
+  // ========================================
+
+  /**
+   * Set a custom handler for word selection events
+   */
+  public setWordSelectHandler(handler: (word: VocabularyItem) => void): void {
+    this.customWordSelectHandler = handler;
+  }
+
+  /**
+   * Set the Enhanced Playback Controls reference for navigation
+   */
+  public setEnhancedPlaybackControls(controls: EnhancedPlaybackControlsAPI): void {
+    this.enhancedPlaybackControls = controls;
+    this.logger?.info('Enhanced Playback Controls connected to vocabulary manager', {
+      component: ComponentType.WORD_LOOKUP,
+      metadata: {
+        controlsReady: controls.isReady(),
+      },
+    });
+  }
+
+  /**
+   * Set the Dual Subtitle Manager reference for subtitle synchronization
+   */
+  public setDualSubtitleManager(manager: DualSubtitleManager): void {
+    this.dualSubtitleManager = manager;
+    this.logger?.info('Dual Subtitle Manager connected to vocabulary manager', {
+      component: ComponentType.WORD_LOOKUP,
+      metadata: {
+        managerReady: manager.isReady(),
+      },
+    });
+  }
+
+  /**
+   * Set up cross-component event listening for state synchronization
+   */
+  public setupCrossComponentSync(): void {
+    if (!this.enhancedPlaybackControls) {
+      this.logger?.warn('Enhanced Playback Controls not available for cross-component sync', {
+        component: ComponentType.WORD_LOOKUP,
+      });
+      return;
+    }
+
+    // Listen to Enhanced Playback Controls events for state synchronization
+    this.enhancedPlaybackControls.addEventListener((event: ControlsEventData) => {
+      this.handlePlaybackControlEvent(event);
+    });
+
+    this.logger?.info('Cross-component synchronization setup completed', {
+      component: ComponentType.WORD_LOOKUP,
+      metadata: {
+        hasEnhancedControls: !!this.enhancedPlaybackControls,
+        hasDualSubtitleManager: !!this.dualSubtitleManager,
+      },
+    });
+  }
+
+  /**
+   * Handle events from Enhanced Playback Controls for state synchronization
+   */
+  private handlePlaybackControlEvent(event: ControlsEventData): void {
+    try {
+      switch (event.type) {
+        case 'vocabulary_navigation':
+          this.handleVocabularyNavigationEvent(event);
+          break;
+
+        case 'subtitle_highlight':
+          this.handleSubtitleHighlightEvent(event);
+          break;
+
+        case 'vocabulary_mode':
+          this.handleVocabularyModeEvent(event);
+          break;
+
+        case 'sentence_nav':
+          this.handleSentenceNavigationEvent(event);
+          break;
+
+        default:
+          // Log other events for debugging but don't process them
+          this.logger?.debug('Received playback control event', {
+            component: ComponentType.WORD_LOOKUP,
+            metadata: {
+              eventType: event.type,
+              timestamp: event.timestamp,
+            },
+          });
+          break;
+      }
+    } catch (error) {
+      this.logger?.error('Error handling playback control event', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: {
+          eventType: event.type,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+    }
+  }
+
+  /**
+   * Handle vocabulary navigation events for highlighting synchronization
+   */
+  private handleVocabularyNavigationEvent(event: ControlsEventData): void {
+    this.logger?.info('Processing vocabulary navigation event for highlighting sync', {
+      component: ComponentType.WORD_LOOKUP,
+      metadata: {
+        navigationMethod: event.value?.navigationMethod,
+        hasSubtitleId: !!event.value?.subtitleId,
+        hasVocabularyWord: !!event.value?.vocabularyWord,
+      },
+    });
+
+    // Update vocabulary list highlighting if a word was navigated to
+    if (event.value?.vocabularyWord && this.state.activeComponent) {
+      // Highlight the vocabulary word in the list (async call)
+      this.highlightVocabularyWord(event.value.vocabularyWord, true).catch((error) => {
+        this.logger?.warn('Failed to highlight vocabulary word during navigation', {
+          component: ComponentType.WORD_LOOKUP,
+          metadata: {
+            word: event.value?.vocabularyWord,
+            error: error instanceof Error ? error.message : String(error),
+          },
+        });
+      });
+    }
+
+    // Coordinate with dual subtitle manager if available
+    if (this.dualSubtitleManager && event.value?.subtitleId) {
+      this.coordinateWithSubtitleManager(event.value.subtitleId, event.value.sentenceText);
+    }
+  }
+
+  /**
+   * Handle subtitle highlight events for visual synchronization
+   */
+  private handleSubtitleHighlightEvent(event: ControlsEventData): void {
+    this.logger?.info('Processing subtitle highlight event for visual sync', {
+      component: ComponentType.WORD_LOOKUP,
+      metadata: {
+        hasSubtitleId: !!event.value?.subtitleId,
+        highlightDuration: event.value?.duration,
+        source: event.metadata?.source,
+      },
+    });
+
+    // Update subtitle highlighting if dual subtitle manager is available
+    if (this.dualSubtitleManager) {
+      this.coordinateWithSubtitleManager(
+        event.value?.subtitleId,
+        event.value?.text,
+        event.value?.highlight,
+        event.value?.duration
+      );
+    }
+  }
+
+  /**
+   * Handle vocabulary mode events for state synchronization
+   */
+  private handleVocabularyModeEvent(event: ControlsEventData): void {
+    const vocabularyModeEnabled = !!event.value;
+    
+    this.logger?.info('Processing vocabulary mode event for state sync', {
+      component: ComponentType.WORD_LOOKUP,
+      metadata: {
+        vocabularyModeEnabled,
+        currentlyVisible: this.state.isVisible,
+      },
+    });
+
+    // Auto-show vocabulary list when vocabulary mode is enabled
+    if (vocabularyModeEnabled && !this.state.isVisible) {
+      this.show().catch((error) => {
+        this.logger?.warn('Failed to auto-show vocabulary list on vocabulary mode enable', {
+          component: ComponentType.WORD_LOOKUP,
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        });
+      });
+    }
+
+    // Coordinate with dual subtitle manager for vocabulary highlighting
+    if (this.dualSubtitleManager) {
+      this.coordinateWithSubtitleManager(null, null, vocabularyModeEnabled);
+    }
+  }
+
+  /**
+   * Handle sentence navigation events for context awareness
+   */
+  private handleSentenceNavigationEvent(event: ControlsEventData): void {
+    this.logger?.info('Processing sentence navigation event for context sync', {
+      component: ComponentType.WORD_LOOKUP,
+      metadata: {
+        direction: event.value?.direction,
+        hasSubtitleId: !!event.value?.subtitleId,
+        hasSentence: !!event.value?.sentence,
+      },
+    });
+
+    // Update vocabulary list context if available
+    if (event.value?.sentence && this.state.activeComponent) {
+      // Could implement sentence-based vocabulary filtering here
+      this.updateVocabularyContext(event.value.sentence);
+    }
+  }
+
+  /**
+   * Coordinate with dual subtitle manager for highlighting and state sync
+   */
+  private coordinateWithSubtitleManager(
+    subtitleId?: string | null,
+    text?: string | null,
+    highlight?: boolean,
+    duration?: number
+  ): void {
+    if (!this.dualSubtitleManager) return;
+
+    try {
+      // Use the available methods from DualSubtitleManager
+      const subtitleComponent = this.dualSubtitleManager.getSubtitleComponent();
+      
+      if (subtitleComponent && highlight !== undefined) {
+        // Highlight vocabulary words in subtitle if we have text
+        if (text && highlight) {
+          // Extract vocabulary words from the sentence and highlight them
+          this.highlightVocabularyWordsInSubtitle(text);
+        }
+      }
+
+      this.logger?.debug('Coordinated with dual subtitle manager', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: {
+          hasSubtitleComponent: !!subtitleComponent,
+          subtitleId,
+          highlight,
+          duration,
+        },
+      });
+    } catch (error) {
+      this.logger?.warn('Failed to coordinate with dual subtitle manager', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+    }
+  }
+
+  /**
+   * Highlight a specific vocabulary word in the vocabulary list
+   */
+  private async highlightVocabularyWord(word: string, highlight: boolean): Promise<void> {
+    if (!this.state.activeComponent) {
+      this.logger?.debug('No active vocabulary component for word highlighting', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: { word, highlight },
+      });
+      return;
+    }
+
+    try {
+      // Get the words from the vocabulary manager
+      const componentWords = await this.vocabularyManager.getVocabulary();
+      if (!componentWords.success || !componentWords.data) {
+        this.logger?.debug('No vocabulary words available for highlighting', {
+          component: ComponentType.WORD_LOOKUP,
+          metadata: { word, highlight },
+        });
+        return;
+      }
+
+      // Find the vocabulary word in the current list
+      const vocabularyWord = componentWords.data.find(
+        (item: VocabularyItem) => item.word.toLowerCase() === word.toLowerCase()
+      );
+
+      if (vocabularyWord) {
+        // Apply or remove highlighting by updating the component's word list
+        const wordElement = document.querySelector(
+          `[data-word-id="${vocabularyWord.id}"] .item-word`
+        );
+
+        if (wordElement) {
+          if (highlight) {
+            wordElement.classList.add('vocabulary-navigation-highlight');
+            // Remove the highlight after a brief period
+            setTimeout(() => {
+              wordElement.classList.remove('vocabulary-navigation-highlight');
+            }, 2500);
+          } else {
+            wordElement.classList.remove('vocabulary-navigation-highlight');
+          }
+
+          this.logger?.debug('Applied vocabulary word highlighting', {
+            component: ComponentType.WORD_LOOKUP,
+            metadata: { 
+              word: vocabularyWord.word, 
+              wordId: vocabularyWord.id, 
+              highlight,
+              elementFound: true 
+            },
+          });
+        } else {
+          this.logger?.debug('Word element not found for highlighting', {
+            component: ComponentType.WORD_LOOKUP,
+            metadata: { 
+              word: vocabularyWord.word, 
+              wordId: vocabularyWord.id, 
+              highlight 
+            },
+          });
+        }
+      } else {
+        this.logger?.debug('Vocabulary word not found in current list', {
+          component: ComponentType.WORD_LOOKUP,
+          metadata: { 
+            word, 
+            highlight, 
+            totalWords: componentWords.data.length 
+          },
+        });
+      }
+    } catch (error) {
+      this.logger?.warn('Error highlighting vocabulary word', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: {
+          word,
+          highlight,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+    }
+  }
+
+  /**
+   * Update vocabulary context based on current sentence
+   */
+  private updateVocabularyContext(sentence: string): void {
+    // This could implement context-aware vocabulary filtering
+    this.logger?.debug('Updating vocabulary context', {
+      component: ComponentType.WORD_LOOKUP,
+      metadata: { sentenceLength: sentence.length },
+    });
+  }
+
+  /**
+   * Highlight vocabulary words found in the subtitle text
+   */
+  private highlightVocabularyWordsInSubtitle(text: string): void {
+    // This would coordinate with DualSubtitleComponent to highlight known vocabulary
+    this.logger?.debug('Highlighting vocabulary words in subtitle', {
+      component: ComponentType.WORD_LOOKUP,
+      metadata: { textLength: text.length },
+    });
+  }
+
+  // ========================================
+  // Core VocabularyListManager Methods (Existing)
+  // ========================================
 
   // ========================================
   // Private Methods
@@ -468,41 +906,130 @@ export class VocabularyListManager {
   }
 
   private positionPopup(container: HTMLElement): void {
-    // Smart positioning to avoid YouTube UI elements
-    const youtubeElements = this.getYouTubeUIElements();
-    const viewport = { width: window.innerWidth, height: window.innerHeight };
+    const playerInfo = this.getPlayerModeInfo();
+    const containerWidth = 400; // Default vocabulary list width
+    const containerHeight = 600; // Default vocabulary list height
 
-    // Default center position
-    let x = viewport.width / 2;
-    let y = viewport.height / 2;
+    this.logger?.debug('Positioning vocabulary list with player context', {
+      component: ComponentType.WORD_LOOKUP,
+      metadata: {
+        playerMode: playerInfo.mode,
+        playerDimensions: playerInfo.dimensions,
+      },
+    });
 
-    // Adjust if overlapping with YouTube UI
-    for (const element of youtubeElements) {
-      const rect = element.rect;
-      const centerX = viewport.width / 2;
-      const centerY = viewport.height / 2;
+    let x: number, y: number;
 
-      if (
-        centerX >= rect.left &&
-        centerX <= rect.right &&
-        centerY >= rect.top &&
-        centerY <= rect.bottom
-      ) {
-        // Move to avoid overlap
-        if (rect.left > viewport.width / 3) {
-          x = rect.left - 220; // Position to the left
-        } else if (rect.right < (2 * viewport.width) / 3) {
-          x = rect.right + 20; // Position to the right
+    switch (playerInfo.mode) {
+      case 'fullscreen':
+        // In fullscreen, position on the right side with margin from controls
+        x = window.innerWidth - containerWidth - 20;
+        y = (window.innerHeight - containerHeight) / 2;
+        break;
+
+      case 'theater':
+        // In theater mode, position to the right of the player
+        x = Math.min(
+          playerInfo.dimensions.left + playerInfo.dimensions.width + 20,
+          window.innerWidth - containerWidth - 20
+        );
+        y = Math.max(
+          playerInfo.dimensions.top,
+          (window.innerHeight - containerHeight) / 2
+        );
+        break;
+
+      case 'mini-player':
+        // For mini-player, position in a non-interfering location
+        x = Math.max(20, playerInfo.dimensions.left - containerWidth - 20);
+        y = Math.max(20, playerInfo.dimensions.top);
+        break;
+
+      case 'default':
+      default:
+        // Default mode: position to the right of the player or below if no space
+        const spaceRight = window.innerWidth - (playerInfo.dimensions.left + playerInfo.dimensions.width);
+        
+        if (spaceRight >= containerWidth + 40) {
+          // Position to the right of the player
+          x = playerInfo.dimensions.left + playerInfo.dimensions.width + 20;
+          y = Math.max(
+            playerInfo.dimensions.top,
+            (window.innerHeight - containerHeight) / 2
+          );
         } else {
-          y = rect.top - 300; // Position above
+          // Position below the player if not enough space on the right
+          x = Math.max(20, Math.min(
+            playerInfo.dimensions.left,
+            window.innerWidth - containerWidth - 20
+          ));
+          y = Math.min(
+            playerInfo.dimensions.top + playerInfo.dimensions.height + 20,
+            window.innerHeight - containerHeight - 20
+          );
         }
         break;
-      }
     }
 
-    container.style.left = `${Math.max(20, Math.min(x - 200, viewport.width - 420))}px`;
-    container.style.top = `${Math.max(20, Math.min(y - 250, viewport.height - 520))}px`;
+    // Apply boundary constraints
+    x = Math.max(20, Math.min(x, window.innerWidth - containerWidth - 20));
+    y = Math.max(20, Math.min(y, window.innerHeight - containerHeight - 20));
+
+    // Apply the calculated position
+    container.style.left = `${x}px`;
+    container.style.top = `${y}px`;
     container.style.transform = 'none';
+
+    // Apply player-mode specific styling
+    this.applyPlayerModeStyles(container, playerInfo);
+
+    this.logger?.debug('Vocabulary list positioned', {
+      component: ComponentType.WORD_LOOKUP,
+      metadata: {
+        finalPosition: { x, y },
+        playerMode: playerInfo.mode,
+        containerSize: { width: containerWidth, height: containerHeight },
+      },
+    });
+  }
+
+  /**
+   * Apply player-mode specific styling adjustments
+   */
+  private applyPlayerModeStyles(container: HTMLElement, playerInfo: PlayerModeInfo): void {
+    // Reset any previous mode-specific classes
+    container.classList.remove('fullscreen-mode', 'theater-mode', 'mini-player-mode', 'default-mode');
+    
+    // Add current mode class
+    container.classList.add(`${playerInfo.mode.replace('-', '')}-mode`);
+
+    // Apply mode-specific z-index and styling
+    switch (playerInfo.mode) {
+      case 'fullscreen':
+        container.style.zIndex = '2147483647'; // Highest z-index for fullscreen
+        container.style.maxWidth = '35vw';
+        container.style.maxHeight = '90vh';
+        break;
+
+      case 'theater':
+        container.style.zIndex = '2147483646';
+        container.style.maxWidth = '400px';
+        container.style.maxHeight = '80vh';
+        break;
+
+      case 'mini-player':
+        container.style.zIndex = '2147483645';
+        container.style.maxWidth = '350px';
+        container.style.maxHeight = '400px';
+        break;
+
+      case 'default':
+      default:
+        container.style.zIndex = '2147483644';
+        container.style.maxWidth = '400px';
+        container.style.maxHeight = '600px';
+        break;
+    }
   }
 
   private getYouTubeUIElements(): Array<{ rect: DOMRect; priority: number }> {
@@ -526,11 +1053,142 @@ export class VocabularyListManager {
     return elements;
   }
 
+  /**
+   * Enhanced YouTube player mode detection with detailed context
+   */
+  private getPlayerModeInfo(): PlayerModeInfo {
+    try {
+      // Check for fullscreen mode
+      if (document.fullscreenElement || 
+          document.querySelector('.ytp-fullscreen') ||
+          window.innerHeight === screen.height) {
+        return this.getFullscreenModeInfo();
+      }
+
+      // Check for theater mode
+      if (document.querySelector('.watch-wide') || 
+          document.querySelector('[theater]') ||
+          document.querySelector('.ytd-watch-flexy[theater]')) {
+        return this.getTheaterModeInfo();
+      }
+
+      // Check for mini-player mode
+      if (document.querySelector('[mini-player]') ||
+          document.querySelector('.ytp-miniplayer') ||
+          window.innerWidth < 600) {
+        return this.getMiniPlayerModeInfo();
+      }
+
+      // Default mode
+      return this.getDefaultModeInfo();
+    } catch (error) {
+      this.logger?.warn('Failed to detect YouTube player mode', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+      return this.getDefaultModeInfo();
+    }
+  }
+
+  private getFullscreenModeInfo(): PlayerModeInfo {
+    return {
+      mode: 'fullscreen',
+      dimensions: {
+        width: window.innerWidth,
+        height: window.innerHeight,
+        top: 0,
+        left: 0,
+      },
+      controls: {
+        bottom: 80,
+        top: 60,
+      },
+    };
+  }
+
+  private getTheaterModeInfo(): PlayerModeInfo {
+    const player = document.querySelector('#player-container') || 
+                   document.querySelector('#movie_player');
+    const rect = player?.getBoundingClientRect() || {
+      width: window.innerWidth,
+      height: window.innerHeight * 0.7,
+      top: 60,
+      left: 0,
+    };
+
+    return {
+      mode: 'theater',
+      dimensions: {
+        width: rect.width,
+        height: rect.height,
+        top: rect.top,
+        left: rect.left,
+      },
+      controls: {
+        bottom: 60,
+        top: 50,
+      },
+    };
+  }
+
+  private getMiniPlayerModeInfo(): PlayerModeInfo {
+    const player = document.querySelector('.ytp-miniplayer') || 
+                   document.querySelector('#player-container');
+    const rect = player?.getBoundingClientRect() || {
+      width: 300,
+      height: 200,
+      top: window.innerHeight - 220,
+      left: window.innerWidth - 320,
+    };
+
+    return {
+      mode: 'mini-player',
+      dimensions: {
+        width: rect.width,
+        height: rect.height,
+        top: rect.top,
+        left: rect.left,
+      },
+      controls: {
+        bottom: 30,
+        top: 20,
+      },
+    };
+  }
+
+  private getDefaultModeInfo(): PlayerModeInfo {
+    const player = document.querySelector('#player-container') || 
+                   document.querySelector('#movie_player');
+    const rect = player?.getBoundingClientRect() || {
+      width: Math.min(window.innerWidth * 0.7, 854),
+      height: Math.min(window.innerHeight * 0.6, 480),
+      top: 100,
+      left: 50,
+    };
+
+    return {
+      mode: 'default',
+      dimensions: {
+        width: rect.width,
+        height: rect.height,
+        top: rect.top,
+        left: rect.left,
+      },
+      controls: {
+        bottom: 50,
+        top: 40,
+      },
+    };
+  }
+
   private setupComponentEvents(component: VocabularyListComponent): void {
     const events: VocabularyListEvents = {
       onWordSelect: this.handleWordSelect.bind(this),
       onWordEdit: this.handleWordEdit.bind(this),
       onWordDelete: this.handleWordDelete.bind(this),
+      onWordNavigate: this.handleWordNavigate.bind(this),
       onBulkAction: this.handleBulkAction.bind(this),
       onSearchChange: this.handleSearchChange.bind(this),
       onFilterChange: this.handleFilterChange.bind(this),
@@ -541,13 +1199,6 @@ export class VocabularyListManager {
     Object.entries(events).forEach(([event, handler]) => {
       component.on(event as keyof VocabularyListEvents, handler);
     });
-  }
-
-  /**
-   * Set a custom handler for word selection events
-   */
-  public setWordSelectHandler(handler: (word: VocabularyItem) => void): void {
-    this.customWordSelectHandler = handler;
   }
 
   private handleWordSelect(word: VocabularyItem): void {
@@ -567,6 +1218,153 @@ export class VocabularyListManager {
     });
 
     this.customWordSelectHandler?.(word);
+  }
+
+  private async handleWordNavigate(word: VocabularyItem): Promise<void> {
+    try {
+      this.logger?.info('Handling vocabulary word navigation', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: {
+          word: word.word,
+          wordId: word.id,
+          videoId: word.videoId,
+          timestamp: word.timestamp,
+          hasEnhancedControls: !!this.enhancedPlaybackControls,
+        },
+      });
+
+      if (!this.enhancedPlaybackControls) {
+        this.logger?.warn('Enhanced Playback Controls not available for navigation', {
+          component: ComponentType.WORD_LOOKUP,
+          metadata: { word: word.word },
+        });
+        return;
+      }
+
+      if (!this.enhancedPlaybackControls.isReady()) {
+        this.logger?.warn('Enhanced Playback Controls not ready for navigation', {
+          component: ComponentType.WORD_LOOKUP,
+          metadata: { word: word.word },
+        });
+        return;
+      }
+
+      // CRITICAL FIX: Validate current video context FIRST
+      const currentVideoId = this.getCurrentVideoId();
+      
+      // CRITICAL FIX: If word is from different video, skip navigation entirely
+      if (word.videoId && word.videoId !== currentVideoId) {
+        this.logger?.warn('Vocabulary word is from different video - navigation skipped for safety', {
+          component: ComponentType.WORD_LOOKUP,
+          metadata: {
+            word: word.word,
+            wordVideoId: word.videoId,
+            currentVideoId: currentVideoId,
+          },
+        });
+        
+        // Show user-friendly message instead of navigating to wrong video
+        this.showNavigationError(`Word "${word.word}" is from a different video. Switch to that video to navigate.`);
+        return;
+      }
+
+      // CRITICAL FIX: If no video ID context, also skip to prevent random navigation
+      if (!currentVideoId) {
+        this.logger?.warn('No current video context available - navigation skipped', {
+          component: ComponentType.WORD_LOOKUP,
+          metadata: { word: word.word },
+        });
+        this.showNavigationError(`Unable to determine current video context for navigation.`);
+        return;
+      }
+
+      let navigationSuccess = false;
+
+      // CRITICAL FIX: Try vocabulary word search first (most reliable)
+      const wordSearchSuccess = this.enhancedPlaybackControls.jumpToVocabularyWord(word.word, {
+        caseSensitive: false,
+        wholeWord: true,
+        bufferTime: 0.5,
+      });
+      
+      if (wordSearchSuccess) {
+        navigationSuccess = true;
+        this.logger?.info('Successfully navigated using vocabulary word search', {
+          component: ComponentType.WORD_LOOKUP,
+          metadata: { word: word.word },
+        });
+      } else {
+        // CRITICAL FIX: Only try subtitle mapping as secondary option, not timestamp fallback
+        const subtitleLookup = await this.vocabularyManager.getSubtitlesByVocabularyWords([word.word]);
+        
+        if (subtitleLookup.success && subtitleLookup.data && subtitleLookup.data.length > 0) {
+          // Found subtitle mapping - but validate it's from current video
+          const lookup = subtitleLookup.data[0];
+          if (lookup.vocabularyItem.videoId === currentVideoId) {
+            this.logger?.info('Using subtitle mapping for navigation', {
+              component: ComponentType.WORD_LOOKUP,
+              metadata: {
+                word: word.word,
+                subtitleId: lookup.subtitleId,
+                timestamp: lookup.timestamp,
+              },
+            });
+            
+            const success = this.enhancedPlaybackControls.jumpToSubtitleWithContext(lookup.subtitleId, {
+              bufferTime: 0.3,
+              highlightDuration: 3000,
+              enableAutoLoop: false,
+            });
+            
+            navigationSuccess = success;
+          } else {
+            this.logger?.warn('Subtitle mapping is from different video - skipped', {
+              component: ComponentType.WORD_LOOKUP,
+              metadata: {
+                word: word.word,
+                mappingVideoId: lookup.vocabularyItem.videoId,
+                currentVideoId: currentVideoId,
+              },
+            });
+          }
+        }
+
+        // CRITICAL FIX: Remove dangerous timestamp-based fallback that was causing wrong video navigation
+        if (!navigationSuccess) {
+          this.logger?.warn('No safe navigation method available for vocabulary word', {
+            component: ComponentType.WORD_LOOKUP,
+            metadata: {
+              word: word.word,
+              hasTimestamp: !!word.timestamp,
+              hasSubtitleMapping: false,
+              reason: 'Timestamp navigation disabled for safety',
+            },
+          });
+          this.showNavigationError(`Unable to locate "${word.word}" in current video subtitles.`);
+        }
+      }
+
+      // Provide user feedback based on navigation success
+      if (navigationSuccess) {
+        this.logger?.info('Vocabulary word navigation completed successfully', {
+          component: ComponentType.WORD_LOOKUP,
+          metadata: {
+            word: word.word,
+            navigationMethod: wordSearchSuccess ? 'word_search' : 'subtitle_mapping',
+          },
+        });
+      }
+
+    } catch (error) {
+      this.logger?.error('Error handling vocabulary word navigation', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: {
+          word: word.word,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+      this.showNavigationError(`Navigation failed for "${word.word}": ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 
   private async handleWordEdit(word: VocabularyItem): Promise<void> {
@@ -1036,6 +1834,186 @@ export class VocabularyListManager {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+  }
+
+  /**
+   * Set up player state listeners for automatic repositioning
+   */
+  private setupPlayerStateListeners(): void {
+    try {
+      // Listen for fullscreen changes
+      const fullscreenChangeHandler = () => {
+        if (this.state.isVisible && this.state.currentContainer) {
+          setTimeout(() => {
+            this.positionPopup(this.state.currentContainer!);
+          }, 100); // Small delay to ensure DOM is updated
+        }
+      };
+
+      // Listen for window resize (affects all player modes)
+      const resizeHandler = () => {
+        if (this.state.isVisible && this.state.currentContainer) {
+          this.positionPopup(this.state.currentContainer!);
+        }
+      };
+
+      // Listen for YouTube-specific events (theater mode toggle, etc.)
+      const observePlayerChanges = () => {
+        const targetNode = document.body;
+        const observer = new MutationObserver((mutations) => {
+          let shouldReposition = false;
+          
+          mutations.forEach((mutation) => {
+            if (mutation.type === 'attributes') {
+              const target = mutation.target as HTMLElement;
+              if (target.matches('[theater]') || 
+                  target.matches('.ytp-fullscreen') ||
+                  target.classList.contains('watch-wide')) {
+                shouldReposition = true;
+              }
+            }
+          });
+
+          if (shouldReposition && this.state.isVisible && this.state.currentContainer) {
+            setTimeout(() => {
+              this.positionPopup(this.state.currentContainer!);
+            }, 200);
+          }
+        });
+
+        observer.observe(targetNode, {
+          attributes: true,
+          attributeFilter: ['theater', 'class'],
+          subtree: true,
+        });
+
+        this.playerStateListeners.push(() => observer.disconnect());
+      };
+
+      // Register event listeners
+      document.addEventListener('fullscreenchange', fullscreenChangeHandler);
+      document.addEventListener('webkitfullscreenchange', fullscreenChangeHandler);
+      document.addEventListener('mozfullscreenchange', fullscreenChangeHandler);
+      document.addEventListener('msfullscreenchange', fullscreenChangeHandler);
+      window.addEventListener('resize', resizeHandler);
+
+      // Set up mutation observer for YouTube-specific changes
+      observePlayerChanges();
+
+      // Store cleanup functions
+      this.playerStateListeners.push(
+        () => document.removeEventListener('fullscreenchange', fullscreenChangeHandler),
+        () => document.removeEventListener('webkitfullscreenchange', fullscreenChangeHandler),
+        () => document.removeEventListener('mozfullscreenchange', fullscreenChangeHandler),
+        () => document.removeEventListener('msfullscreenchange', fullscreenChangeHandler),
+        () => window.removeEventListener('resize', resizeHandler)
+      );
+
+      this.logger?.info('Player state listeners setup completed', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: {
+          listenersCount: this.playerStateListeners.length,
+        },
+      });
+    } catch (error) {
+      this.logger?.warn('Failed to setup player state listeners', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+    }
+  }
+
+  /**
+   * Clean up player state listeners
+   */
+  private cleanupPlayerStateListeners(): void {
+    this.playerStateListeners.forEach((cleanup) => cleanup());
+    this.playerStateListeners = [];
+  }
+
+  /**
+   * Helper to get the current video ID from the Enhanced Playback Controls
+   */
+  private getCurrentVideoId(): string | undefined {
+    if (!this.enhancedPlaybackControls) {
+      this.logger?.warn('Enhanced Playback Controls not available to get video ID', {
+        component: ComponentType.WORD_LOOKUP,
+      });
+      return undefined;
+    }
+
+    const videoId = this.enhancedPlaybackControls.getVideoId();
+    this.logger?.debug('Current video ID', {
+      component: ComponentType.WORD_LOOKUP,
+      metadata: {
+        videoId: videoId,
+      },
+    });
+    return videoId;
+  }
+
+  /**
+   * Helper to show a user-friendly error message
+   */
+  private showNavigationError(message: string): void {
+    // Create a temporary toast notification for better UX
+    const toast = document.createElement('div');
+    toast.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: #f56565;
+      color: white;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      z-index: 2147483647;
+      max-width: 300px;
+      word-wrap: break-word;
+      animation: slideInRight 0.3s ease-out;
+    `;
+    
+    // Add animation keyframes if not already present
+    if (!document.querySelector('#linguatube-toast-styles')) {
+      const style = document.createElement('style');
+      style.id = 'linguatube-toast-styles';
+      style.textContent = `
+        @keyframes slideInRight {
+          from { transform: translateX(100%); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes slideOutRight {
+          from { transform: translateX(0); opacity: 1; }
+          to { transform: translateX(100%); opacity: 0; }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+    
+    toast.textContent = `[LinguaTube] ${message}`;
+    document.body.appendChild(toast);
+    
+    // Auto-remove after 4 seconds with slide out animation
+    setTimeout(() => {
+      toast.style.animation = 'slideOutRight 0.3s ease-in forwards';
+      setTimeout(() => {
+        if (toast.parentNode) {
+          toast.parentNode.removeChild(toast);
+        }
+      }, 300);
+    }, 4000);
+    
+    this.logger?.warn('Navigation error shown to user', {
+      component: ComponentType.WORD_LOOKUP,
+      metadata: {
+        message: message,
+      },
+    });
   }
 }
 
