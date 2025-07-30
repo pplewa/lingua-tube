@@ -639,6 +639,43 @@ const VOCABULARY_LIST_STYLES = `
     color: #c53030;
   }
 
+  /* Review button styling */
+  .review-button {
+    background: #e6fffa !important;
+    color: #2f855a !important;
+    border-color: #c6f6d5 !important;
+  }
+
+  .review-button:hover {
+    background: #c6f6d5 !important;
+    color: #276749 !important;
+  }
+
+  /* Learning status indicators */
+  .list-item.status-new {
+    border-left: 3px solid #4299e1; /* Blue border for new words */
+  }
+
+  .list-item.status-learning {
+    border-left: 3px solid #f6ad55; /* Orange border for learning words */
+  }
+
+  .list-item.status-review {
+    border-left: 3px solid #9f7aea; /* Purple border for review words */
+  }
+
+  .list-item.status-mastered {
+    border-left: 3px solid #48bb78; /* Green border for mastered words */
+  }
+
+  .list-item.recently-reviewed {
+    background: #f0fff4; /* Very light green background for recently reviewed */
+  }
+
+  .list-item.recently-reviewed:hover {
+    background: #e6fffa; /* Slightly darker on hover */
+  }
+
   .bulk-actions {
     padding: 12px 20px;
     border-top: 1px solid #e2e8f0;
@@ -1172,6 +1209,66 @@ export class VocabularyListComponent {
     
     // CRITICAL FIX: Only update the results list, don't destroy the search input
     this.renderResultsOnly();
+  }
+
+  /**
+   * Handle reviewing a word - increment review count and update lastReviewed
+   */
+  private async handleReviewWord(word: VocabularyItem): Promise<void> {
+    try {
+      const now = Date.now();
+      const newReviewCount = (word.reviewCount || 0) + 1;
+      
+      // Determine learning status based on review count
+      let learningStatus: VocabularyItem['learningStatus'] = word.learningStatus;
+      if (newReviewCount === 1) {
+        learningStatus = 'learning';
+      } else if (newReviewCount >= 5) {
+        learningStatus = 'mastered';
+      } else if (newReviewCount >= 2) {
+        learningStatus = 'review';
+      }
+
+      const updates: Partial<VocabularyItem> = {
+        lastReviewed: now,
+        reviewCount: newReviewCount,
+        learningStatus,
+      };
+
+      // Update the word via VocabularyManager
+      const result = await this.vocabularyManager.updateWords([word.id], updates);
+      
+      if (result.successful.length > 0) {
+        this.logger?.info('Word marked as reviewed', {
+          component: ComponentType.VOCABULARY_LIST,
+          metadata: {
+            word: word.word,
+            oldReviewCount: word.reviewCount || 0,
+            newReviewCount,
+            learningStatus,
+          },
+        });
+        
+        // Refresh the vocabulary list to show updated review count
+        await this.loadVocabulary();
+      } else {
+        this.logger?.error('Failed to mark word as reviewed', {
+          component: ComponentType.VOCABULARY_LIST,
+          metadata: {
+            word: word.word,
+            error: result.failed[0]?.error || 'Unknown error',
+          },
+        });
+      }
+    } catch (error) {
+      this.logger?.error('Error reviewing word', {
+        component: ComponentType.VOCABULARY_LIST,
+        metadata: {
+          word: word.word,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+    }
   }
 
   /**
@@ -1713,9 +1810,13 @@ export class VocabularyListComponent {
   private renderListItem(word: VocabularyItem, index: number): string {
     const isSelected = this.state.selectedWords.has(word.id);
     const dateAdded = new Date(word.createdAt).toLocaleDateString();
+    
+    // Add visual indicators for learning status
+    const learningStatusClass = word.learningStatus ? `status-${word.learningStatus}` : '';
+    const recentlyReviewedClass = word.lastReviewed && (Date.now() - word.lastReviewed < 24 * 60 * 60 * 1000) ? 'recently-reviewed' : '';
 
     return `
-      <div class="list-item ${isSelected ? 'selected' : ''}" data-word-id="${word.id}">
+      <div class="list-item ${isSelected ? 'selected' : ''} ${learningStatusClass} ${recentlyReviewedClass}" data-word-id="${word.id}">
         ${
           this.config.enableBulkActions
             ? `
@@ -1739,10 +1840,15 @@ export class VocabularyListComponent {
           <div class="item-meta">
             <span>Added: ${dateAdded}</span>
             <span>Reviews: ${word.reviewCount || 0}</span>
+            ${word.learningStatus ? `<span>Status: ${word.learningStatus}</span>` : ''}
+            ${word.lastReviewed ? `<span>Last reviewed: ${new Date(word.lastReviewed).toLocaleDateString()}</span>` : ''}
             ${word.difficulty ? `<span>Difficulty: ${word.difficulty}</span>` : ''}
           </div>
         </div>
         <div class="item-actions">
+          <button class="action-button review-button" data-action="review" data-word-id="${word.id}" title="Mark as reviewed">
+            ✓ Review
+          </button>
           <button class="action-button" data-action="edit" data-word-id="${word.id}">
             Edit
           </button>
@@ -1887,6 +1993,9 @@ export class VocabularyListComponent {
         break;
       case 'delete':
         if (word) this.events.onWordDelete?.(word);
+        break;
+      case 'review':
+        if (word) this.handleReviewWord(word);
         break;
       case 'toggle-sort-order':
         this.sort(this.state.sortBy, this.state.sortOrder === 'asc' ? 'desc' : 'asc');
