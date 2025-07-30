@@ -1057,9 +1057,6 @@ export class VocabularyListComponent {
     }
     
     this.searchTimeout = setTimeout(() => {
-      this.logger?.debug('search timeout executing, calling applyFiltersAndSearch()', {
-        component: ComponentType.VOCABULARY_LIST,
-      });
       this.applyFiltersAndSearch();
     }, 300);
   }
@@ -1173,8 +1170,8 @@ export class VocabularyListComponent {
     this.currentFocusIndex = -1;
     this.updateFocusHighlight();
     
-    // CRITICAL FIX: Re-render to show the filtered results
-    this.render();
+    // CRITICAL FIX: Only update the results list, don't destroy the search input
+    this.renderResultsOnly();
   }
 
   /**
@@ -1787,20 +1784,8 @@ export class VocabularyListComponent {
     });
       
     if (searchInput) {
-      this.logger?.debug('Adding search input listener', {
-        component: ComponentType.VOCABULARY_LIST,
-        metadata: {
-          searchInput: !!searchInput,
-        },
-      });
       searchInput.addEventListener('input', (e) => {
         const query = (e.target as HTMLInputElement).value;
-        this.logger?.debug('Search input changed:', {
-          component: ComponentType.VOCABULARY_LIST,
-          metadata: {
-            searchInput: query,
-          },
-        });
         this.search(query);
       });
     } else {
@@ -1817,25 +1802,13 @@ export class VocabularyListComponent {
       const target = e.target as HTMLSelectElement;
       
       // Sort controls
-      if (target.classList.contains('sort-select')) {
-        this.logger?.debug('Sort changed to:', {
-          component: ComponentType.VOCABULARY_LIST,
-          metadata: {
-            sort: target.value,
-          },
-        });
-        this.sort(target.value, this.state.sortOrder);
-      }
+              if (target.classList.contains('sort-select')) {
+          this.sort(target.value, this.state.sortOrder);
+        }
       
       // Video filter
       if (target.hasAttribute('data-action') && target.getAttribute('data-action') === 'filter-by-video') {
         const selectedFilter = target.value as 'all' | 'current';
-        this.logger?.debug('Video filter changed to:', {
-          component: ComponentType.VOCABULARY_LIST,
-          metadata: {
-            videoFilter: selectedFilter,
-          },
-        });
         this.setVideoFilter(selectedFilter);
       }
     });
@@ -1847,15 +1820,6 @@ export class VocabularyListComponent {
       const action = actionElement?.getAttribute('data-action');
       const wordId = actionElement?.getAttribute('data-word-id');
       const format = actionElement?.getAttribute('data-format') as 'json' | 'csv' | 'anki';
-      
-      this.logger?.debug('Click detected:', {
-        component: ComponentType.VOCABULARY_LIST,
-        metadata: {
-          target: target.tagName,
-          action,
-          hasActionElement: !!actionElement,
-        },
-      });
 
       // REAL FIX: Handle actions that don't need wordId
       if (action === 'close') {
