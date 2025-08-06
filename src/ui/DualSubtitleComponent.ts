@@ -1577,6 +1577,41 @@ export class DualSubtitleComponent {
     return this.vocabularyModeEnabled;
   }
 
+  /**
+   * Show the subtitle component
+   */
+  public show(): void {
+    this.showSubtitles();
+  }
+
+  /**
+   * Hide the subtitle component
+   */
+  public hide(): void {
+    this.hideSubtitles();
+  }
+
+  /**
+   * Toggle the overall visibility of the subtitle component
+   * @returns The new visibility state
+   */
+  public toggleVisibility(): boolean {
+    if (this.isVisible) {
+      this.hideSubtitles();
+    } else {
+      this.showSubtitles();
+    }
+    return this.isVisible;
+  }
+
+  /**
+   * Get the current overall visibility state
+   * @returns Whether the subtitle component is currently visible
+   */
+  public getVisibility(): boolean {
+    return this.isVisible;
+  }
+
   private async checkVocabularyWord(word: string): Promise<boolean> {
     // Use boolean cache for better performance
     if (this.vocabularyCache.has(word)) {

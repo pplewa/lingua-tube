@@ -740,6 +740,9 @@ class LinguaTubeContentScript {
       return;
     }
 
+    // Set the DualSubtitleManager reference in Enhanced Playback Controls for subtitle toggle functionality
+    this.state.components.playbackControls.setDualSubtitleManager(this.state.components.subtitleManager);
+
     // Listen for vocabulary mode events from Enhanced Playback Controls
     this.state.components.playbackControls.addEventListener((event) => {
       if (event.type === 'vocabulary_mode') {

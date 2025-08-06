@@ -13,6 +13,7 @@ import { StorageService } from '../storage';
 import { UserSettings } from '../storage/types';
 import { VocabularyManager } from '../vocabulary/VocabularyManager';
 import { VocabularyListManager } from './VocabularyListManager';
+import { DualSubtitleManager } from './DualSubtitleManager';
 import { SentenceLoopingService, SentenceLoop, LoopEvent } from './SentenceLoopingService';
 import { Logger } from '../logging';
 import { ComponentType } from '../logging/types';
@@ -26,6 +27,7 @@ export interface EnhancedControlsConfig {
   readonly showLoopControl: boolean;
   readonly showSentenceNavigation: boolean;
   readonly showVocabularyMode: boolean;
+  readonly showSubtitleControl: boolean;
   readonly compactMode: boolean;
   readonly position: 'bottom' | 'top' | 'floating';
   readonly theme: 'dark' | 'light' | 'auto';
@@ -45,6 +47,7 @@ export interface EnhancedControlsState {
   readonly loop: LoopSegment | null;
   readonly vocabularyMode: boolean;
   readonly vocabularyListVisible: boolean;
+  readonly subtitlesVisible: boolean;
   readonly lastVideoId: string | null;
   readonly lastPosition: number;
   readonly sessionStartTime: number;
@@ -75,7 +78,8 @@ export interface ControlsEventData {
     | 'vocabulary_mode'
     | 'vocabulary_list'
     | 'vocabulary_navigation' // New event type for vocabulary-specific navigation
-    | 'subtitle_highlight'    // New event type for subtitle highlighting
+    | 'subtitle_highlight' // New event type for subtitle highlighting
+    | 'subtitle_visibility' // New event type for subtitle visibility toggle
     | 'fullscreen_change';
   readonly value: any;
   readonly timestamp: number;
@@ -256,18 +260,24 @@ export interface EnhancedPlaybackControlsAPI {
   getVideoId(): string | undefined;
 
   /** Enhanced subtitle navigation with sentence context and optional auto-loop */
-  jumpToSubtitleWithContext(subtitleId: string, options?: {
-    bufferTime?: number;
-    highlightDuration?: number;
-    enableAutoLoop?: boolean;
-  }): boolean;
+  jumpToSubtitleWithContext(
+    subtitleId: string,
+    options?: {
+      bufferTime?: number;
+      highlightDuration?: number;
+      enableAutoLoop?: boolean;
+    },
+  ): boolean;
 
   /** Navigate to the sentence containing a specific vocabulary word */
-  jumpToVocabularyWord(word: string, options?: {
-    caseSensitive?: boolean;
-    wholeWord?: boolean;
-    bufferTime?: number;
-  }): boolean;
+  jumpToVocabularyWord(
+    word: string,
+    options?: {
+      caseSensitive?: boolean;
+      wholeWord?: boolean;
+      bufferTime?: number;
+    },
+  ): boolean;
 }
 
 // ========================================
@@ -279,6 +289,7 @@ const DEFAULT_CONFIG: EnhancedControlsConfig = {
   showLoopControl: true,
   showSentenceNavigation: true,
   showVocabularyMode: true,
+  showSubtitleControl: true,
   compactMode: false,
   position: 'bottom',
   theme: 'dark',
@@ -812,12 +823,14 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
   private storageService: StorageService;
   private vocabularyManager: VocabularyManager;
   private vocabularyListManager: VocabularyListManager;
+  private dualSubtitleManager: DualSubtitleManager | null = null;
   private sentenceLoopingService: SentenceLoopingService;
 
   private currentSpeed: number = 1.0;
   private currentLoop: LoopSegment | null = null;
   private vocabularyModeActive: boolean = false;
   private vocabularyListVisible: boolean = false;
+  private subtitlesVisible: boolean = true;
 
   // State management
   private currentState: EnhancedControlsState;
@@ -859,6 +872,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       loop: null,
       vocabularyMode: false,
       vocabularyListVisible: false,
+      subtitlesVisible: true,
       lastVideoId: null,
       lastPosition: 0,
       sessionStartTime: Date.now(),
@@ -952,6 +966,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
 
       // Update initial visual feedback state
       this.updateStateIndicators();
+      this.updateSubtitleDisplay();
 
       // Ensure controls are initially visible and properly trigger auto-hide system
       this.show();
@@ -1097,6 +1112,9 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     this.controlsContainer = document.createElement('div');
     this.controlsContainer.className = 'controls-container';
 
+    // Create visual feedback elements
+    this.createFeedbackElements();
+
     // Create control groups
     if (this.config.showSpeedControl) {
       this.controlsContainer.appendChild(this.createSpeedControl());
@@ -1114,8 +1132,9 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       this.controlsContainer.appendChild(this.createVocabularyControl());
     }
 
-    // Create visual feedback elements
-    this.createFeedbackElements();
+    if (this.config.showSubtitleControl) {
+      this.controlsContainer.appendChild(this.createSubtitleControl());
+    }
 
     this.shadowRoot.appendChild(this.controlsContainer);
   }
@@ -1273,6 +1292,27 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     return group;
   }
 
+  private createSubtitleControl(): HTMLElement {
+    const group = document.createElement('div');
+    group.className = 'control-group subtitle-control';
+
+    // Subtitle toggle button
+    const subtitleBtn = document.createElement('button');
+    subtitleBtn.className = 'control-button subtitle-toggle-btn';
+    subtitleBtn.innerHTML = '💬';
+    subtitleBtn.title = 'Toggle Subtitles';
+    subtitleBtn.addEventListener('click', () => this.toggleSubtitles());
+
+    // Subtitle indicator
+    const subtitleIndicator = document.createElement('div');
+    subtitleIndicator.className = 'subtitle-indicator';
+    subtitleIndicator.textContent = 'ON';
+
+    group.appendChild(subtitleBtn);
+    group.appendChild(subtitleIndicator);
+
+    return group;
+  }
 
   private createFeedbackElements(): void {
     if (!this.controlsContainer) return;
@@ -1435,8 +1475,6 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       }
     }
   }
-
-
 
   // ========================================
   // Configuration and Settings
@@ -1880,10 +1918,10 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       if (!targetSentence || targetSentence.segments.length === 0) {
         this.logger?.warn('Target subtitle not found in available sentences', {
           component: ComponentType.YOUTUBE_INTEGRATION,
-          metadata: { 
+          metadata: {
             subtitleId,
             availableSentenceCount: sentences.length,
-            totalSegments: sentences.reduce((sum, s) => sum + s.segments.length, 0)
+            totalSegments: sentences.reduce((sum, s) => sum + s.segments.length, 0),
           },
         });
         this.showActionToast('Subtitle not found', 'error', 1500);
@@ -1893,10 +1931,12 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       // Find the specific segment within the sentence for precise timing
       const targetSegment = targetSentence.segments.find((segment) => segment.id === subtitleId);
       const currentTime = this.playerService.getCurrentTime();
-      
+
       // Use segment start time if found, otherwise use sentence start time
-      const baseTargetTime = targetSegment ? targetSegment.startTime : targetSentence.segments[0].startTime;
-      
+      const baseTargetTime = targetSegment
+        ? targetSegment.startTime
+        : targetSentence.segments[0].startTime;
+
       // Apply buffer time to ensure context is visible (0.5 seconds before segment start)
       const bufferTime = Math.min(0.5, baseTargetTime * 0.1); // Dynamic buffer, max 0.5s
       const targetTime = Math.max(0, baseTargetTime - bufferTime);
@@ -1906,11 +1946,11 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       if (targetTime >= videoDuration) {
         this.logger?.warn('Target time exceeds video duration', {
           component: ComponentType.YOUTUBE_INTEGRATION,
-          metadata: { 
-            subtitleId, 
-            targetTime, 
+          metadata: {
+            subtitleId,
+            targetTime,
             videoDuration,
-            segmentStartTime: baseTargetTime
+            segmentStartTime: baseTargetTime,
           },
         });
         this.showActionToast('Subtitle beyond video end', 'warning', 2000);
@@ -1923,11 +1963,11 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       // Show success feedback with context information
       const navigationDirection = targetTime > currentTime ? 'forward' : 'backward';
       const timeDifference = Math.abs(targetTime - currentTime);
-      
+
       this.showActionToast(
         `Jumped ${navigationDirection} ${Math.round(timeDifference)}s`,
         'success',
-        1500
+        1500,
       );
 
       // Emit navigation event with detailed information
@@ -1958,7 +1998,6 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
           timeDifference: Math.round(timeDifference * 100) / 100,
         },
       });
-
     } catch (error) {
       this.logger?.error('Failed to navigate to subtitle', {
         component: ComponentType.YOUTUBE_INTEGRATION,
@@ -2002,7 +2041,9 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
   }
 
   private toggleVocabularyMode(): void {
-    console.log('[EnhancedPlaybackControls] toggleVocabularyMode() called - vocabulary highlighting mode'); // DEBUG
+    console.log(
+      '[EnhancedPlaybackControls] toggleVocabularyMode() called - vocabulary highlighting mode',
+    ); // DEBUG
     this.vocabularyModeActive = !this.vocabularyModeActive;
     this.updateVocabularyDisplay();
 
@@ -2026,7 +2067,9 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
   }
 
   public toggleVocabularyList(): void {
-    console.log('[EnhancedPlaybackControls] toggleVocabularyList() called - vocabulary list visibility'); // DEBUG
+    console.log(
+      '[EnhancedPlaybackControls] toggleVocabularyList() called - vocabulary list visibility',
+    ); // DEBUG
     this.vocabularyListVisible = !this.vocabularyListVisible;
     this.updateVocabularyListDisplay();
 
@@ -2076,33 +2119,114 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       if (this.vocabularyListVisible) {
         vocabListBtn.classList.add('active');
         vocabListBtn.setAttribute('title', 'Hide Vocabulary List');
-        
+
         // Show the vocabulary list with smooth animation
-        this.vocabularyListManager.show().then(() => {
-          this.logger?.debug('Vocabulary list shown successfully', {
-            component: ComponentType.YOUTUBE_INTEGRATION,
+        this.vocabularyListManager
+          .show()
+          .then(() => {
+            this.logger?.debug('Vocabulary list shown successfully', {
+              component: ComponentType.YOUTUBE_INTEGRATION,
+            });
+          })
+          .catch((error) => {
+            this.logger?.warn('Failed to show vocabulary list', {
+              component: ComponentType.YOUTUBE_INTEGRATION,
+              metadata: {
+                error: error instanceof Error ? error.message : String(error),
+              },
+            });
+            // Revert the state if showing failed
+            this.vocabularyListVisible = false;
+            vocabListBtn.classList.remove('active');
+            vocabListBtn.setAttribute('title', 'Show Vocabulary List');
           });
-        }).catch((error) => {
-          this.logger?.warn('Failed to show vocabulary list', {
-            component: ComponentType.YOUTUBE_INTEGRATION,
-            metadata: {
-              error: error instanceof Error ? error.message : String(error),
-            },
-          });
-          // Revert the state if showing failed
-          this.vocabularyListVisible = false;
-          vocabListBtn.classList.remove('active');
-          vocabListBtn.setAttribute('title', 'Show Vocabulary List');
-        });
       } else {
         vocabListBtn.classList.remove('active');
         vocabListBtn.setAttribute('title', 'Show Vocabulary List');
-        
+
         // Hide the vocabulary list with smooth animation
         this.vocabularyListManager.hide();
         this.logger?.debug('Vocabulary list hidden', {
           component: ComponentType.YOUTUBE_INTEGRATION,
         });
+      }
+    }
+  }
+
+  private toggleSubtitles(): void {
+    if (!this.dualSubtitleManager) {
+      this.logger?.warn('Cannot toggle subtitles - DualSubtitleManager not available', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+      });
+      this.showActionToast('Subtitles not available', 'error', 2000);
+      return;
+    }
+
+    const subtitleComponent = this.dualSubtitleManager.getSubtitleComponent();
+    if (!subtitleComponent) {
+      this.logger?.warn('Cannot toggle subtitles - DualSubtitleComponent not available', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+      });
+      this.showActionToast('Subtitles not ready', 'error', 2000);
+      return;
+    }
+
+    try {
+      // Toggle the extension's dual subtitle visibility
+      const newVisibility = subtitleComponent.toggleVisibility();
+      this.subtitlesVisible = newVisibility;
+
+      this.logger?.debug('Extension subtitles toggled', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          subtitlesVisible: this.subtitlesVisible,
+        },
+      });
+    } catch (error) {
+      this.logger?.warn('Failed to toggle extension subtitles', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+      this.showActionToast('Failed to toggle subtitles', 'error', 2000);
+      return;
+    }
+
+    this.updateSubtitleDisplay();
+    this.updateCurrentState();
+
+    // Show visual feedback
+    this.showActionToast(
+      `LinguaTube Subtitles: ${this.subtitlesVisible ? 'ON' : 'OFF'}`,
+      'success',
+      1500,
+    );
+
+    this.emitEvent({
+      type: 'subtitle_visibility',
+      value: this.subtitlesVisible,
+      timestamp: Date.now(),
+    });
+  }
+
+  private updateSubtitleDisplay(): void {
+    if (!this.shadowRoot) return;
+
+    const subtitleBtn = this.shadowRoot.querySelector('.subtitle-control .subtitle-toggle-btn');
+    const subtitleIndicator = this.shadowRoot.querySelector(
+      '.subtitle-control .subtitle-indicator',
+    );
+
+    if (subtitleBtn && subtitleIndicator) {
+      if (this.subtitlesVisible) {
+        subtitleIndicator.textContent = 'ON';
+        subtitleBtn.classList.add('active');
+        subtitleBtn.setAttribute('title', 'Hide Subtitles');
+      } else {
+        subtitleIndicator.textContent = 'OFF';
+        subtitleBtn.classList.remove('active');
+        subtitleBtn.setAttribute('title', 'Show Subtitles');
       }
     }
   }
@@ -2172,10 +2296,11 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
   }
 
   private setupKeyboardShortcuts(): void {
-    // Define keyboard shortcuts
-    // Note: Removed Space key mapping to avoid conflicts with YouTube's native play/pause behavior
-    // Users can still use other controls for play/pause functionality
+    // Define keyboard shortcuts - ALL CAREFULLY CHOSEN TO AVOID YOUTUBE CONFLICTS
+    // YouTube reserved keys: k,j,l,f,t,i,m,c,o,w,+,-,0-9,comma,period,<,>,P,N,ESCAPE
+    // Safe extension keys: q,r,e,u,a,s,d,g,h,v,b,x,z and modifier combinations
 
+    // Navigation (safe - arrows not used by YouTube for playback)
     this.keyboardShortcuts.set('ArrowLeft', () => {
       this.navigateSentence('previous');
     });
@@ -2192,73 +2317,84 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       this.adjustSpeed(-0.25);
     });
 
-    this.keyboardShortcuts.set('KeyN', () => {
+    // Loop control - CHANGED from 'n' to 'g' (YouTube uses Shift+N for next video)
+    this.keyboardShortcuts.set('KeyG', () => {
       this.toggleLoop();
     });
 
+    // Vocabulary mode (safe - 'v' not used by YouTube)
     this.keyboardShortcuts.set('KeyV', () => {
       this.toggleVocabularyMode();
     });
 
-    // CRITICAL FIX: Add Ctrl+V/Cmd+V shortcut to toggle vocabulary list
+    // Vocabulary list toggle with modifiers (safe)
     this.keyboardShortcuts.set('Ctrl+KeyV', () => {
       this.toggleVocabularyList();
     });
 
-    // Mac support (Cmd+V maps to metaKey)
     this.keyboardShortcuts.set('Meta+KeyV', () => {
       this.toggleVocabularyList();
     });
 
-    this.keyboardShortcuts.set('KeyL', () => {
+    // Vocabulary list - CHANGED from 'l' to 'q' (YouTube uses 'l' for fast forward 10s)
+    this.keyboardShortcuts.set('KeyQ', () => {
       this.toggleVocabularyList();
     });
 
+    // Subtitles - CHANGED from 'c' to 's' (YouTube uses 'c' for captions)
+    this.keyboardShortcuts.set('KeyS', () => {
+      this.toggleSubtitles();
+    });
+
+    // Reset speed (safe - 'r' not used by YouTube)
     this.keyboardShortcuts.set('KeyR', () => {
       this.resetSpeed();
     });
 
+    // Replay current sentence (safe - 'e' not used by YouTube)
     this.keyboardShortcuts.set('KeyE', () => {
       this.replayCurrentSentence();
     });
 
-    this.keyboardShortcuts.set('Comma', () => {
+    // Time skipping - CHANGED from comma/period to z/x (YouTube uses comma/period for frame navigation)
+    this.keyboardShortcuts.set('KeyZ', () => {
       this.skipTime(-1);
     });
 
-    this.keyboardShortcuts.set('Period', () => {
+    this.keyboardShortcuts.set('KeyX', () => {
       this.skipTime(1);
     });
 
-    this.keyboardShortcuts.set('Digit1', () => {
+    // Speed presets - CHANGED from digits to Shift+digits (YouTube uses 0-9 for seeking)
+    this.keyboardShortcuts.set('Shift+Digit1', () => {
       this.setPlaybackSpeed(0.25);
     });
 
-    this.keyboardShortcuts.set('Digit2', () => {
+    this.keyboardShortcuts.set('Shift+Digit2', () => {
       this.setPlaybackSpeed(0.5);
     });
 
-    this.keyboardShortcuts.set('Digit3', () => {
+    this.keyboardShortcuts.set('Shift+Digit3', () => {
       this.setPlaybackSpeed(0.75);
     });
 
-    this.keyboardShortcuts.set('Digit4', () => {
+    this.keyboardShortcuts.set('Shift+Digit4', () => {
       this.setPlaybackSpeed(1.0);
     });
 
-    this.keyboardShortcuts.set('Digit5', () => {
+    this.keyboardShortcuts.set('Shift+Digit5', () => {
       this.setPlaybackSpeed(1.25);
     });
 
-    this.keyboardShortcuts.set('Digit6', () => {
+    this.keyboardShortcuts.set('Shift+Digit6', () => {
       this.setPlaybackSpeed(1.5);
     });
 
-    this.keyboardShortcuts.set('Digit7', () => {
+    this.keyboardShortcuts.set('Shift+Digit7', () => {
       this.setPlaybackSpeed(1.75);
     });
 
-    this.keyboardShortcuts.set('Digit8', () => {
+    this.keyboardShortcuts.set('Shift+Digit8', () => {
       this.setPlaybackSpeed(2.0);
     });
 
@@ -2288,7 +2424,11 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       this.keyboardShortcuts.get(shortcutKey) || this.keyboardShortcuts.get(event.code);
 
     if (handler) {
-      console.log('[EnhancedPlaybackControls] Keyboard shortcut triggered:', { shortcutKey, eventCode: event.code, key: event.key }); // DEBUG
+      console.log('[EnhancedPlaybackControls] Keyboard shortcut triggered:', {
+        shortcutKey,
+        eventCode: event.code,
+        key: event.key,
+      }); // DEBUG
       event.preventDefault();
       event.stopPropagation();
       handler();
@@ -2298,54 +2438,64 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
   private isUserTypingInInputField(event: KeyboardEvent): boolean {
     // Check document activeElement first
     const activeElement = document.activeElement;
-    
+
     // Check for standard input fields
     if (activeElement) {
-      if (activeElement.tagName === 'INPUT' ||
-          activeElement.tagName === 'TEXTAREA' ||
-          (activeElement as HTMLElement).contentEditable === 'true') {
+      if (
+        activeElement.tagName === 'INPUT' ||
+        activeElement.tagName === 'TEXTAREA' ||
+        (activeElement as HTMLElement).contentEditable === 'true'
+      ) {
         return true;
       }
-      
+
       // Check if activeElement is a shadow host that might contain input fields
       const shadowRoot = (activeElement as any).shadowRoot;
       if (shadowRoot) {
         const shadowActiveElement = shadowRoot.activeElement;
-        if (shadowActiveElement &&
-            (shadowActiveElement.tagName === 'INPUT' ||
-             shadowActiveElement.tagName === 'TEXTAREA' ||
-             (shadowActiveElement as HTMLElement).contentEditable === 'true')) {
+        if (
+          shadowActiveElement &&
+          (shadowActiveElement.tagName === 'INPUT' ||
+            shadowActiveElement.tagName === 'TEXTAREA' ||
+            (shadowActiveElement as HTMLElement).contentEditable === 'true')
+        ) {
           return true;
         }
       }
     }
-    
+
     // Check event target as well
     const target = event.target as HTMLElement;
-    if (target &&
-        (target.tagName === 'INPUT' ||
-         target.tagName === 'TEXTAREA' ||
-         target.contentEditable === 'true')) {
+    if (
+      target &&
+      (target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.contentEditable === 'true')
+    ) {
       return true;
     }
-    
+
     // Check if we're inside vocabulary list container (which might use shadow DOM)
     const vocabularyContainer = document.getElementById('linguatube-vocabulary-list-container');
     if (vocabularyContainer && vocabularyContainer.contains(target)) {
       // If event is happening inside vocabulary list, check if it's from an input
-      const inputs = vocabularyContainer.querySelectorAll('input, textarea, [contenteditable="true"]');
+      const inputs = vocabularyContainer.querySelectorAll(
+        'input, textarea, [contenteditable="true"]',
+      );
       for (const input of inputs) {
         if (input === target || input.contains(target)) {
           return true;
         }
       }
-      
+
       // Also check shadow DOM within vocabulary list
       const shadowHosts = vocabularyContainer.querySelectorAll('*');
       for (const host of shadowHosts) {
         const shadowRoot = (host as any).shadowRoot;
         if (shadowRoot) {
-          const shadowInputs = shadowRoot.querySelectorAll('input, textarea, [contenteditable="true"]');
+          const shadowInputs = shadowRoot.querySelectorAll(
+            'input, textarea, [contenteditable="true"]',
+          );
           for (const shadowInput of shadowInputs) {
             if (shadowInput === target || shadowInput.contains(target)) {
               return true;
@@ -2354,7 +2504,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
         }
       }
     }
-    
+
     return false;
   }
 
@@ -2723,6 +2873,67 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     return this.vocabularyListManager;
   }
 
+  public setDualSubtitleManager(manager: DualSubtitleManager): void {
+    this.dualSubtitleManager = manager;
+
+    // Sync subtitle visibility state with the actual component
+    const subtitleComponent = manager.getSubtitleComponent();
+    if (subtitleComponent) {
+      this.subtitlesVisible = subtitleComponent.getVisibility();
+      this.updateSubtitleDisplay();
+    }
+
+    this.logger?.debug('Dual subtitle manager set', {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+      metadata: {
+        managerReady: manager.isReady(),
+        subtitlesVisible: this.subtitlesVisible,
+      },
+    });
+  }
+
+  // ========================================
+  // Public Subtitle Control API
+  // ========================================
+
+  public getSubtitleVisibility(): boolean {
+    return this.subtitlesVisible;
+  }
+
+  public setSubtitleVisibility(visible: boolean): void {
+    if (!this.dualSubtitleManager) {
+      this.logger?.warn('Cannot set subtitle visibility - DualSubtitleManager not available', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+      });
+      return;
+    }
+
+    const subtitleComponent = this.dualSubtitleManager.getSubtitleComponent();
+    if (!subtitleComponent) {
+      this.logger?.warn('Cannot set subtitle visibility - DualSubtitleComponent not available', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+      });
+      return;
+    }
+
+    const currentVisibility = subtitleComponent.getVisibility();
+    if (currentVisibility !== visible) {
+      if (visible) {
+        subtitleComponent.show();
+      } else {
+        subtitleComponent.hide();
+      }
+      this.subtitlesVisible = visible;
+      this.updateSubtitleDisplay();
+      this.updateCurrentState();
+    }
+  }
+
+  public toggleSubtitleVisibility(): boolean {
+    this.toggleSubtitles();
+    return this.subtitlesVisible;
+  }
+
   // ========================================
   // Public State Query API
   // ========================================
@@ -2746,6 +2957,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     currentLoop: LoopSegment | null;
     vocabularyModeActive: boolean;
     vocabularyListVisible: boolean;
+    subtitlesVisible: boolean;
     config: EnhancedControlsConfig;
   } {
     return {
@@ -2755,6 +2967,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       currentLoop: this.currentLoop,
       vocabularyModeActive: this.vocabularyModeActive,
       vocabularyListVisible: this.vocabularyListVisible,
+      subtitlesVisible: this.subtitlesVisible,
       config: this.getConfig(),
     };
   }
@@ -2864,6 +3077,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       loop: this.currentLoop,
       vocabularyMode: this.vocabularyModeActive,
       vocabularyListVisible: this.vocabularyListVisible,
+      subtitlesVisible: this.subtitlesVisible,
       lastVideoId: videoId,
       lastPosition: currentTime,
       totalWatchTime:
@@ -2945,6 +3159,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
         loop: null,
         vocabularyMode: false,
         vocabularyListVisible: false,
+        subtitlesVisible: true,
         lastVideoId: currentVideoId,
         lastPosition: 0,
         sessionStartTime: Date.now(),
@@ -3165,11 +3380,14 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
   /**
    * Enhanced subtitle navigation with sentence context and optional auto-loop
    */
-  public jumpToSubtitleWithContext(subtitleId: string, options?: {
-    bufferTime?: number;
-    highlightDuration?: number;
-    enableAutoLoop?: boolean;
-  }): boolean {
+  public jumpToSubtitleWithContext(
+    subtitleId: string,
+    options?: {
+      bufferTime?: number;
+      highlightDuration?: number;
+      enableAutoLoop?: boolean;
+    },
+  ): boolean {
     try {
       const { bufferTime = 0.5, highlightDuration = 2000, enableAutoLoop = false } = options || {};
 
@@ -3196,7 +3414,9 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
 
       // Find the specific segment for precise timing
       const targetSegment = targetSentence.segments.find((segment) => segment.id === subtitleId);
-      const baseTargetTime = targetSegment ? targetSegment.startTime : targetSentence.segments[0].startTime;
+      const baseTargetTime = targetSegment
+        ? targetSegment.startTime
+        : targetSentence.segments[0].startTime;
       const targetTime = Math.max(0, baseTargetTime - bufferTime);
 
       // Perform navigation
@@ -3206,7 +3426,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       this.showActionToast(
         `Jumped to: "${targetSentence.combinedText.substring(0, 30)}..."`,
         'success',
-        highlightDuration
+        highlightDuration,
       );
 
       // Emit vocabulary navigation event for cross-component coordination
@@ -3272,11 +3492,14 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
   /**
    * Navigate to the sentence containing a specific vocabulary word
    */
-  public jumpToVocabularyWord(word: string, options?: {
-    caseSensitive?: boolean;
-    wholeWord?: boolean;
-    bufferTime?: number;
-  }): boolean {
+  public jumpToVocabularyWord(
+    word: string,
+    options?: {
+      caseSensitive?: boolean;
+      wholeWord?: boolean;
+      bufferTime?: number;
+    },
+  ): boolean {
     try {
       const { caseSensitive = false, wholeWord = true, bufferTime = 0.5 } = options || {};
 
@@ -3289,18 +3512,18 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       }
 
       const sentences = this.sentenceLoopingService.getAvailableSentences();
-      
+
       // Find sentence containing the vocabulary word
       const targetSentence = sentences.find((sentence) => {
         const text = caseSensitive ? sentence.combinedText : sentence.combinedText.toLowerCase();
         const searchWord = caseSensitive ? word : word.toLowerCase();
-        
+
         // CRITICAL FIX: Improve matching for Thai and other non-space-separated languages
         if (wholeWord) {
           // For Thai and similar languages, word boundaries (\b) don't work well
           // Use a more flexible approach that works for both English and Thai
           const isThai = /[\u0E00-\u0E7F]/.test(searchWord);
-          
+
           if (isThai) {
             // For Thai, just check if the word appears in the text (no word boundaries needed)
             return text.includes(searchWord);
@@ -3318,14 +3541,16 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
         // CRITICAL FIX: Enhanced debugging for failed word search
         this.logger?.warn('No sentence found containing vocabulary word', {
           component: ComponentType.YOUTUBE_INTEGRATION,
-          metadata: { 
-            word, 
-            caseSensitive, 
+          metadata: {
+            word,
+            caseSensitive,
             wholeWord,
             availableSentencesCount: sentences.length,
             isThai: /[\u0E00-\u0E7F]/.test(word),
             // Log first few sentences for debugging (truncated)
-            sampleSentences: sentences.slice(0, 3).map(s => s.combinedText.substring(0, 50) + '...'),
+            sampleSentences: sentences
+              .slice(0, 3)
+              .map((s) => s.combinedText.substring(0, 50) + '...'),
           },
         });
         return false;
@@ -3339,7 +3564,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       this.showActionToast(
         `Found "${word}" in: "${targetSentence.combinedText.substring(0, 30)}..."`,
         'success',
-        2500
+        2500,
       );
 
       // Emit vocabulary navigation event for cross-component coordination

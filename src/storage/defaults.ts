@@ -76,13 +76,13 @@ export const DEFAULT_VOCABULARY_SETTINGS: VocabularySettings = {
 // ========================================
 
 export const DEFAULT_KEYBOARD_SHORTCUTS: KeyboardShortcuts = {
-  toggleSubtitles: 'KeyC',
-  slowDown: 'Comma',
-  speedUp: 'Period',
-  replay: 'KeyR',
-  saveWord: 'KeyS',
-  showDefinition: 'KeyD',
-  toggleVocabularyList: 'Ctrl+KeyV', // CRITICAL FIX: Add vocabulary list toggle shortcut
+  toggleSubtitles: 'KeyS', // CHANGED from 'KeyC' - YouTube uses 'c' for captions
+  slowDown: 'KeyZ', // CHANGED from 'Comma' - YouTube uses comma for previous frame
+  speedUp: 'KeyX', // CHANGED from 'Period' - YouTube uses period for next frame  
+  replay: 'KeyR', // Safe - not used by YouTube
+  saveWord: 'KeyD', // Safe - not used by YouTube
+  showDefinition: 'KeyH', // Safe - not used by YouTube
+  toggleVocabularyList: 'KeyQ', // CHANGED from 'Ctrl+KeyV' to 'KeyQ' - YouTube uses 'l' for fast forward
 };
 
 // ========================================
