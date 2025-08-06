@@ -291,7 +291,7 @@ const DEFAULT_CONFIG: EnhancedControlsConfig = {
   showVocabularyMode: true,
   showSubtitleControl: true,
   compactMode: false,
-  position: 'bottom',
+  position: 'top',
   theme: 'dark',
   opacity: 0.9,
   autoHide: true,
@@ -338,15 +338,43 @@ const CONTROLS_STYLES = `
     padding: var(--controls-padding);
     opacity: var(--controls-opacity);
     pointer-events: auto;
-    backdrop-filter: blur(4px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(6px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
     position: absolute;
-    top: 10px;
+    bottom: 24px;
     left: 50%;
     transform: translateX(-50%);
     z-index: 2147483646;
   }
+
+  /* Collapsed mode */
+  .controls-container.collapsed {
+    padding: 6px 8px;
+    gap: 6px;
+  }
+  .controls-container.collapsed > :not(.drag-handle):not(.collapse-toggle):not(.action-toast):not(.state-indicators) {
+    display: none !important;
+  }
+
+  /* Collapse toggle */
+  .collapse-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    margin-left: 4px;
+    border-radius: 6px;
+    background: rgba(255,255,255,0.08);
+    color: var(--controls-text-color);
+    cursor: pointer;
+    pointer-events: auto;
+    border: 1px solid rgba(255,255,255,0.2);
+    transition: var(--controls-transition);
+    font-size: 14px;
+  }
+  .collapse-toggle:hover { background: rgba(255,255,255,0.16); }
 
   .controls-container.compact {
     padding: 8px;
@@ -360,21 +388,45 @@ const CONTROLS_STYLES = `
   }
 
   .controls-container.floating {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
+    position: absolute;
+    bottom: 24px;
+    right: 24px;
     left: auto;
     transform: none;
   }
 
   .controls-container.position-top {
     bottom: auto;
-    top: 20px;
+    top: 24px;
+    left: 50%;
+    transform: translateX(-50%);
   }
 
   .controls-container.position-bottom {
-    /* Default positioning - no override needed */
+    /* Default bottom center positioning is set on base class */
   }
+
+  /* Custom drag position - inline left/top will be set; transform removed */
+  .controls-container.custom-position {
+    position: absolute;
+    transform: none;
+  }
+
+  /* Drag handle */
+  .drag-handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 100%;
+    margin-right: 6px;
+    cursor: grab;
+    user-select: none;
+    opacity: 0.6;
+    transition: opacity 0.2s ease;
+  }
+  .drag-handle:hover { opacity: 0.9; }
+  .drag-handle:active { cursor: grabbing; }
 
   /* Control Groups */
   .control-group {
@@ -515,6 +567,7 @@ const CONTROLS_STYLES = `
     font-size: 11px;
     color: var(--controls-text-color);
     transition: var(--controls-transition);
+    white-space: nowrap;
   }
 
   .loop-indicator.active {
@@ -729,6 +782,15 @@ const CONTROLS_STYLES = `
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
     padding: 14px;
     gap: 10px;
+    width: auto;
+    height: auto;
+    max-width: 90vw;
+    max-height: none;
+    position: fixed;
+    bottom: auto;
+    left: 50%;
+    transform: translateX(-50%);
+    top: 10px;
   }
 
   :host(.fullscreen-mode) .control-button {
@@ -813,6 +875,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
   private container: HTMLElement | null = null;
   private shadowRoot: ShadowRoot | null = null;
   private controlsContainer: HTMLElement | null = null;
+  private isCollapsed: boolean = false;
 
   private config: EnhancedControlsConfig = { ...DEFAULT_CONFIG };
   private isVisible: boolean = true;
@@ -1084,12 +1147,9 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     container.id = 'linguatube-enhanced-controls';
     container.style.cssText = `
       position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
+      inset: 0;
       pointer-events: none;
-      z-index: 1000;
+      z-index: 2147483645;
     `;
     return container;
   }
@@ -1111,6 +1171,25 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     // Create main controls container
     this.controlsContainer = document.createElement('div');
     this.controlsContainer.className = 'controls-container';
+
+    // Add a drag handle
+    const dragHandle = document.createElement('div');
+    dragHandle.className = 'drag-handle';
+    dragHandle.title = 'Drag to reposition';
+    dragHandle.innerHTML = '⋮⋮';
+    this.controlsContainer.appendChild(dragHandle);
+
+    // Collapse toggle button
+    const collapseBtn = document.createElement('button');
+    collapseBtn.className = 'collapse-toggle';
+    collapseBtn.title = 'Collapse/Expand Controls';
+    collapseBtn.setAttribute('aria-label', 'Collapse controls');
+    collapseBtn.textContent = '—';
+    collapseBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.toggleCollapsed();
+    });
+    this.controlsContainer.appendChild(collapseBtn);
 
     // Create visual feedback elements
     this.createFeedbackElements();
@@ -1137,6 +1216,9 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     }
 
     this.shadowRoot.appendChild(this.controlsContainer);
+
+    // Enable drag functionality
+    this.enableDragging(dragHandle);
   }
 
   // ========================================
@@ -1150,7 +1232,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     // Speed decrease button
     const decreaseBtn = document.createElement('button');
     decreaseBtn.className = 'control-button';
-    decreaseBtn.innerHTML = '⏪';
+    decreaseBtn.innerHTML = '◀️';
     decreaseBtn.title = 'Decrease Speed';
     decreaseBtn.addEventListener('click', () => this.adjustSpeed(-0.25));
 
@@ -1164,7 +1246,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     // Speed increase button
     const increaseBtn = document.createElement('button');
     increaseBtn.className = 'control-button';
-    increaseBtn.innerHTML = '⏩';
+    increaseBtn.innerHTML = '▶️';
     increaseBtn.title = 'Increase Speed';
     increaseBtn.addEventListener('click', () => this.adjustSpeed(0.25));
 
@@ -1204,7 +1286,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     // 5-second backward skip
     const skip5BackBtn = document.createElement('button');
     skip5BackBtn.className = 'control-button skip-button';
-    skip5BackBtn.innerHTML = '⏪5s';
+    skip5BackBtn.innerHTML = '⏪';
     skip5BackBtn.title = 'Skip Back 5 Seconds';
     skip5BackBtn.addEventListener('click', () => {
       this.showButtonClickFeedback(skip5BackBtn);
@@ -1214,7 +1296,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     // Previous sentence button
     const prevBtn = document.createElement('button');
     prevBtn.className = 'control-button';
-    prevBtn.innerHTML = '⏮';
+    prevBtn.innerHTML = '⏮️';
     prevBtn.title = 'Previous Sentence';
     prevBtn.addEventListener('click', () => {
       this.showButtonClickFeedback(prevBtn);
@@ -1235,7 +1317,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     // Next sentence button
     const nextBtn = document.createElement('button');
     nextBtn.className = 'control-button';
-    nextBtn.innerHTML = '⏭';
+    nextBtn.innerHTML = '⏭️';
     nextBtn.title = 'Next Sentence';
     nextBtn.addEventListener('click', () => {
       this.showButtonClickFeedback(nextBtn);
@@ -1246,7 +1328,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     // 5-second forward skip
     const skip5ForwardBtn = document.createElement('button');
     skip5ForwardBtn.className = 'control-button skip-button';
-    skip5ForwardBtn.innerHTML = '5s⏩';
+    skip5ForwardBtn.innerHTML = '⏩';
     skip5ForwardBtn.title = 'Skip Forward 5 Seconds';
     skip5ForwardBtn.addEventListener('click', () => {
       this.showButtonClickFeedback(skip5ForwardBtn);
@@ -1539,7 +1621,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     if (!this.controlsContainer) return;
 
     // Reset all position classes
-    this.controlsContainer.classList.remove('floating', 'position-top', 'position-bottom');
+    this.controlsContainer.classList.remove('floating', 'position-top', 'position-bottom', 'custom-position');
 
     // Apply position class based on config
     switch (this.config.position) {
@@ -1554,6 +1636,98 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
         this.controlsContainer.classList.add('position-bottom');
         break;
     }
+
+    // If a custom position has been set via drag, preserve it
+    if (this.controlsContainer.hasAttribute('data-custom-x')) {
+      const x = Number(this.controlsContainer.getAttribute('data-custom-x'));
+      const y = Number(this.controlsContainer.getAttribute('data-custom-y'));
+      this.applyCustomPosition(x, y);
+    } else {
+      // Ensure base centering defaults apply when no custom position
+      if (this.config.position === 'bottom' || this.config.position === 'top') {
+        this.controlsContainer.style.left = '50%';
+        this.controlsContainer.style.transform = 'translateX(-50%)';
+        this.controlsContainer.style.right = '';
+      } else if (this.config.position === 'floating') {
+        this.controlsContainer.style.right = '24px';
+        this.controlsContainer.style.left = 'auto';
+        this.controlsContainer.style.transform = 'none';
+      }
+    }
+  }
+
+  private toggleCollapsed(): void {
+    if (!this.controlsContainer) return;
+    this.isCollapsed = !this.isCollapsed;
+    if (this.isCollapsed) {
+      this.controlsContainer.classList.add('collapsed');
+      // keep drag handle, collapse toggle, state indicators and toast visible by CSS rules
+    } else {
+      this.controlsContainer.classList.remove('collapsed');
+    }
+    // Preserve current position and visibility
+    this.updateCurrentState();
+  }
+
+  private enableDragging(handle: HTMLElement): void {
+    if (!this.controlsContainer || !this.container) return;
+    let isDragging = false;
+    let offsetX = 0;
+    let offsetY = 0;
+
+    const onMouseDown = (e: MouseEvent) => {
+      if (!this.controlsContainer || !this.container) return;
+      const containerRect = this.container.getBoundingClientRect();
+      const controlRect = this.controlsContainer.getBoundingClientRect();
+      // Compute pointer offset within the control, using overlay-relative coords
+      const pointerX = e.clientX - containerRect.left;
+      const pointerY = e.clientY - containerRect.top;
+      offsetX = pointerX - (controlRect.left - containerRect.left);
+      offsetY = pointerY - (controlRect.top - containerRect.top);
+
+      isDragging = true;
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+      // Prevent text selection while dragging
+      document.body.style.userSelect = 'none';
+    };
+
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isDragging || !this.controlsContainer || !this.container) return;
+      const containerRect = this.container.getBoundingClientRect();
+      const pointerX = e.clientX - containerRect.left;
+      const pointerY = e.clientY - containerRect.top;
+      const x = pointerX - offsetX;
+      const y = pointerY - offsetY;
+      this.applyCustomPosition(x, y);
+    };
+
+    const onMouseUp = () => {
+      isDragging = false;
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      document.body.style.userSelect = '';
+    };
+
+    handle.addEventListener('mousedown', onMouseDown);
+  }
+
+  private applyCustomPosition(x: number, y: number): void {
+    if (!this.controlsContainer || !this.container) return;
+    const containerRect = this.container.getBoundingClientRect();
+    const maxX = containerRect.width - this.controlsContainer.offsetWidth - 8;
+    const maxY = containerRect.height - this.controlsContainer.offsetHeight - 8;
+    const clampedX = Math.max(8, Math.min(Math.round(x), Math.round(maxX)));
+    const clampedY = Math.max(8, Math.min(Math.round(y), Math.round(maxY)));
+
+    this.controlsContainer.classList.add('custom-position');
+    this.controlsContainer.style.left = `${clampedX}px`;
+    this.controlsContainer.style.top = `${clampedY}px`;
+    this.controlsContainer.style.right = 'auto';
+    this.controlsContainer.style.bottom = 'auto';
+    this.controlsContainer.style.transform = 'none';
+    this.controlsContainer.setAttribute('data-custom-x', String(clampedX));
+    this.controlsContainer.setAttribute('data-custom-y', String(clampedY));
   }
 
   // ========================================
@@ -1631,7 +1805,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
         startTime: loopStart,
         endTime: loopEnd,
         isActive: true,
-        title: `Loop ${this.formatTime(loopStart)} - ${this.formatTime(loopEnd)}`,
+        title: `${this.formatTime(loopStart)} - ${this.formatTime(loopEnd)}`,
       };
 
       this.playerService.createSegmentLoop(loopStart, loopEnd);
@@ -2041,9 +2215,9 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
   }
 
   private toggleVocabularyMode(): void {
-    console.log(
-      '[EnhancedPlaybackControls] toggleVocabularyMode() called - vocabulary highlighting mode',
-    ); // DEBUG
+    this.logger?.debug('toggleVocabularyMode() called - vocabulary highlighting mode', {
+      component: ComponentType.WORD_LOOKUP,
+    });
     this.vocabularyModeActive = !this.vocabularyModeActive;
     this.updateVocabularyDisplay();
 
@@ -2067,9 +2241,9 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
   }
 
   public toggleVocabularyList(): void {
-    console.log(
-      '[EnhancedPlaybackControls] toggleVocabularyList() called - vocabulary list visibility',
-    ); // DEBUG
+    this.logger?.debug('toggleVocabularyList() called - vocabulary list visibility', {
+      component: ComponentType.WORD_LOOKUP,
+    });
     this.vocabularyListVisible = !this.vocabularyListVisible;
     this.updateVocabularyListDisplay();
 
@@ -2172,9 +2346,15 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     }
 
     try {
-      // Toggle the extension's dual subtitle visibility
+      // Toggle the extension's dual subtitle visibility and force UI sync
       const newVisibility = subtitleComponent.toggleVisibility();
       this.subtitlesVisible = newVisibility;
+      // Force update of the subtitle component's container class to avoid flicker
+      if (newVisibility) {
+        subtitleComponent.show();
+      } else {
+        subtitleComponent.hide();
+      }
 
       this.logger?.debug('Extension subtitles toggled', {
         component: ComponentType.YOUTUBE_INTEGRATION,
@@ -2424,11 +2604,10 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       this.keyboardShortcuts.get(shortcutKey) || this.keyboardShortcuts.get(event.code);
 
     if (handler) {
-      console.log('[EnhancedPlaybackControls] Keyboard shortcut triggered:', {
-        shortcutKey,
-        eventCode: event.code,
-        key: event.key,
-      }); // DEBUG
+      this.logger?.debug('Keyboard shortcut triggered', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: { shortcutKey, eventCode: event.code, key: event.key },
+      });
       event.preventDefault();
       event.stopPropagation();
       handler();
@@ -2574,6 +2753,27 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
 
     this.isVisible = true;
     this.controlsContainer.classList.remove('hidden');
+    // Ensure base position is centered if not custom-dragged
+    if (!this.controlsContainer.hasAttribute('data-custom-x')) {
+      if (this.config.position === 'bottom') {
+        this.controlsContainer.style.left = '50%';
+        this.controlsContainer.style.transform = 'translateX(-50%)';
+        this.controlsContainer.style.bottom = '24px';
+        this.controlsContainer.style.top = '';
+        this.controlsContainer.style.right = '';
+      } else if (this.config.position === 'top') {
+        this.controlsContainer.style.left = '50%';
+        this.controlsContainer.style.transform = 'translateX(-50%)';
+        this.controlsContainer.style.top = '24px';
+        this.controlsContainer.style.bottom = '';
+        this.controlsContainer.style.right = '';
+      } else if (this.config.position === 'floating') {
+        this.controlsContainer.style.right = '24px';
+        this.controlsContainer.style.bottom = '24px';
+        this.controlsContainer.style.left = 'auto';
+        this.controlsContainer.style.transform = 'none';
+      }
+    }
   }
 
   public hide(): void {
@@ -2760,7 +2960,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
         startTime: loopStart,
         endTime: loopEnd,
         isActive: true,
-        title: `Loop ${this.formatTime(loopStart)} - ${this.formatTime(loopEnd)}`,
+        title: `${this.formatTime(loopStart)} - ${this.formatTime(loopEnd)}`,
       };
 
       this.playerService.createSegmentLoop(loopStart, loopEnd);
@@ -2958,6 +3158,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     vocabularyModeActive: boolean;
     vocabularyListVisible: boolean;
     subtitlesVisible: boolean;
+    collapsed: boolean;
     config: EnhancedControlsConfig;
   } {
     return {
@@ -2968,6 +3169,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       vocabularyModeActive: this.vocabularyModeActive,
       vocabularyListVisible: this.vocabularyListVisible,
       subtitlesVisible: this.subtitlesVisible,
+      collapsed: this.isCollapsed,
       config: this.getConfig(),
     };
   }
@@ -3280,22 +3482,29 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
 
     if (this.isFullscreenMode) {
       this.container.classList.add('fullscreen-mode');
-
-      // Adjust positioning for fullscreen
-      this.adjustFullscreenPosition();
-
-      // Show fullscreen feedback
+      // In fullscreen, leave base positioning (top center) unless user dragged it
+      if (this.controlsContainer && !this.controlsContainer.hasAttribute('data-custom-x')) {
+        this.controlsContainer.classList.remove('custom-position');
+        this.controlsContainer.style.left = '50%';
+        this.controlsContainer.style.top = '10px';
+        this.controlsContainer.style.transform = 'translateX(-50%)';
+        this.controlsContainer.style.right = '';
+        this.controlsContainer.style.bottom = '';
+      }
       this.showActionToast('Fullscreen mode', 'success', 1500);
     } else {
       this.container.classList.remove('fullscreen-mode');
 
       // Reset inline styles set during fullscreen
       if (this.controlsContainer) {
-        this.controlsContainer.style.position = '';
-        this.controlsContainer.style.bottom = '';
-        this.controlsContainer.style.left = '';
-        this.controlsContainer.style.transform = '';
-        this.controlsContainer.style.zIndex = '';
+        if (!this.controlsContainer.hasAttribute('data-custom-x')) {
+          this.controlsContainer.classList.remove('custom-position');
+          this.controlsContainer.style.left = '';
+          this.controlsContainer.style.top = '';
+          this.controlsContainer.style.right = '';
+          this.controlsContainer.style.bottom = '';
+          this.controlsContainer.style.transform = '';
+        }
       }
 
       // Reset to normal positioning
@@ -3304,17 +3513,6 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       // Show exit fullscreen feedback
       this.showActionToast('Exited fullscreen', 'success', 1500);
     }
-  }
-
-  private adjustFullscreenPosition(): void {
-    if (!this.controlsContainer || !this.isFullscreenMode) return;
-
-    // In fullscreen, override positioning with fixed positioning
-    this.controlsContainer.style.position = 'fixed';
-    this.controlsContainer.style.bottom = '80px';
-    this.controlsContainer.style.left = '50%';
-    this.controlsContainer.style.transform = 'translateX(-50%)';
-    this.controlsContainer.style.zIndex = '2147483647';
   }
 
   private removeFullscreenObserver(): void {

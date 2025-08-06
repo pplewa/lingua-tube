@@ -24,6 +24,8 @@ import {
   mergeObjects,
   isEmpty,
 } from './index';
+import { Logger } from '../../logging';
+import { ComponentType } from '../../logging/types';
 
 // Example: Enhanced PlayerInteractionService methods using utilities
 class EnhancedPlayerInteractionService {
@@ -45,8 +47,9 @@ class EnhancedPlayerInteractionService {
     if (duration > 0) {
       const clampedTime = clamp(timeInSeconds, { min: 0, max: duration });
       if (clampedTime !== timeInSeconds) {
-        console.warn(
+        Logger.getInstance()?.warn(
           `[PlayerInteractionService] ${paramName} ${timeInSeconds}s clamped to ${clampedTime}s`,
+          { component: ComponentType.YOUTUBE_INTEGRATION },
         );
       }
       return clampedTime;
@@ -105,7 +108,9 @@ class EnhancedPlayerInteractionService {
         timeoutMessage: 'Play operation timed out',
       });
     } catch (error) {
-      console.error('[PlayerInteractionService] Play failed:', error);
+      Logger.getInstance()?.error('[PlayerInteractionService] Play failed', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+      }, error as Error);
       throw error;
     }
   }
@@ -136,7 +141,9 @@ class EnhancedPlayerInteractionService {
         { timeoutMs: 3000, timeoutMessage: 'Seek operation timed out' },
       );
     } catch (error) {
-      console.error('[PlayerInteractionService] Seek failed:', error);
+      Logger.getInstance()?.error('[PlayerInteractionService] Seek failed', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+      }, error as Error);
       throw error;
     }
   }
@@ -186,7 +193,10 @@ class EnhancedSubtitleService {
     const result = validateTimeRange(startTime, endTime);
 
     if (!result.isValid) {
-      console.error('[SubtitleService] Invalid subtitle timing:', result.error);
+      Logger.getInstance()?.error('[SubtitleService] Invalid subtitle timing', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: { error: result.error },
+      });
       return false;
     }
 
@@ -209,7 +219,10 @@ class EnhancedSubtitleService {
 
       return seconds;
     } catch (error) {
-      console.error('[SubtitleService] Failed to parse timestamp:', timeString, error);
+      Logger.getInstance()?.error('[SubtitleService] Failed to parse timestamp', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: { timeString },
+      }, error as Error);
       throw error;
     }
   }
@@ -222,7 +235,10 @@ class EnhancedSubtitleService {
     });
 
     if (!result.isValid) {
-      console.warn('[SubtitleService] Invalid subtitle text:', result.error);
+      Logger.getInstance()?.warn('[SubtitleService] Invalid subtitle text', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: { error: result.error },
+      });
       return '';
     }
 
@@ -278,7 +294,9 @@ class YouTubeElementService {
 
       return videoElement;
     } catch (error) {
-      console.error('[YouTubeElementService] Failed to find video element:', error);
+      Logger.getInstance()?.error('[YouTubeElementService] Failed to find video element', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+      }, error as Error);
       return null;
     }
   }
@@ -338,7 +356,10 @@ class PlayerConfigService {
       if (volumeResult.isValid) {
         validatedConfig.volume = clamp(userConfig.volume, { min: 0, max: 1 });
       } else {
-        console.warn('[PlayerConfigService] Invalid volume, using default:', volumeResult.error);
+        Logger.getInstance()?.warn('[PlayerConfigService] Invalid volume, using default', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: { error: volumeResult.error },
+        });
       }
     }
 
@@ -353,10 +374,10 @@ class PlayerConfigService {
       if (rateResult.isValid) {
         validatedConfig.playbackRate = clamp(userConfig.playbackRate, { min: 0.25, max: 2.0 });
       } else {
-        console.warn(
-          '[PlayerConfigService] Invalid playback rate, using default:',
-          rateResult.error,
-        );
+        Logger.getInstance()?.warn('[PlayerConfigService] Invalid playback rate, using default', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: { error: rateResult.error },
+        });
       }
     }
 
@@ -370,10 +391,10 @@ class PlayerConfigService {
       if (qualityResult.isValid) {
         validatedConfig.quality = userConfig.quality;
       } else {
-        console.warn(
-          '[PlayerConfigService] Invalid quality setting, using default:',
-          qualityResult.error,
-        );
+        Logger.getInstance()?.warn('[PlayerConfigService] Invalid quality setting, using default', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: { error: qualityResult.error },
+        });
       }
     }
 
@@ -442,7 +463,9 @@ class YouTubeAPIService {
       const state = await this.getCurrentPlayerState();
       this.onStateUpdate(state);
     } catch (error) {
-      console.error('[YouTubeAPIService] State check failed:', error);
+      Logger.getInstance()?.error('[YouTubeAPIService] State check failed', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+      }, error as Error);
     }
   }, 500);
 
@@ -478,7 +501,9 @@ class PlayerErrorHandler {
     const currentCount = this.errorCounts.get(errorKey) || 0;
 
     if (currentCount >= this.maxErrors) {
-      console.warn(`[PlayerErrorHandler] Error threshold reached for ${errorKey}, suppressing`);
+      Logger.getInstance()?.warn(`Error threshold reached for ${errorKey}, suppressing`, {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+      });
       return;
     }
 
@@ -489,8 +514,10 @@ class PlayerErrorHandler {
   private reportError(error: Error, context: string): void {
     const sanitizedMessage = sanitizeString(error.message);
     const truncatedMessage = truncateString(sanitizedMessage, 200);
-
-    console.error(`[PlayerErrorHandler] ${context}:`, truncatedMessage);
+    Logger.getInstance()?.error(`[PlayerErrorHandler] ${context}`, {
+      component: ComponentType.YOUTUBE_INTEGRATION,
+      metadata: { message: truncatedMessage },
+    });
 
     // Could send to error tracking service here
   }
@@ -519,7 +546,9 @@ export const UsageExamples = {
         const seconds = parseTimeToSeconds(timeInput);
         return clamp(seconds, { min: 0, max: maxDuration });
       } catch (error) {
-        console.error('Invalid time input:', error);
+        Logger.getInstance()?.error('Invalid time input', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+        }, error as Error);
         return 0;
       }
     },
@@ -554,13 +583,18 @@ export const UsageExamples = {
   eventHandling: {
     createThrottledScrollHandler: () => {
       return throttle((event: Event) => {
-        console.log('Scroll event processed');
+        Logger.getInstance()?.debug('Scroll event processed', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+        });
       }, 100);
     },
 
     createDebouncedSearchHandler: () => {
       return debounce((query: string) => {
-        console.log('Search query:', query);
+        Logger.getInstance()?.debug('Search query', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+          metadata: { query },
+        });
       }, 300);
     },
   },

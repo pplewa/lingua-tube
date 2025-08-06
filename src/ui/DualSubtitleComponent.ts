@@ -1246,7 +1246,7 @@ export class DualSubtitleComponent {
         }
       }, this.config.transitionDuration);
     } else {
-      this.subtitleContainer.classList.remove('hidden');
+      this.subtitleContainer.classList.add('hidden');
     }
 
     this.notifyVisibilityChange(false, 0);

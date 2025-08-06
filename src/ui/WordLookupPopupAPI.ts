@@ -587,12 +587,17 @@ const popup = new WordLookupPopup(
 
 // With event handlers
 popup.on('onShow', (data) => {
-  console.log('Popup shown for word:', data.word);
+  Logger.getInstance()?.info('Popup shown for word', {
+    component: ComponentType.WORD_LOOKUP,
+    metadata: { word: data.word },
+  });
 });
 
 popup.on('onAction', (data) => {
   if (data.action === 'save' && data.success) {
-    console.log('Word saved to vocabulary');
+    Logger.getInstance()?.info('Word saved to vocabulary', {
+      component: ComponentType.WORD_LOOKUP,
+    });
   }
 });
 
@@ -601,8 +606,16 @@ const popup = new PopupBuilder()
   .withConfig({ appearance: { maxWidth: 500 } })
   .withServices(services)
   .withEventHandlers({
-    onShow: (data) => console.log('Shown:', data.word),
-    onHide: (data) => console.log('Hidden:', data.reason)
+    onShow: (data) =>
+      Logger.getInstance()?.info('Shown', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: { word: data.word },
+      }),
+    onHide: (data) =>
+      Logger.getInstance()?.info('Hidden', {
+        component: ComponentType.WORD_LOOKUP,
+        metadata: { reason: data.reason },
+      })
   })
   .build();
 

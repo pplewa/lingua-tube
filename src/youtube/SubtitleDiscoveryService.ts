@@ -202,9 +202,14 @@ export class LinguaTubeSubtitleDiscoveryService implements SubtitleDiscoveryServ
       return;
     }
 
-    this.logger?.info('Starting subtitle discovery monitoring...', {
-      component: ComponentType.YOUTUBE_INTEGRATION,
-    });
+    // Reduce noise: only verbose-log discovery in debug mode
+    try {
+      if ((this.logger as any)?.isDebugModeEnabled && (this.logger as any)?.isDebugModeEnabled()) {
+        this.logger?.debug('Starting subtitle discovery monitoring...', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+        });
+      }
+    } catch {}
     this.isMonitoringActive = true;
 
     // Set up mutation observer for page changes

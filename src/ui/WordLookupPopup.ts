@@ -10,6 +10,7 @@ import { translationCacheService } from '../translation/TranslationCacheService'
 import { TTSService } from '../translation/TTSService';
 import { StorageService } from '../storage';
 import { VocabularyManager } from '../vocabulary/VocabularyManager';
+import { vocabularyObserver } from '../vocabulary/VocabularyObserver';
 import { Logger } from '../logging';
 import { ComponentType } from '../logging/types';
 
@@ -2799,6 +2800,11 @@ ${text}`;
               component: ComponentType.WORD_LOOKUP,
               metadata: { word: this.currentWord, wordId: existingWord.id },
             });
+
+            // Proactively emit removal event to update highlights immediately
+            try {
+              vocabularyObserver.emitWordRemoved(existingWord, 'user');
+            } catch {}
           }
         }
       } else {
@@ -2831,6 +2837,13 @@ ${text}`;
             wordId: result?.data?.id,
           },
         });
+
+        // Proactively emit added event to update highlights immediately
+        try {
+          if (result?.success && result.data) {
+            vocabularyObserver.emitWordAdded(result.data, 'user');
+          }
+        } catch {}
       }
     } catch (error) {
       this.logger?.error('Save/remove word failed', {

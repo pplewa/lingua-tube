@@ -5,6 +5,7 @@
 
 import { storageService } from '../storage';
 import { ConfigService } from '../translation/ConfigService';
+import { Logger, ComponentType } from '../logging';
 
 // Types for messaging and state management
 interface ExtensionState {
@@ -39,13 +40,18 @@ let extensionState: ExtensionState = {
   errors: [],
 };
 
-console.log('[LinguaTube] Background service worker starting...');
+const logger = Logger.getInstance();
+logger?.info('Background service worker starting...', {
+  component: ComponentType.BACKGROUND,
+});
 
 // Initialize storage service and translation API on startup
 (async () => {
   try {
     await storageService.initialize();
-    console.log('[LinguaTube] Storage service initialized successfully');
+    logger?.info('Storage service initialized successfully', {
+      component: ComponentType.BACKGROUND,
+    });
 
     // Initialize Microsoft Translator API
     await initializeTranslationService();
@@ -57,14 +63,22 @@ console.log('[LinguaTube] Background service worker starting...');
     ]);
 
     if (settingsResult.success) {
-      console.log('[LinguaTube] Current settings:', settingsResult.data);
+      logger?.info('Current settings', {
+        component: ComponentType.BACKGROUND,
+        metadata: settingsResult.data,
+      });
     }
 
     if (usageResult.success) {
-      console.log('[LinguaTube] Storage usage:', usageResult.data);
+      logger?.info('Storage usage', {
+        component: ComponentType.BACKGROUND,
+        metadata: usageResult.data,
+      });
     }
   } catch (error) {
-    console.error('[LinguaTube] Failed to initialize storage service:', error);
+    logger?.error('Failed to initialize storage service', {
+      component: ComponentType.BACKGROUND,
+    }, error as Error);
   }
 })();
 
@@ -73,9 +87,12 @@ chrome.webRequest.onBeforeRequest.addListener(
   function (details) {
     const url = new URL(details.url);
     const pot = url.searchParams.get('pot');
-    console.log('[LinguaTube] POT:', pot);
+    logger?.debug('Proof of Origin token captured', {
+      component: ComponentType.BACKGROUND,
+      metadata: { pot }
+    });
     chrome.storage.local.set({ pot }).then(() => {
-      console.log('Value was set');
+      logger?.info('PO token stored', { component: ComponentType.BACKGROUND });
     });
     return { cancel: false };
   },
@@ -85,8 +102,13 @@ chrome.webRequest.onBeforeRequest.addListener(
 
 // Handle messages from content scripts and popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  const level = (request.level ?? 'log') as 'log' | 'info' | 'warn' | 'error';
-  console[level]('[LinguaTube] Received message:', request);
+  const baseContext = { component: ComponentType.BACKGROUND, metadata: { request } } as const;
+  // Only log received messages in debug mode to reduce log volume
+  try {
+    if (logger?.isDebugModeEnabled && logger.isDebugModeEnabled()) {
+      logger.debug('Received message', baseContext);
+    }
+  } catch {}
 
   // Update last activity timestamp
   extensionState.lastActivity = Date.now();
@@ -138,13 +160,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 // Handle extension installation
 chrome.runtime.onInstalled.addListener(async (details) => {
-  console.log('[LinguaTube] Extension installed/updated:', details.reason);
+  logger?.info('Extension installed/updated', {
+    component: ComponentType.BACKGROUND,
+    metadata: { reason: details.reason },
+  });
 
   try {
     await storageService.initialize();
 
     if (details.reason === 'install') {
-      console.log('[LinguaTube] First time installation - setting up defaults');
+      logger?.info('First time installation - setting up defaults', {
+        component: ComponentType.BACKGROUND,
+      });
       // Initialize translation service on first install
       await initializeTranslationService();
 
@@ -154,7 +181,10 @@ chrome.runtime.onInstalled.addListener(async (details) => {
         'Start watching YouTube videos to translate subtitles and build your vocabulary.',
       );
     } else if (details.reason === 'update') {
-      console.log('[LinguaTube] Extension updated from version:', details.previousVersion);
+      logger?.info('Extension updated', {
+        component: ComponentType.BACKGROUND,
+        metadata: { previousVersion: details.previousVersion },
+      });
       // Re-initialize translation service on update to ensure API key is still valid
       await initializeTranslationService();
 
@@ -165,18 +195,22 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     // Create context menu items
     createContextMenus();
   } catch (error) {
-    console.error('[LinguaTube] Installation setup failed:', error);
+    logger?.error('Installation setup failed', {
+      component: ComponentType.BACKGROUND,
+    }, error as Error);
   }
 });
 
 // Handle extension startup
 chrome.runtime.onStartup.addListener(async () => {
-  console.log('[LinguaTube] Extension starting up');
+  logger?.info('Extension starting up', { component: ComponentType.BACKGROUND });
   try {
     await storageService.initialize();
     await initializeTranslationService();
   } catch (error) {
-    console.error('[LinguaTube] Startup initialization failed:', error);
+    logger?.error('Startup initialization failed', {
+      component: ComponentType.BACKGROUND,
+    }, error as Error);
   }
 });
 
@@ -307,7 +341,10 @@ async function handleReportError(
     }
 
     // Log error for debugging
-    console.error('[LinguaTube] Error reported:', errorReport);
+    logger?.error('Error reported', {
+      component: ComponentType.BACKGROUND,
+      metadata: errorReport,
+    });
 
     // Show notification for critical errors
     if (error.context === 'critical') {
@@ -416,12 +453,17 @@ async function handleSetApiKey(apiKey: string, sendResponse: (response: any) => 
     const configService = new ConfigService();
     await configService.setApiKey(apiKey.trim());
 
-    console.log('[LinguaTube] ✅ API key updated manually via message');
+    logger?.info('✅ API key updated manually via message', {
+      component: ComponentType.BACKGROUND,
+    });
 
     // Test the configuration
     try {
       const config = await configService.getConfig();
-      console.log('[LinguaTube] Translation service re-configured with new key');
+      logger?.info('Translation service re-configured with new key', {
+        component: ComponentType.BACKGROUND,
+        metadata: { endpoint: config.endpoint },
+      });
 
       sendResponse({
         success: true,
@@ -504,7 +546,7 @@ function updateBadge(tabId?: number) {
     //   tabId,
     // })
   } catch (error) {
-    console.error('[LinguaTube] Failed to update badge:', error);
+    logger?.error('Failed to update badge', { component: ComponentType.BACKGROUND }, error as Error);
   }
 }
 
@@ -517,7 +559,7 @@ function showNotification(title: string, message: string) {
       message,
     });
   } catch (error) {
-    console.error('[LinguaTube] Failed to show notification:', error);
+    logger?.error('Failed to show notification', { component: ComponentType.BACKGROUND }, error as Error);
   }
 }
 
@@ -538,7 +580,7 @@ async function storeAnalyticsEvent(event: AnalyticsEvent) {
     // Store back
     await chrome.storage.local.set({ analytics });
   } catch (error) {
-    console.error('[LinguaTube] Failed to store analytics event:', error);
+    logger?.error('Failed to store analytics event', { component: ComponentType.BACKGROUND }, error as Error);
   }
 }
 
@@ -595,7 +637,7 @@ function createContextMenus() {
       documentUrlPatterns: ['*://*.youtube.com/watch*'],
     });
   } catch (error) {
-    console.error('[LinguaTube] Failed to create context menus:', error);
+    logger?.error('Failed to create context menus', { component: ComponentType.BACKGROUND }, error as Error);
   }
 }
 
@@ -619,7 +661,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
         break;
     }
   } catch (error) {
-    console.error('[LinguaTube] Context menu action failed:', error);
+    logger?.error('Context menu action failed', { component: ComponentType.BACKGROUND }, error as Error);
   }
 });
 
@@ -629,7 +671,9 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
 async function initializeTranslationService(): Promise<void> {
   try {
-    console.log('[LinguaTube] Initializing Microsoft Translator API...');
+    logger?.info('Initializing Microsoft Translator API...', {
+      component: ComponentType.BACKGROUND,
+    });
 
     const configService = new ConfigService();
 
@@ -637,56 +681,46 @@ async function initializeTranslationService(): Promise<void> {
     try {
       const existingKey = await configService.getApiKey();
       if (existingKey) {
-        console.log('[LinguaTube] ✅ Found existing API key in Chrome storage');
+        logger?.info('✅ Found existing API key in Chrome storage', {
+          component: ComponentType.BACKGROUND,
+        });
         const config = await configService.getConfig();
-        console.log(
-          '[LinguaTube] Translation service ready with stored key, endpoint:',
-          config.endpoint,
-        );
+        logger?.info('Translation service ready with stored key', {
+          component: ComponentType.BACKGROUND,
+          metadata: { endpoint: config.endpoint },
+        });
         return;
       }
     } catch (error) {
-      console.log('[LinguaTube] No existing API key found in storage, checking environment...');
+      logger?.info('No existing API key found in storage, checking environment...', {
+        component: ComponentType.BACKGROUND,
+      });
     }
 
     // Get API key and region from environment variables
     const apiKey = import.meta.env.VITE_TRANSLATION_API_KEY;
     const region = import.meta.env.VITE_TRANSLATION_API_REGION;
 
-    console.log('[LinguaTube] Environment variable check:', {
-      hasApiKey: !!apiKey,
-      apiKeyLength: apiKey ? apiKey.length : 0,
-      // Only show first/last few chars for security
-      apiKeyPreview: apiKey
-        ? `${apiKey.substring(0, 4)}...${apiKey.substring(apiKey.length - 4)}`
-        : 'undefined',
-      region: region || 'global',
+    logger?.debug('Environment variable check', {
+      component: ComponentType.BACKGROUND,
+      metadata: {
+        hasApiKey: !!apiKey,
+        apiKeyLength: apiKey ? apiKey.length : 0,
+        region: region || 'global',
+      },
     });
 
     if (!apiKey) {
-      console.warn('[LinguaTube] ⚠️ VITE_TRANSLATION_API_KEY not found in environment variables');
-      console.warn(
-        '[LinguaTube] This usually means the .env file was not properly loaded during build.',
-      );
-      console.warn('[LinguaTube] Manual API key configuration will be required.');
-
-      // Set up a temporary API key configuration using the known working key
-      const fallbackApiKey =
-        'I8H9OJS0tH3KSwBqdSWBCXlVLSafmVQ3arnjqH7aS7MAjG62X5ZjJQQJ99BGACL93NaXJ3w3AAAbACOGENHq';
-      const fallbackRegion = 'australiaeast';
-
-      console.log('[LinguaTube] Setting up fallback API key configuration...');
-      await configService.setApiKey(fallbackApiKey);
-      await configService.updateConfig({ region: fallbackRegion });
-
-      console.log('[LinguaTube] ✅ Fallback API key configured successfully');
-
-      // Verify configuration
-      const config = await configService.getConfig();
-      console.log(
-        '[LinguaTube] Translation service ready with fallback key, endpoint:',
-        config.endpoint,
-      );
+      logger?.warn('VITE_TRANSLATION_API_KEY not found in environment variables', {
+        component: ComponentType.BACKGROUND,
+      });
+      logger?.warn('This usually means the .env file was not properly loaded during build.', {
+        component: ComponentType.BACKGROUND,
+      });
+      logger?.warn('Manual API key configuration will be required.', {
+        component: ComponentType.BACKGROUND,
+      });
+      // Exit early without configuring a fallback key
       return;
     }
 
@@ -696,31 +730,38 @@ async function initializeTranslationService(): Promise<void> {
     // Set the region if provided
     if (region) {
       await configService.updateConfig({ region });
-      console.log(
-        '[LinguaTube] ✅ Microsoft Translator API key and region configured successfully',
-      );
+      logger?.info('✅ Microsoft Translator API key and region configured successfully', {
+        component: ComponentType.BACKGROUND,
+      });
     } else {
-      console.log(
-        '[LinguaTube] ✅ Microsoft Translator API key configured successfully (using default region)',
-      );
+      logger?.info('✅ Microsoft Translator API key configured successfully (using default region)', {
+        component: ComponentType.BACKGROUND,
+      });
     }
 
     // Verify configuration
     const config = await configService.getConfig();
     const isConfigured = await configService.isConfigured();
 
-    console.log('[LinguaTube] ✅ Translation service configured:', {
-      endpoint: config.endpoint,
-      region: config.region || 'global',
-      version: config.apiVersion,
-      cacheEnabled: config.cacheConfig.enabled,
-      rateLimitTracking: config.rateLimitConfig.trackingEnabled,
-      batchEnabled: config.batchConfig.enabled,
-      isReady: isConfigured,
+    logger?.info('✅ Translation service configured', {
+      component: ComponentType.BACKGROUND,
+      metadata: {
+        endpoint: config.endpoint,
+        region: config.region || 'global',
+        version: config.apiVersion,
+        cacheEnabled: config.cacheConfig.enabled,
+        rateLimitTracking: config.rateLimitConfig.trackingEnabled,
+        batchEnabled: config.batchConfig.enabled,
+        isReady: isConfigured,
+      },
     });
   } catch (error) {
-    console.error('[LinguaTube] ❌ Failed to initialize translation service:', error);
+    logger?.error('❌ Failed to initialize translation service', {
+      component: ComponentType.BACKGROUND,
+    }, error as Error);
     // Don't re-throw the error, just log it - let extension work without translation
-    console.warn('[LinguaTube] Extension will continue without translation features');
+    logger?.warn('Extension will continue without translation features', {
+      component: ComponentType.BACKGROUND,
+    });
   }
 }

@@ -199,7 +199,6 @@ const VOCABULARY_LIST_STYLES = `
     gap: 12px;
     padding: 16px;
     transition: max-height 0.3s ease-out, opacity 0.2s ease-out;
-    overflow: hidden;
   }
 
   .controls-content.collapsed {
@@ -761,6 +760,9 @@ export class VocabularyListComponent {
 
   private state: ListState;
   private eventListenersAttached: boolean = false; // CRITICAL FIX: Track event listener attachment
+  private shadowRootListenersAttached: boolean = false; // Track shadowRoot-level listeners separately
+  private lastExportTime: number = 0; // Prevent duplicate exports
+  private exportInProgress: boolean = false; // Track if export is currently running
   private currentFocusIndex: number = -1; // Track currently focused item for keyboard navigation
   private currentVideoFilter: 'all' | 'current' = 'current'; // Track video filter mode - default to current video
   private controlsCollapsed: boolean = true; // Controls are collapsed by default to save space
@@ -894,9 +896,15 @@ export class VocabularyListComponent {
    */
   private setupVideoChangeListener(): void {
     let currentVideoId = this.getCurrentVideoId();
+    let lastCheckTime = Date.now();
     
     // Listen for URL changes (YouTube navigation)
     const checkVideoChange = () => {
+      const now = Date.now();
+      // Throttle checks to avoid excessive logging
+      if (now - lastCheckTime < 1000) return;
+      lastCheckTime = now;
+      
       const newVideoId = this.getCurrentVideoId();
       if (newVideoId !== currentVideoId) {
         this.logger?.debug('Video changed, refreshing vocabulary list', {
@@ -911,8 +919,8 @@ export class VocabularyListComponent {
       }
     };
     
-    // Check for video changes every 2 seconds
-    setInterval(checkVideoChange, 2000);
+    // Check for video changes every 5 seconds (reduced frequency)
+    setInterval(checkVideoChange, 5000);
     
     // Also listen for popstate events (back/forward navigation)
     window.addEventListener('popstate', checkVideoChange);
@@ -1054,8 +1062,9 @@ export class VocabularyListComponent {
     this.vocabularyObserver.off(VocabularyEventType.WORD_UPDATED);
     this.vocabularyObserver.off(VocabularyEventType.VOCABULARY_CLEARED);
 
-    // CRITICAL FIX: Reset event listener flag to allow reattachment if component is recreated
+    // CRITICAL FIX: Reset event listener flags to allow reattachment if component is recreated
     this.eventListenersAttached = false;
+    this.shadowRootListenersAttached = false;
 
     if (this.container && this.shadowRoot) {
       this.container.removeChild(this.shadowRoot.host);
@@ -1276,12 +1285,36 @@ export class VocabularyListComponent {
    */
   private toggleControls(): void {
     this.controlsCollapsed = !this.controlsCollapsed;
-    this.render(); // Re-render to update the UI
+    
+    // Try to update the UI immediately without full re-render for better performance
+    let elementsFound = false;
+    if (this.shadowRoot) {
+      const controlsContent = this.shadowRoot.querySelector('.controls-content');
+      const toggleIcon = this.shadowRoot.querySelector('.controls-toggle-icon');
+      
+      if (controlsContent && toggleIcon) {
+        elementsFound = true;
+        if (this.controlsCollapsed) {
+          controlsContent.classList.add('collapsed');
+          toggleIcon.classList.remove('expanded');
+        } else {
+          controlsContent.classList.remove('collapsed');
+          toggleIcon.classList.add('expanded');
+        }
+      }
+    }
+    
+    // If elements weren't found, fall back to full re-render
+    if (!elementsFound) {
+      this.render();
+    }
     
     this.logger?.debug('Controls toggled', {
       component: ComponentType.VOCABULARY_LIST,
       metadata: {
         collapsed: this.controlsCollapsed,
+        elementsFound,
+        method: elementsFound ? 'direct_dom' : 'full_render',
       },
     });
   }
@@ -1473,13 +1506,7 @@ export class VocabularyListComponent {
     try {
       const url = new URL(window.location.href);
       const videoId = url.searchParams.get('v');
-      this.logger?.debug('Getting current video ID', {
-        component: ComponentType.VOCABULARY_LIST,
-        metadata: {
-          url: window.location.href,
-          videoId,
-        },
-      });
+      // Only log when video ID actually changes or on errors
       return videoId;
     } catch (error) {
       this.logger?.warn('Failed to parse URL for video ID', {
@@ -1562,8 +1589,9 @@ export class VocabularyListComponent {
       // Update the container content
       existingContainer.innerHTML = this.renderContent();
       
-      // CRITICAL FIX: Reset event listeners flag since DOM was rebuilt
-      this.eventListenersAttached = false;
+      // NOTE: shadowRoot event listeners persist, but element-specific listeners 
+      // (like search input) need to be reattached since elements are recreated
+      this.attachElementSpecificHandlers();
       
       // Restore search input state if it existed
       if (existingSearchInput && searchValue) {
@@ -1579,7 +1607,7 @@ export class VocabularyListComponent {
         }
       }
       
-      this.attachEventHandlers();
+      // No need to call attachEventHandlers() here since shadowRoot listeners persist
     } else {
       // Create the container if it doesn't exist
       const containerDiv = document.createElement('div');
@@ -1880,37 +1908,26 @@ export class VocabularyListComponent {
 
     if (!this.shadowRoot) return;
 
-    // Search input
-    const searchInput = this.shadowRoot.querySelector('.search-input') as HTMLInputElement;
-    this.logger?.debug('Search input found:', {
-      component: ComponentType.VOCABULARY_LIST,
-      metadata: {
-        searchInput: !!searchInput,
-      },
-    });
-      
-    if (searchInput) {
-      searchInput.addEventListener('input', (e) => {
-        const query = (e.target as HTMLInputElement).value;
-        this.search(query);
-      });
-    } else {
-      this.logger?.warn('Search input not found in shadow DOM', {
-        component: ComponentType.VOCABULARY_LIST,
-        metadata: {
-          searchInput: !!searchInput,
-        },
-      });
-    }
+    // Attach shadowRoot-level event listeners (these persist through innerHTML changes)
+    this.attachShadowRootHandlers();
+    
+    // Attach element-specific event listeners (these need reattachment after innerHTML)
+    this.attachElementSpecificHandlers();
+
+    this.eventListenersAttached = true;
+  }
+
+  private attachShadowRootHandlers(): void {
+    if (!this.shadowRoot || this.shadowRootListenersAttached) return;
 
     // Unified change event handler for all selects
     this.shadowRoot.addEventListener('change', (e) => {
       const target = e.target as HTMLSelectElement;
       
       // Sort controls
-              if (target.classList.contains('sort-select')) {
-          this.sort(target.value, this.state.sortOrder);
-        }
+      if (target.classList.contains('sort-select')) {
+        this.sort(target.value, this.state.sortOrder);
+      }
       
       // Video filter
       if (target.hasAttribute('data-action') && target.getAttribute('data-action') === 'filter-by-video') {
@@ -1931,7 +1948,8 @@ export class VocabularyListComponent {
       if (action === 'close') {
         this.handleAction('close', ''); // Close doesn't need wordId
       } else if (action === 'toggle-controls') {
-        this.handleAction('toggle-controls', ''); // Toggle controls doesn't need wordId
+        this.toggleControls(); // Handle toggle-controls directly to avoid double calls
+        return; // Early return to prevent further processing
       } else if (action && wordId) {
         this.handleAction(action, wordId);
       } else if (action === 'import' && format) {
@@ -1963,7 +1981,34 @@ export class VocabularyListComponent {
       this.handleKeyboardNavigation(e as KeyboardEvent);
     });
 
-    this.eventListenersAttached = true; // Mark as attached
+    this.shadowRootListenersAttached = true;
+  }
+
+  private attachElementSpecificHandlers(): void {
+    if (!this.shadowRoot) return;
+
+    // Search input - needs to be reattached after innerHTML changes
+    const searchInput = this.shadowRoot.querySelector('.search-input') as HTMLInputElement;
+    this.logger?.debug('Search input found:', {
+      component: ComponentType.VOCABULARY_LIST,
+      metadata: {
+        searchInput: !!searchInput,
+      },
+    });
+      
+    if (searchInput) {
+      searchInput.addEventListener('input', (e) => {
+        const query = (e.target as HTMLInputElement).value;
+        this.search(query);
+      });
+    } else {
+      this.logger?.warn('Search input not found in shadow DOM', {
+        component: ComponentType.VOCABULARY_LIST,
+        metadata: {
+          searchInput: !!searchInput,
+        },
+      });
+    }
   }
 
   private handleAction(action: string, wordId: string): void {
@@ -2131,6 +2176,49 @@ export class VocabularyListComponent {
   }
 
   private async handleExport(format: 'json' | 'csv' | 'anki'): Promise<void> {
+    const now = Date.now();
+    const timeSinceLastExport = now - this.lastExportTime;
+    
+    this.logger?.debug('Export handler called', {
+      component: ComponentType.VOCABULARY_LIST,
+      metadata: {
+        format,
+        timestamp: now,
+        timeSinceLastExport,
+        lastExportTime: this.lastExportTime,
+        wordsCount: this.state.words.length,
+        callStack: new Error().stack?.split('\n').slice(1, 4).join(' | '),
+      },
+    });
+    
+    // Prevent duplicate exports - check both time and in-progress flag
+    if (this.exportInProgress) {
+      this.logger?.warn('Export blocked - already in progress', {
+        component: ComponentType.VOCABULARY_LIST,
+        metadata: {
+          format,
+          timeSinceLastExport,
+          blockedAt: now,
+        },
+      });
+      return;
+    }
+    
+    if (timeSinceLastExport < 2000 && this.lastExportTime > 0) {
+      this.logger?.warn('Export blocked - too recent', {
+        component: ComponentType.VOCABULARY_LIST,
+        metadata: {
+          format,
+          timeSinceLastExport,
+          blockedAt: now,
+        },
+      });
+      return;
+    }
+    
+    this.lastExportTime = now;
+    this.exportInProgress = true;
+    
     try {
       const result = await this.vocabularyManager.exportVocabulary(format);
       if (result.success && result.data) {
@@ -2174,10 +2262,13 @@ export class VocabularyListComponent {
           format: format,
         },
       });
+    } finally {
+      // Always reset the in-progress flag
+      this.exportInProgress = false;
     }
     
-    // Also trigger event for external handling
-    this.events.onExportRequest?.(format);
+    // NOTE: Removed external event trigger to prevent duplicate downloads
+    // The component now handles export internally without delegating to manager
   }
 
   private renderResultsOnly(): void {

@@ -2445,9 +2445,14 @@ export class PlayerInteractionService {
   private async recheckVideoElement(): Promise<void> {
     if (!this.isInitialized) return;
 
-    logger?.info('Rechecking video element due to DOM changes', {
-      component: ComponentType.YOUTUBE_INTEGRATION,
-    });
+    // Log rechecks only in debug mode to avoid log spam
+    try {
+      if ((logger as any)?.isDebugModeEnabled && (logger as any)?.isDebugModeEnabled()) {
+        logger?.debug('Rechecking video element due to DOM changes', {
+          component: ComponentType.YOUTUBE_INTEGRATION,
+        });
+      }
+    } catch {}
 
     const currentElement = await this.findVideoElement();
 

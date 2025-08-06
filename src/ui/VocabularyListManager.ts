@@ -1892,49 +1892,27 @@ export class VocabularyListManager {
     });
 
     try {
-      // Get vocabulary data directly since exportVocabulary doesn't exist
-      const result = await this.vocabularyManager.getVocabulary();
-      if (result.success && result.data) {
-        let exportData: string;
-        let filename: string;
-        let mimeType: string;
+      const exportResult = await this.vocabularyManager.exportVocabulary(format);
+      if (exportResult.success && exportResult.data) {
+        const { data } = exportResult;
+        const filename =
+          format === 'json'
+            ? 'vocabulary-export.json'
+            : format === 'csv'
+              ? 'vocabulary-export.csv'
+              : 'vocabulary-export.txt';
+        const mimeType =
+          format === 'json' ? 'application/json' : format === 'csv' ? 'text/csv' : 'text/plain';
 
-        switch (format) {
-          case 'json':
-            exportData = JSON.stringify(result.data, null, 2);
-            filename = 'vocabulary-export.json';
-            mimeType = 'application/json';
-            break;
-          case 'csv':
-            exportData = this.convertToCSV(result.data);
-            filename = 'vocabulary-export.csv';
-            mimeType = 'text/csv';
-            break;
-          case 'anki':
-            exportData = this.convertToAnki(result.data);
-            filename = 'vocabulary-export.txt';
-            mimeType = 'text/plain';
-            break;
-          default:
-            throw new Error(`Unsupported export format: ${format}`);
-        }
-
-        this.downloadFile(exportData, filename, mimeType);
+        this.downloadFile(data, filename, mimeType);
         this.logger?.info('Export completed', {
           component: ComponentType.WORD_LOOKUP,
-          metadata: {
-            filename: filename,
-            format: format,
-            wordCount: result.data.length,
-          },
+          metadata: { filename, format },
         });
       } else {
-        this.logger?.error('Export failed - no vocabulary data', {
+        this.logger?.error('Export failed', {
           component: ComponentType.WORD_LOOKUP,
-          metadata: {
-            error: result.error?.message || 'No vocabulary data available',
-            format: format,
-          },
+          metadata: { format, error: exportResult.error?.message },
         });
       }
     } catch (error) {
@@ -2249,61 +2227,22 @@ export class VocabularyListManager {
    * Helper to show a user-friendly error message
    */
   private showNavigationError(message: string): void {
-    // Create a temporary toast notification for better UX
-    const toast = document.createElement('div');
-    toast.style.cssText = `
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      background: #f56565;
-      color: white;
-      padding: 12px 20px;
-      border-radius: 8px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      font-size: 14px;
-      font-weight: 500;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-      z-index: 2147483647;
-      max-width: 300px;
-      word-wrap: break-word;
-      animation: slideInRight 0.3s ease-out;
-    `;
-    
-    // Add animation keyframes if not already present
-    if (!document.querySelector('#linguatube-toast-styles')) {
-      const style = document.createElement('style');
-      style.id = 'linguatube-toast-styles';
-      style.textContent = `
-        @keyframes slideInRight {
-          from { transform: translateX(100%); opacity: 0; }
-          to { transform: translateX(0); opacity: 1; }
-        }
-        @keyframes slideOutRight {
-          from { transform: translateX(0); opacity: 1; }
-          to { transform: translateX(100%); opacity: 0; }
-        }
-      `;
-      document.head.appendChild(style);
+    try {
+      // Lazy import to avoid bundling issues if tree-shaken
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { showToast } = require('./Toast') as { showToast: (m: string, v?: any, d?: number) => void };
+      showToast(message, 'error', 4000);
+    } catch {
+      // Fallback minimal inline toast if dynamic import fails
+      const div = document.createElement('div');
+      div.textContent = `[LinguaTube] ${message}`;
+      div.style.cssText = 'position:fixed;top:20px;right:20px;background:#f56565;color:#fff;padding:12px 20px;border-radius:8px;z-index:2147483647;';
+      document.body.appendChild(div);
+      setTimeout(() => div.parentNode && div.parentNode.removeChild(div), 4000);
     }
-    
-    toast.textContent = `[LinguaTube] ${message}`;
-    document.body.appendChild(toast);
-    
-    // Auto-remove after 4 seconds with slide out animation
-    setTimeout(() => {
-      toast.style.animation = 'slideOutRight 0.3s ease-in forwards';
-      setTimeout(() => {
-        if (toast.parentNode) {
-          toast.parentNode.removeChild(toast);
-        }
-      }, 300);
-    }, 4000);
-    
     this.logger?.warn('Navigation error shown to user', {
       component: ComponentType.WORD_LOOKUP,
-      metadata: {
-        message: message,
-      },
+      metadata: { message },
     });
   }
 
@@ -2311,58 +2250,20 @@ export class VocabularyListManager {
    * Helper to show a user-friendly success message
    */
   private showNavigationSuccess(message: string): void {
-    const toast = document.createElement('div');
-    toast.style.cssText = `
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      background: #4CAF50;
-      color: white;
-      padding: 12px 20px;
-      border-radius: 8px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      font-size: 14px;
-      font-weight: 500;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-      z-index: 2147483647;
-      max-width: 300px;
-      word-wrap: break-word;
-      animation: slideInRight 0.3s ease-out;
-    `;
-
-    if (!document.querySelector('#linguatube-toast-styles')) {
-      const style = document.createElement('style');
-      style.id = 'linguatube-toast-styles';
-      style.textContent = `
-        @keyframes slideInRight {
-          from { transform: translateX(100%); opacity: 0; }
-          to { transform: translateX(0); opacity: 1; }
-        }
-        @keyframes slideOutRight {
-          from { transform: translateX(0); opacity: 1; }
-          to { transform: translateX(100%); opacity: 0; }
-        }
-      `;
-      document.head.appendChild(style);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { showToast } = require('./Toast') as { showToast: (m: string, v?: any, d?: number) => void };
+      showToast(message, 'success', 4000);
+    } catch {
+      const div = document.createElement('div');
+      div.textContent = `[LinguaTube] ${message}`;
+      div.style.cssText = 'position:fixed;top:20px;right:20px;background:#4CAF50;color:#fff;padding:12px 20px;border-radius:8px;z-index:2147483647;';
+      document.body.appendChild(div);
+      setTimeout(() => div.parentNode && div.parentNode.removeChild(div), 4000);
     }
-
-    toast.textContent = `[LinguaTube] ${message}`;
-    document.body.appendChild(toast);
-
-    setTimeout(() => {
-      toast.style.animation = 'slideOutRight 0.3s ease-in forwards';
-      setTimeout(() => {
-        if (toast.parentNode) {
-          toast.parentNode.removeChild(toast);
-        }
-      }, 300);
-    }, 4000);
-
     this.logger?.info('Navigation success shown to user', {
       component: ComponentType.WORD_LOOKUP,
-      metadata: {
-        message: message,
-      },
+      metadata: { message },
     });
   }
 

@@ -23,6 +23,8 @@ import { SubtitleCacheService, createSubtitleCache } from './CacheService';
 import { RetryService, createRetryService } from './RetryService';
 import { SegmentMerger, createSegmentMerger } from './SegmentMerger';
 import { CorsHandler, createExtensionCorsHandler } from './CorsHandler';
+import { Logger } from '../logging/Logger';
+import { ComponentType } from '../logging/types';
 
 /**
  * Service configuration
@@ -82,6 +84,7 @@ export class SubtitleFetchingService {
 
   private readonly metrics: ServiceMetrics;
   private readonly requestTimes: number[] = [];
+  private readonly logger = Logger.getInstance();
 
   constructor(config: Partial<SubtitleServiceConfig> = {}) {
     this.config = { ...DEFAULT_SERVICE_CONFIG, ...config };
@@ -148,7 +151,7 @@ export class SubtitleFetchingService {
 
       return this.finalizeTiming(result, startTime);
     } catch (error) {
-      this.log('error', `[${requestId}] Unexpected error:`, error);
+      this.log('error', `[${requestId}] Unexpected error: ${(error as Error)?.message}`, error);
 
       const fetchError: SubtitleFetchError = {
         code: SubtitleErrorCode.UNKNOWN_ERROR,
@@ -253,7 +256,7 @@ export class SubtitleFetchingService {
     }
 
     this.metrics.failedRequests++;
-    this.log('error', `[${requestId}] All attempts failed. Last error:`, lastError);
+    this.log('error', `[${requestId}] All attempts failed. Last error: ${lastError?.message}`);
 
     return {
       success: false,
@@ -359,7 +362,7 @@ export class SubtitleFetchingService {
         responseSize,
       };
     } catch (error) {
-      this.log('error', `[${requestId}] Fetch failed:`, error);
+      this.log('error', `[${requestId}] Fetch failed: ${(error as Error)?.message}`, error);
 
       return {
         success: false,
@@ -468,7 +471,7 @@ export class SubtitleFetchingService {
         responseSize: content.length,
       };
     } catch (error) {
-      this.log('error', `[${requestId}] Parse failed:`, error);
+      this.log('error', `[${requestId}] Parse failed: ${(error as Error)?.message}`, error);
 
       return {
         success: false,
@@ -519,7 +522,7 @@ export class SubtitleFetchingService {
       this.metrics.cacheMisses++;
       return null;
     } catch (error) {
-      this.log('warn', `[${requestId}] Cache check failed:`, error);
+      this.log('warn', `[${requestId}] Cache check failed: ${(error as Error)?.message}`);
       return null;
     }
   }
@@ -539,7 +542,7 @@ export class SubtitleFetchingService {
       await this.cacheService.set(cacheKey, subtitleFile);
       this.log('debug', `[${requestId}] Cached successfully`);
     } catch (error) {
-      this.log('warn', `[${requestId}] Cache storage failed:`, error);
+      this.log('warn', `[${requestId}] Cache storage failed: ${(error as Error)?.message}`);
     }
   }
 
@@ -710,10 +713,22 @@ export class SubtitleFetchingService {
   /**
    * Logging utility
    */
-  private log(level: 'error' | 'warn' | 'info' | 'debug', message: string, ...args: any[]): void {
-    if (this.shouldLog(level)) {
-      const timestamp = new Date().toISOString();
-      console[level](`[${timestamp}] [SubtitleService] ${message}`, ...args);
+  private log(level: 'error' | 'warn' | 'info' | 'debug', message: string, error?: unknown): void {
+    if (!this.shouldLog(level)) return;
+    const context = { component: ComponentType.SUBTITLE_MANAGER, metadata: { service: 'SubtitleService' } } as const;
+    switch (level) {
+      case 'debug':
+        this.logger?.debug(message, context);
+        break;
+      case 'info':
+        this.logger?.info(message, context);
+        break;
+      case 'warn':
+        this.logger?.warn(message, context);
+        break;
+      case 'error':
+        this.logger?.error(message, context, error instanceof Error ? error : undefined);
+        break;
     }
   }
 

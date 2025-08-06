@@ -51,7 +51,7 @@ export class Logger {
   private config: LoggerConfig;
   private logQueue: LogEntry[] = [];
   private performanceMarks: Map<string, number> = new Map();
-  private batchTimer: number | null = null;
+  private batchTimer: ReturnType<typeof setInterval> | null = null;
   private isBackground: boolean;
   private sessionId: string;
   private extensionVersion: string;
@@ -92,9 +92,6 @@ export class Logger {
    * Get singleton instance of Logger
    */
   public static getInstance(config?: Partial<LoggerConfig>): Logger | null {
-    if (typeof window === 'undefined') {
-      return null;
-    }
     if (!Logger.instance) {
       Logger.instance = new Logger(config);
     }
@@ -204,7 +201,7 @@ export class Logger {
    */
   private setupBatchTimer(): void {
     if (this.config.batching.enabled && this.isBackground) {
-      this.batchTimer = window.setInterval(() => {
+      this.batchTimer = setInterval(() => {
         this.flushLogs();
       }, this.config.batching.flushInterval);
     }
@@ -764,9 +761,11 @@ export class Logger {
   private async flushLogs(): Promise<void> {
     if (this.logQueue.length === 0 || !this.config.enableStorage) return;
 
+    // Capture the current batch outside try/catch so it's visible in catch
+    const logsToFlush = [...this.logQueue];
+    this.logQueue = [];
+
     try {
-      const logsToFlush = [...this.logQueue];
-      this.logQueue = [];
 
       const storedEntries: StoredLogEntry[] = logsToFlush.map((entry) => ({
         ...entry,
@@ -789,8 +788,17 @@ export class Logger {
       await chrome.storage.local.set({ logs: limitedLogs });
     } catch (error) {
       console.error('[Logger] Failed to flush logs:', error);
-      // Re-add failed logs to queue
-      this.logQueue.unshift(...this.logQueue);
+      // Re-add failed logs to queue in a bounded way
+      try {
+        const remainingCapacity = Math.max(0, this.config.maxEntries - this.logQueue.length);
+        if (remainingCapacity > 0) {
+          this.logQueue.unshift(...logsToFlush.slice(-remainingCapacity));
+        }
+        // Disable storage to prevent repeated QUOTA errors this session
+        this.config = { ...this.config, enableStorage: false };
+      } catch {
+        // Drop silently if we cannot safely re-queue
+      }
     }
   }
 
@@ -809,6 +817,27 @@ export class Logger {
     // Enforce retention period
     const cutoffDate = new Date(Date.now() - this.config.retentionDays * 24 * 60 * 60 * 1000);
     logs = logs.filter((log) => new Date(log.timestamp) > cutoffDate);
+
+    // Enforce approximate byte-size limit to avoid QUOTA_BYTES errors
+    try {
+      const maxBytes = Math.max(262144, Math.floor(this.config.maxStorageSize * 0.9));
+      let estimated = JSON.stringify(logs).length;
+      if (estimated > maxBytes) {
+        const avg = Math.max(256, Math.floor(estimated / Math.max(1, logs.length)));
+        const over = estimated - maxBytes;
+        const approxRemove = Math.min(logs.length - 1, Math.ceil(over / avg));
+        if (approxRemove > 0) {
+          logs = logs.slice(0, logs.length - approxRemove);
+          estimated = JSON.stringify(logs).length;
+        }
+        while (estimated > maxBytes && logs.length > 0) {
+          logs.pop();
+          estimated = JSON.stringify(logs).length;
+        }
+      }
+    } catch {
+      // If we cannot compute size, keep current logs
+    }
 
     return logs;
   }
