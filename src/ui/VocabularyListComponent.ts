@@ -392,11 +392,11 @@ const VOCABULARY_LIST_STYLES = `
   }
 
   .list-item {
-    padding: 16px 20px;
+    padding: 8px 12px;
     border-bottom: 1px solid #f1f5f9;
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 8px;
     transition: background-color 0.2s;
     cursor: pointer;
   }
@@ -460,23 +460,29 @@ const VOCABULARY_LIST_STYLES = `
     width: 16px;
     height: 16px;
     cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+
+  .list-item:hover .item-checkbox {
+    opacity: 1;
   }
 
   .item-content {
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 2px;
   }
 
   .item-word {
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 600;
     color: #2d3748;
-    margin-bottom: 4px;
+    margin-bottom: 2px;
     cursor: pointer; /* Make word clickable */
     transition: all 0.2s ease;
-    padding: 4px 8px;
+    padding: 2px 6px;
     border-radius: 4px;
     display: inline-block;
   }
@@ -596,16 +602,11 @@ const VOCABULARY_LIST_STYLES = `
   }
 
   .item-translation {
-    font-size: 14px;
+    font-size: 12px;
     color: #4a5568;
   }
 
-  .item-meta {
-    font-size: 12px;
-    color: #718096;
-    display: flex;
-    gap: 12px;
-  }
+  .item-meta { display: none; }
 
   .item-actions {
     display: flex;
@@ -638,17 +639,8 @@ const VOCABULARY_LIST_STYLES = `
     color: #c53030;
   }
 
-  /* Review button styling */
-  .review-button {
-    background: #e6fffa !important;
-    color: #2f855a !important;
-    border-color: #c6f6d5 !important;
-  }
-
-  .review-button:hover {
-    background: #c6f6d5 !important;
-    color: #276749 !important;
-  }
+  /* Hide review button when feature is disabled */
+  .review-button { display: none; }
 
   /* Learning status indicators */
   .list-item.status-new {
@@ -1865,21 +1857,11 @@ export class VocabularyListComponent {
             ${this.escapeHtml(word.word)}
           </div>
           <div class="item-translation">${this.escapeHtml(word.translation)}</div>
-          <div class="item-meta">
-            <span>Added: ${dateAdded}</span>
-            <span>Reviews: ${word.reviewCount || 0}</span>
-            ${word.learningStatus ? `<span>Status: ${word.learningStatus}</span>` : ''}
-            ${word.lastReviewed ? `<span>Last reviewed: ${new Date(word.lastReviewed).toLocaleDateString()}</span>` : ''}
-            ${word.difficulty ? `<span>Difficulty: ${word.difficulty}</span>` : ''}
-          </div>
+          <!-- meta hidden per simplified design -->
+          <div class="item-meta"></div>
         </div>
         <div class="item-actions">
-          <button class="action-button review-button" data-action="review" data-word-id="${word.id}" title="Mark as reviewed">
-            ✓ Review
-          </button>
-          <button class="action-button" data-action="edit" data-word-id="${word.id}">
-            Edit
-          </button>
+          <!-- edit/review hidden per simplified design -->
           <button class="action-button danger" data-action="delete" data-word-id="${word.id}">
             Delete
           </button>

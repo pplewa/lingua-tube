@@ -2786,36 +2786,36 @@ ${text}`;
     if (!this.currentWord || this.isDestroyed) return;
 
     const actionKey = 'save';
-    this.isPerformingAction = true;
-    this.setActionLoading(actionKey, true);
+      // Prevent double clicks from racing
+      if (this.isPerformingAction) return;
+      this.isPerformingAction = true;
+      this.setActionLoading(actionKey, true);
 
     try {
       if (this.isWordSaved) {
         // Remove word if it's already saved
+        // Find the exact saved item by scanning cache (tolerate language mismatches)
         const vocabulary = await this.vocabularyService.getVocabulary();
-        if (vocabulary.success && vocabulary.data) {
-          const existingWord = vocabulary.data.find(
-            (item) =>
-              item.word.toLowerCase() === this.currentWord.toLowerCase() &&
-              item.sourceLanguage === this.currentSourceLanguage,
-          );
-
-          if (existingWord) {
-            await this.vocabularyService.removeWords([existingWord.id]);
+        if (vocabulary.success && Array.isArray(vocabulary.data)) {
+          const lc = this.currentWord.toLowerCase();
+          const match = vocabulary.data.find((item) => item.word.toLowerCase() === lc);
+          if (match) {
+            await this.vocabularyService.removeWords([match.id]);
             this.isWordSaved = false;
+            this.updateSaveButtonText();
 
             if (!this.isDestroyed) {
+              // Use onWordSaved callback for UI refreshes elsewhere; removal path may not be listened separately
               this.events.onWordSaved?.(this.currentWord);
             }
 
             this.logger?.debug('Word removed from vocabulary', {
               component: ComponentType.WORD_LOOKUP,
-              metadata: { word: this.currentWord, wordId: existingWord.id },
+              metadata: { word: this.currentWord, wordId: match.id },
             });
 
-            // Proactively emit removal event to update highlights immediately
             try {
-              vocabularyObserver.emitWordRemoved(existingWord, 'user');
+              vocabularyObserver.emitWordRemoved(match, 'user');
             } catch {}
           }
         }
@@ -2905,6 +2905,13 @@ ${text}`;
       if (!this.isDestroyed) {
         this.setActionLoading(actionKey, false);
       }
+      // Re-check saved state after operation to keep UI truthful
+      try {
+        if (this.currentWord) {
+          await this.checkWordSaved(this.currentWord);
+          this.updateSaveButtonText();
+        }
+      } catch {}
     }
   }
 
