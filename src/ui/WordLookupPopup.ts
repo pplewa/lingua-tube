@@ -2757,7 +2757,19 @@ ${text}`;
 
   private async checkWordSaved(word: string): Promise<void> {
     try {
-      this.isWordSaved = await this.vocabularyService.isWordSaved(word, this.currentSourceLanguage);
+      // Be tolerant of language code mismatches by checking a small language set
+      const primary = (this.currentSourceLanguage || 'auto').toLowerCase();
+      const candidates = Array.from(new Set([primary, 'auto', 'th', 'en', 'es', 'fr', 'de']));
+
+      let found = false;
+      for (const lang of candidates) {
+        // eslint-disable-next-line no-await-in-loop
+        if (await this.vocabularyService.isWordSaved(word, lang)) {
+          found = true;
+          break;
+        }
+      }
+      this.isWordSaved = found;
     } catch (error) {
       this.logger?.warn('Failed to check if word is saved', {
         component: ComponentType.WORD_LOOKUP,
@@ -2844,6 +2856,8 @@ ${text}`;
 
         const result = await this.trackOperation(savePromise);
         this.isWordSaved = true;
+        // Reflect state in the UI immediately
+        this.updateSaveButtonText();
 
         if (!this.isDestroyed) {
           this.events.onWordSaved?.(this.currentWord);

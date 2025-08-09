@@ -765,6 +765,16 @@ class LinguaTubeContentScript {
       component: ComponentType.CONTENT_SCRIPT,
       action: 'vocabulary_bridge_ready',
     });
+
+    // Initial sync: push current controls state to subtitle component so UI and behavior match
+    try {
+      const current = this.state.components.playbackControls.getState();
+      subtitleComponent.setVocabularyMode(!!current.vocabularyModeActive);
+      this.logger?.debug('Vocabulary mode initial sync applied', {
+        component: ComponentType.CONTENT_SCRIPT,
+        metadata: { vocabularyModeActive: current.vocabularyModeActive },
+      });
+    } catch {}
   }
 
   private setupVocabularyListBridge(): void {
@@ -812,6 +822,20 @@ class LinguaTubeContentScript {
       component: ComponentType.CONTENT_SCRIPT,
       action: 'vocabulary_list_bridge_ready',
     });
+
+    // Initial sync: apply current controls visibility to the manager
+    try {
+      const current = this.state.components.playbackControls.getState();
+      if (current.vocabularyListVisible) {
+        this.showVocabularyList();
+      } else {
+        this.hideVocabularyList();
+      }
+      this.logger?.debug('Vocabulary list initial sync applied', {
+        component: ComponentType.CONTENT_SCRIPT,
+        metadata: { vocabularyListVisible: current.vocabularyListVisible },
+      });
+    } catch {}
   }
 
   private vocabularyListContainer: HTMLElement | null = null;
