@@ -2809,6 +2809,26 @@ ${text}`;
         }
       } else {
         // Save word if it's not already saved
+        // Capture precise playback time in seconds (no heuristics)
+        const currentTimeSeconds = (() => {
+          try {
+            const video = document.querySelector('video') as HTMLVideoElement | null;
+            if (video && typeof video.currentTime === 'number' && !Number.isNaN(video.currentTime)) {
+              return Math.max(0, Math.floor(video.currentTime));
+            }
+          } catch {}
+          // Fallback: parse from URL param `t` if present
+          try {
+            const url = new URL(window.location.href);
+            const tParam = url.searchParams.get('t');
+            if (tParam) {
+              const t = parseInt(tParam, 10);
+              if (!Number.isNaN(t) && t >= 0) return t;
+            }
+          } catch {}
+          return 0;
+        })();
+
         const savePromise = this.vocabularyService.saveWord(
           this.currentWord,
           this.translation,
@@ -2818,7 +2838,7 @@ ${text}`;
             targetLanguage: this.currentTargetLanguage,
             videoId: this.extractVideoId(window.location.href) || '',
             videoTitle: await this.getVideoTitle(),
-            timestamp: Date.now(),
+            timestamp: currentTimeSeconds,
           },
         );
 

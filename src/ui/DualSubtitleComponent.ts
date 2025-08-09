@@ -1640,23 +1640,22 @@ export class DualSubtitleComponent {
     try {
       // Get the current source language from the subtitle track
       const currentTrack = this.playerService.getCurrentSubtitleTrack();
-      const sourceLanguage = currentTrack?.language || 'auto';
-      
+      const sourceLanguage = (currentTrack?.language || 'auto').toLowerCase();
+
       // Normalize the word - less aggressive than before, preserving more characters
       const cleanWord = word.trim().toLowerCase();
-      
-      // First try with the actual source language
-      let isVocabularyWord = await this.vocabularyManager.isWordSaved(cleanWord, sourceLanguage);
-      
-      // If not found and source language is not one of the common ones, try fallback languages
-      if (!isVocabularyWord && !['auto', 'en', 'es', 'fr', 'th', 'de'].includes(sourceLanguage)) {
-        const fallbackLanguages = ['auto', 'en', 'es', 'fr', 'th', 'de'];
-        
-        for (const lang of fallbackLanguages) {
-          isVocabularyWord = await this.vocabularyManager.isWordSaved(cleanWord, lang);
-          if (isVocabularyWord) {
-            break;
-          }
+
+      // Always attempt a small set of fallback languages to tolerate mismatches
+      const candidateLanguages = Array.from(
+        new Set([sourceLanguage, 'auto', 'th', 'en', 'es', 'fr', 'de'])
+      );
+
+      let isVocabularyWord = false;
+      for (const lang of candidateLanguages) {
+        // eslint-disable-next-line no-await-in-loop
+        if (await this.vocabularyManager.isWordSaved(cleanWord, lang)) {
+          isVocabularyWord = true;
+          break;
         }
       }
 

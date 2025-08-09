@@ -113,6 +113,9 @@ export class VocabularyListManager {
   private readonly logger = Logger.getInstance();
   private playerStateListeners: Array<() => void> = [];
   private storageService: typeof storageService; // CRITICAL FIX: Add StorageService for persistence
+  // Drag/positioning state to prevent jumpiness and unwanted auto-reposition
+  private isDragging: boolean = false;
+  private hasCustomPosition: boolean = false; // set after first user drag
 
   // ========================================
   // Constructor and Initialization
@@ -309,31 +312,20 @@ export class VocabularyListManager {
     if (!this.state.isVisible) return;
 
     try {
-      // Always destroy the component
+      // Always destroy the component UI, but preserve container and position state
       if (this.state.activeComponent) {
         this.state.activeComponent.destroy();
       }
 
-      // Handle container cleanup based on whether it's content script's container or our own
-      if (this.state.currentContainer) {
-        if (this.state.currentContainer.id === 'linguatube-vocabulary-list-container') {
-          // This is the content script's container - just hide it, don't remove it
-          this.state.currentContainer.style.opacity = '0';
-          this.state.currentContainer.style.visibility = 'hidden';
-          this.state.currentContainer.style.pointerEvents = 'none';
-          // Clear the content but keep the container
-          this.state.currentContainer.innerHTML = '';
-        } else {
-          // This is our popup container - remove it completely
-          if (this.state.currentContainer.parentNode) {
-            this.state.currentContainer.parentNode.removeChild(this.state.currentContainer);
-          }
-          
-          // Clean up drag handlers if they exist
-          if ((this.state.currentContainer as any)._dragCleanup) {
-            (this.state.currentContainer as any)._dragCleanup();
-          }
-        }
+      // Do not force-hide the persistent container; keep it visible to avoid stuck opacity/visibility states.
+      // We only clear its content so it can be re-rendered quickly on next show.
+      if (this.state.currentContainer && this.state.currentContainer.id === 'linguatube-vocabulary-list-container') {
+        const c = this.state.currentContainer;
+        c.style.opacity = '1';
+        c.style.visibility = 'visible';
+        c.style.pointerEvents = 'auto';
+        c.style.removeProperty('transition');
+        c.innerHTML = '';
       }
 
       // Only remove our own popup containers, never the content script container
@@ -351,6 +343,7 @@ export class VocabularyListManager {
       this.state = { 
         ...this.state, 
         isVisible: false,
+        // Preserve the container so visibility toggles don't lose custom position
         currentContainer: shouldPreserveContainer ? this.state.currentContainer : null,
         activeComponent: null,
       };
@@ -873,6 +866,8 @@ export class VocabularyListManager {
       if (!header) return;
 
       isDragging = true;
+      this.isDragging = true;
+      this.hasCustomPosition = true; // lock out auto-reposition as soon as drag starts
       const rect = container.getBoundingClientRect();
       dragOffset.x = e.clientX - rect.left;
       dragOffset.y = e.clientY - rect.top;
@@ -920,6 +915,7 @@ export class VocabularyListManager {
 
     const onMouseUp = () => {
       isDragging = false;
+      this.isDragging = false;
       container.style.cursor = '';
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
@@ -946,6 +942,10 @@ export class VocabularyListManager {
       zIndex: '2147483647',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
       transition: 'none', // Disable transitions to prevent initial jump flicker
+      opacity: '1',
+      visibility: 'visible',
+      pointerEvents: 'auto',
+      boxSizing: 'border-box' as const,
     };
 
     const positionStyles = this.getPositionStyles();
@@ -992,6 +992,11 @@ export class VocabularyListManager {
 
   private positionPopup(container: HTMLElement): void {
     const playerInfo = this.getPlayerModeInfo();
+
+    // If the user has dragged the panel, respect the custom position entirely
+    if (this.hasCustomPosition || this.isDragging) {
+      return;
+    }
     const containerWidth = 400; // Default vocabulary list width
     const containerHeight = 600; // Default vocabulary list height
 
@@ -1471,6 +1476,12 @@ export class VocabularyListManager {
     // Handle close button click
     if (word.word === 'close') {
       this.hide();
+      // Update playback controls toggle state to reflect hidden list
+      try {
+        if (this.enhancedPlaybackControls) {
+          this.enhancedPlaybackControls.hideVocabularyList?.();
+        }
+      } catch {}
       return;
     }
 
@@ -1488,6 +1499,13 @@ export class VocabularyListManager {
 
   private async handleWordNavigate(word: VocabularyItem): Promise<void> {
     try {
+      // Delegate navigation directly to the content script if available so it can
+      // perform a precise seek using the saved timestamp (user can fine-tune).
+      if (this.customWordSelectHandler) {
+        this.customWordSelectHandler(word);
+        return;
+      }
+
       this.logger?.info('Handling vocabulary word navigation', {
         component: ComponentType.WORD_LOOKUP,
         metadata: {
@@ -1552,7 +1570,9 @@ export class VocabularyListManager {
         },
       });
 
-      // CRITICAL FIX: Try vocabulary word search first (most reliable and safe)
+      // If content script handler isn't present, fall back to internal logic below
+
+      // If timestamp not available/successful, try vocabulary word search
       try {
         const wordSearchSuccess = this.enhancedPlaybackControls.jumpToVocabularyWord(word.word, {
           caseSensitive: false,
@@ -2119,9 +2139,12 @@ export class VocabularyListManager {
    */
   private setupPlayerStateListeners(): void {
     try {
+      // Guard: if the user has set a custom position, do not alter placement on any system events
+      const shouldRespectCustom = () => this.hasCustomPosition || this.isDragging;
+
       // Listen for fullscreen changes
       const fullscreenChangeHandler = () => {
-        if (this.state.isVisible && this.state.currentContainer) {
+        if (this.state.isVisible && this.state.currentContainer && !shouldRespectCustom()) {
           setTimeout(() => {
             this.positionPopup(this.state.currentContainer!);
           }, 100); // Small delay to ensure DOM is updated
@@ -2130,9 +2153,21 @@ export class VocabularyListManager {
 
       // Listen for window resize (affects all player modes)
       const resizeHandler = () => {
-        if (this.state.isVisible && this.state.currentContainer) {
-          this.positionPopup(this.state.currentContainer!);
+        if (!this.state.isVisible || !this.state.currentContainer) return;
+        if (shouldRespectCustom()) {
+          // Ensure container remains visible and within viewport bounds after resize
+          const rect = this.state.currentContainer.getBoundingClientRect();
+          const safeLeft = Math.max(0, Math.min(rect.left, window.innerWidth - rect.width));
+          const safeTop = Math.max(0, Math.min(rect.top, window.innerHeight - rect.height));
+          this.state.currentContainer.style.left = `${safeLeft}px`;
+          this.state.currentContainer.style.top = `${safeTop}px`;
+          // Force visible in case some external style toggled it
+          this.state.currentContainer.style.visibility = 'visible';
+          this.state.currentContainer.style.opacity = '1';
+          this.state.currentContainer.style.pointerEvents = 'auto';
+          return;
         }
+        this.positionPopup(this.state.currentContainer!);
       };
 
       // Listen for YouTube-specific events (theater mode toggle, etc.)
@@ -2152,7 +2187,7 @@ export class VocabularyListManager {
             }
           });
 
-          if (shouldReposition && this.state.isVisible && this.state.currentContainer) {
+          if (shouldReposition && this.state.isVisible && this.state.currentContainer && !shouldRespectCustom()) {
             setTimeout(() => {
               this.positionPopup(this.state.currentContainer!);
             }, 200);

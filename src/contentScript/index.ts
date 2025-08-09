@@ -887,18 +887,20 @@ class LinguaTubeContentScript {
       };
     }
 
-    // Apply styles with responsive calculations
+    // Apply styles with responsive calculations without touching visibility/opacity
     this.vocabularyListContainer.style.cssText = `
       ${Object.entries(position).map(([key, value]) => `${key}: ${value}`).join('; ')};
       width: ${width};
       max-height: ${maxHeight};
       z-index: 2147483647;
-      opacity: 0;
-      visibility: hidden;
-      transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out, transform 0.3s ease-in-out;
-      pointer-events: none;
       box-sizing: border-box;
     `;
+
+    // Ensure it remains visible/interactive across resizes
+    this.vocabularyListContainer.style.opacity = '1';
+    this.vocabularyListContainer.style.visibility = 'visible';
+    this.vocabularyListContainer.style.pointerEvents = 'auto';
+    this.vocabularyListContainer.style.removeProperty('transition');
 
     this.logger?.debug('Applied responsive vocabulary list styling', {
       component: ComponentType.CONTENT_SCRIPT,
@@ -1002,10 +1004,11 @@ class LinguaTubeContentScript {
       // Show the vocabulary list using the manager
       await this.state.components.vocabularyListManager.show(this.vocabularyListContainer);
 
-      // Make container visible with smooth transition
+      // Ensure container is visible and not overridden by stale styles
       this.vocabularyListContainer.style.opacity = '1';
       this.vocabularyListContainer.style.visibility = 'visible';
       this.vocabularyListContainer.style.pointerEvents = 'auto';
+      this.vocabularyListContainer.style.removeProperty('transition');
 
       this.logger?.debug('Vocabulary list shown', {
         component: ComponentType.CONTENT_SCRIPT,
@@ -1030,10 +1033,10 @@ class LinguaTubeContentScript {
       // Hide the vocabulary list using the manager
       this.state.components.vocabularyListManager.hide();
 
-      // Hide container with smooth transition
-      this.vocabularyListContainer.style.opacity = '0';
-      this.vocabularyListContainer.style.visibility = 'hidden';
-      this.vocabularyListContainer.style.pointerEvents = 'none';
+      // Keep container visible and interactive; content manager controls UI
+      this.vocabularyListContainer.style.opacity = '1';
+      this.vocabularyListContainer.style.visibility = 'visible';
+      this.vocabularyListContainer.style.pointerEvents = 'auto';
 
       this.logger?.debug('Vocabulary list hidden', {
         component: ComponentType.CONTENT_SCRIPT,
@@ -1162,18 +1165,20 @@ class LinguaTubeContentScript {
       if (word.videoId && currentVideoId !== word.videoId) {
         const params = new URLSearchParams(window.location.search);
         params.set('v', word.videoId);
-        // Preserve current time for better UX if available; YouTube will start at provided t
+        // Navigate directly to saved timestamp in seconds
         if (typeof word.timestamp === 'number' && !isNaN(word.timestamp)) {
-          params.set('t', Math.max(0, Math.floor(word.timestamp)).toString());
+          const seconds = Math.max(0, Math.floor(word.timestamp));
+          params.set('t', seconds.toString());
         }
         const newUrl = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
         window.location.assign(newUrl);
         return; // Further actions will happen after navigation
       }
 
-      // Same video: seek to the timestamp where this vocabulary word was found
+      // Same video: seek directly to the saved timestamp (seconds)
       if (typeof word.timestamp === 'number' && !isNaN(word.timestamp)) {
-        this.state.components.playerService.seek(word.timestamp);
+        const seconds = Math.max(0, Math.floor(word.timestamp));
+        this.state.components.playerService.seek(seconds);
       }
 
       // Show visual feedback
