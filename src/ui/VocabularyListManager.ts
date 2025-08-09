@@ -605,17 +605,9 @@ export class VocabularyListManager {
       },
     });
 
-    // Auto-show vocabulary list when vocabulary mode is enabled
-    if (vocabularyModeEnabled && !this.state.isVisible) {
-      this.show().catch((error) => {
-        this.logger?.warn('Failed to auto-show vocabulary list on vocabulary mode enable', {
-          component: ComponentType.WORD_LOOKUP,
-          metadata: {
-            error: error instanceof Error ? error.message : String(error),
-          },
-        });
-      });
-    }
+    // Do NOT auto-show vocabulary list on mode toggle. Visibility is controlled solely
+    // by the explicit "Show Vocabulary List" button.
+    // If needed in future, this can be made configurable via manager config.
 
     // Coordinate with dual subtitle manager for vocabulary highlighting
     if (this.dualSubtitleManager) {

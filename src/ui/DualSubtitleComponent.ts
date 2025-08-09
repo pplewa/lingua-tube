@@ -445,6 +445,9 @@ export class DualSubtitleComponent {
   private currentCues: SubtitleCueDisplay[] = [];
   private isVisible: boolean = false;
   private isInitialized: boolean = false;
+  // When true, the user explicitly hid subtitles via the UI. This prevents
+  // automatic re-showing on cue updates.
+  private isUserHidden: boolean = false;
 
   private playerService: PlayerInteractionService;
   private storageService: StorageService;
@@ -1018,6 +1021,15 @@ export class DualSubtitleComponent {
     const combinedTarget = this.currentCues.map((cue) => cue.targetText).join(' ');
     const combinedNative = this.currentCues.map((cue) => cue.nativeText).join(' ');
 
+    // Respect user toggle: never auto-show while explicitly hidden
+    if (this.isUserHidden) {
+      if (this.isVisible) {
+        this.hideSubtitles();
+      }
+      // Still update internal text buffers if needed without rendering
+      return;
+    }
+
     // Update target language line with clickable words
     if (this.config.showTargetLanguage) {
       this.renderTargetLine(combinedTarget);
@@ -1413,9 +1425,13 @@ export class DualSubtitleComponent {
       // Clear vocabulary cache to force refresh
       this.vocabularyCache.clear();
 
-      // Re-render current subtitles with updated highlighting
+      // Re-render current subtitles and ensure new vocabulary words are highlighted immediately
       if (this.isVisible && this.currentCues.length > 0) {
         this.updateSubtitleDisplay();
+        if (this.vocabularyModeEnabled) {
+          // Force a pass to add vocabulary highlighting without needing a mode toggle
+          this.highlightVocabularyWords().catch(() => {});
+        }
       }
 
       this.vocabularyUpdateTimeout = null;
@@ -1581,6 +1597,7 @@ export class DualSubtitleComponent {
    * Show the subtitle component
    */
   public show(): void {
+    this.isUserHidden = false;
     this.showSubtitles();
   }
 
@@ -1588,6 +1605,8 @@ export class DualSubtitleComponent {
    * Hide the subtitle component
    */
   public hide(): void {
+    // Mark as user-hidden to prevent automatic re-showing on cue changes
+    this.isUserHidden = true;
     this.hideSubtitles();
   }
 
@@ -1597,9 +1616,9 @@ export class DualSubtitleComponent {
    */
   public toggleVisibility(): boolean {
     if (this.isVisible) {
-      this.hideSubtitles();
+      this.hide();
     } else {
-      this.showSubtitles();
+      this.show();
     }
     return this.isVisible;
   }

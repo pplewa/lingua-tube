@@ -3081,6 +3081,15 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     if (subtitleComponent) {
       this.subtitlesVisible = subtitleComponent.getVisibility();
       this.updateSubtitleDisplay();
+
+      // Keep UI state in sync with real subtitle visibility changes (e.g., when
+      // subtitles first appear after cues arrive). This fixes the initial state
+      // mismatch where the indicator could show OFF while subtitles are visible.
+      subtitleComponent.addVisibilityListener((visible) => {
+        this.subtitlesVisible = visible;
+        this.updateSubtitleDisplay();
+        this.updateCurrentState();
+      });
     }
 
     this.logger?.debug('Dual subtitle manager set', {
