@@ -1499,24 +1499,27 @@ export class VocabularyListManager {
         return;
       }
 
-      // CRITICAL FIX: Validate current video context, but be less restrictive
-      const currentVideoId = this.getCurrentVideoId();
-      
-      // CRITICAL FIX: Only skip if word explicitly has different video ID
-      if (word.videoId && currentVideoId && word.videoId !== currentVideoId) {
-        this.logger?.warn('Vocabulary word is from different video - navigation skipped for safety', {
+    // If the word belongs to a different video, delegate to content script navigation (page switch)
+    const currentVideoId = this.getCurrentVideoId();
+    if (word.videoId && currentVideoId && word.videoId !== currentVideoId) {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        params.set('v', word.videoId);
+        if (typeof word.timestamp === 'number' && !isNaN(word.timestamp)) {
+          params.set('t', Math.max(0, Math.floor(word.timestamp)).toString());
+        }
+        const newUrl = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
+        window.location.assign(newUrl);
+        return;
+      } catch (err) {
+        this.logger?.warn('Failed to auto-navigate to different video, falling back to error message', {
           component: ComponentType.WORD_LOOKUP,
-          metadata: {
-            word: word.word,
-            wordVideoId: word.videoId,
-            currentVideoId: currentVideoId,
-          },
+          metadata: { err: err instanceof Error ? err.message : String(err) },
         });
-        
-        // Show user-friendly message instead of navigating to wrong video
         this.showNavigationError(`Word "${word.word}" is from a different video. Switch to that video to navigate.`);
         return;
       }
+    }
 
       let navigationSuccess = false;
 

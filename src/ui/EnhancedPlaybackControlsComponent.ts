@@ -666,6 +666,11 @@ const CONTROLS_STYLES = `
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   }
 
+  /* When the controls are near the top of the screen, flip the toast below */
+  .action-toast.below {
+    top: calc(100% + 8px);
+  }
+
   .action-toast.show {
     opacity: 1;
     transform: translateX(-50%) translateY(-5px);
@@ -1448,7 +1453,23 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     toast.textContent = message;
 
     // Add type class and show
-    toast.classList.add(type, 'show');
+    toast.classList.add(type);
+
+    // Flip position below the controls if showing above would go off-screen
+    try {
+      if (this.controlsContainer) {
+        const rect = this.controlsContainer.getBoundingClientRect();
+        const wouldBeOffTop = rect.top - 60 < 0; // ~50px toast height + margin
+        if (wouldBeOffTop) {
+          toast.classList.add('below');
+        } else {
+          toast.classList.remove('below');
+        }
+      }
+    } catch {}
+
+    // Finally show with fade-in
+    toast.classList.add('show');
 
     // Auto-hide after duration
     setTimeout(() => {

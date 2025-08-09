@@ -1157,8 +1157,24 @@ class LinguaTubeContentScript {
     });
 
     try {
-      // Seek to the timestamp where this vocabulary word was found
-      this.state.components.playerService.seek(word.timestamp);
+      const currentVideoId = this.extractVideoId(window.location.href);
+      // If the word belongs to a different video, navigate there first
+      if (word.videoId && currentVideoId !== word.videoId) {
+        const params = new URLSearchParams(window.location.search);
+        params.set('v', word.videoId);
+        // Preserve current time for better UX if available; YouTube will start at provided t
+        if (typeof word.timestamp === 'number' && !isNaN(word.timestamp)) {
+          params.set('t', Math.max(0, Math.floor(word.timestamp)).toString());
+        }
+        const newUrl = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
+        window.location.assign(newUrl);
+        return; // Further actions will happen after navigation
+      }
+
+      // Same video: seek to the timestamp where this vocabulary word was found
+      if (typeof word.timestamp === 'number' && !isNaN(word.timestamp)) {
+        this.state.components.playerService.seek(word.timestamp);
+      }
 
       // Show visual feedback
       this.showWordNavigationFeedback(word);
