@@ -668,7 +668,8 @@ const CONTROLS_STYLES = `
 
   /* When the controls are near the top of the screen, flip the toast below */
   .action-toast.below {
-    top: calc(100% + 8px);
+    top: auto !important;
+    bottom: -50px;
   }
 
   .action-toast.show {
@@ -1455,15 +1456,31 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     // Add type class and show
     toast.classList.add(type);
 
-    // Flip position below the controls if showing above would go off-screen
+    // Flip position below the controls when near the top to avoid off-screen
     try {
       if (this.controlsContainer) {
         const rect = this.controlsContainer.getBoundingClientRect();
-        const wouldBeOffTop = rect.top - 60 < 0; // ~50px toast height + margin
-        if (wouldBeOffTop) {
+        const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+        // If top or any part would clip above the viewport, put toast below
+        const isTopPositioned = this.controlsContainer.classList.contains('position-top');
+        const nearTop = isTopPositioned || rect.top < 120 || rect.top < 0;
+        if (nearTop) {
           toast.classList.add('below');
+          toast.style.removeProperty('top');
+          toast.style.bottom = '-50px';
         } else {
-          toast.classList.remove('below');
+          // Also guard against controls being very close to the bottom where bottom:-50 would clip
+          const nearBottom = viewportHeight - rect.bottom < 120;
+          if (nearBottom) {
+            toast.classList.remove('below');
+            toast.style.removeProperty('bottom');
+            toast.style.top = '-50px';
+          } else {
+            // Default above placement
+            toast.classList.remove('below');
+            toast.style.removeProperty('bottom');
+            toast.style.top = '-50px';
+          }
         }
       }
     } catch {}

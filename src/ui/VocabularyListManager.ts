@@ -73,7 +73,7 @@ export const DEFAULT_MANAGER_CONFIG: VocabularyListManagerConfig = {
   theme: 'light',
   autoShow: false,
   showOnHover: false,
-  hideOnClickOutside: true,
+  hideOnClickOutside: false,
   enableKeyboardShortcuts: true, // Re-enable so users can reopen with Ctrl+Shift+V
   keyboardShortcut: 'Ctrl+Shift+V',
   listConfig: {
@@ -816,11 +816,9 @@ export class VocabularyListManager {
   }
 
   private setupContainerInteractions(): void {
+    // Disable auto-hide on outside clicks to keep the component visible unless explicitly closed
     if (this.config.hideOnClickOutside) {
-      this.clickOutsideHandler = this.handleClickOutside.bind(this);
-      setTimeout(() => {
-        document.addEventListener('click', this.clickOutsideHandler!);
-      }, 100);
+      this.config = { ...this.config, hideOnClickOutside: false };
     }
 
     // REAL FIX: Set up dragging for ALL containers, not just popups
@@ -855,6 +853,8 @@ export class VocabularyListManager {
   private makeDraggable(container: HTMLElement): void {
     let isDragging = false;
     let dragOffset = { x: 0, y: 0 };
+    let lastX = 0;
+    let lastY = 0;
 
     const onMouseDown = (e: MouseEvent) => {
       // REAL FIX: Use composedPath to find shadow DOM elements
@@ -876,11 +876,18 @@ export class VocabularyListManager {
       const rect = container.getBoundingClientRect();
       dragOffset.x = e.clientX - rect.left;
       dragOffset.y = e.clientY - rect.top;
-      
+      lastX = rect.left;
+      lastY = rect.top;
+
+      // Disable transitions during drag to prevent jumpy animations
+      const previousTransition = container.style.transition;
+      container.setAttribute('data-prev-transition', previousTransition);
+      container.style.transition = 'none';
+
       container.style.cursor = 'grabbing';
       document.body.style.cursor = 'grabbing';
       document.body.style.userSelect = 'none';
-      
+
       e.preventDefault();
       e.stopPropagation();
     };
@@ -897,8 +904,15 @@ export class VocabularyListManager {
       const boundedX = Math.max(0, Math.min(x, maxX));
       const boundedY = Math.max(0, Math.min(y, maxY));
 
-      container.style.left = `${boundedX}px`;
-      container.style.top = `${boundedY}px`;
+      // Only update DOM position if it actually changed to avoid layout thrash
+      if (boundedX !== lastX) {
+        container.style.left = `${boundedX}px`;
+        lastX = boundedX;
+      }
+      if (boundedY !== lastY) {
+        container.style.top = `${boundedY}px`;
+        lastY = boundedY;
+      }
       container.style.transform = 'none';
       
       e.preventDefault();
@@ -909,6 +923,10 @@ export class VocabularyListManager {
       container.style.cursor = '';
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
+      // Restore transition after drag
+      const prev = container.getAttribute('data-prev-transition') || '';
+      container.style.transition = prev;
+      container.removeAttribute('data-prev-transition');
     };
 
     document.addEventListener('mousedown', onMouseDown, true);
@@ -927,6 +945,7 @@ export class VocabularyListManager {
       position: 'fixed' as const,
       zIndex: '2147483647',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      transition: 'none', // Disable transitions to prevent initial jump flicker
     };
 
     const positionStyles = this.getPositionStyles();
@@ -1961,12 +1980,7 @@ export class VocabularyListManager {
   }
 
   private handleClickOutside(event: Event): void {
-    if (!this.state.currentContainer || !this.state.isVisible) return;
-
-    const target = event.target as Node;
-    if (!this.state.currentContainer.contains(target)) {
-      this.hide();
-    }
+    // No-op: auto-hide on outside click intentionally disabled
   }
 
   private handleResize(): void {
