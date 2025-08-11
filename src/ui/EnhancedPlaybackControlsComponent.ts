@@ -568,6 +568,7 @@ const CONTROLS_STYLES = `
     color: var(--controls-text-color);
     transition: var(--controls-transition);
     white-space: nowrap;
+    cursor: pointer;
   }
 
   .loop-indicator.active {
@@ -897,6 +898,9 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
 
   private currentSpeed: number = 1.0;
   private currentLoop: LoopSegment | null = null;
+  // Explicit loop markers
+  private loopMarkerIn: number | null = null;
+  private loopMarkerOut: number | null = null;
   private vocabularyModeActive: boolean = false;
   private vocabularyListVisible: boolean = false;
   private subtitlesVisible: boolean = true;
@@ -1274,10 +1278,11 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     loopBtn.title = 'Toggle Loop';
     loopBtn.addEventListener('click', () => this.toggleLoop());
 
-    // Loop indicator
+    // Loop indicator acts as IN/OUT/clear toggler
     const loopIndicator = document.createElement('div');
     loopIndicator.className = 'loop-indicator';
     loopIndicator.textContent = 'No Loop';
+    loopIndicator.addEventListener('click', () => this.handleLoopIndicatorClick());
 
     group.appendChild(loopBtn);
     group.appendChild(loopIndicator);
@@ -1824,6 +1829,11 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
   private toggleLoop(): void {
     if (this.currentLoop) {
       this.clearLoop();
+      return;
+    }
+    // If explicit markers exist, apply them; otherwise default +/-5s
+    if (this.loopMarkerIn != null && this.loopMarkerOut != null) {
+      this.applyMarkerLoop();
     } else {
       this.createLoop();
     }
@@ -1847,6 +1857,11 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       };
 
       this.playerService.createSegmentLoop(loopStart, loopEnd);
+      // Ensure we are inside the loop even if current time is after OUT (or before IN)
+      const now = this.playerService.getCurrentTime();
+      if (now < loopStart || now > loopEnd) {
+        this.playerService.seek(loopStart);
+      }
       this.updateLoopDisplay();
 
       // Update state tracking
@@ -1901,6 +1916,107 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     }
   }
 
+  // ========================================
+  // Explicit Loop Markers API
+  // ========================================
+
+  private setLoopMarkIn(): void {
+    try {
+      const t = this.playerService.getCurrentTime();
+      const vid = this.playerService.getDuration();
+      this.loopMarkerIn = Math.min(Math.max(0, t), Math.max(0, vid));
+      this.showActionToast(`Mark In: ${this.formatTime(this.loopMarkerIn)}`, 'success', 1200);
+      this.updateLoopDisplay();
+    } catch (error) {
+      this.logger?.warn('Failed to set Mark In', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: { error: error instanceof Error ? error.message : String(error) },
+      });
+      this.showActionToast('Failed to set Mark In', 'error', 1500);
+    }
+  }
+
+  private setLoopMarkOut(): void {
+    try {
+      const t = this.playerService.getCurrentTime();
+      const vid = this.playerService.getDuration();
+      this.loopMarkerOut = Math.min(Math.max(0, t), Math.max(0, vid));
+      this.showActionToast(`Mark Out: ${this.formatTime(this.loopMarkerOut)}`, 'success', 1200);
+      this.updateLoopDisplay();
+    } catch (error) {
+      this.logger?.warn('Failed to set Mark Out', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: { error: error instanceof Error ? error.message : String(error) },
+      });
+      this.showActionToast('Failed to set Mark Out', 'error', 1500);
+    }
+  }
+
+  private applyMarkerLoop(): void {
+    const start = this.loopMarkerIn;
+    const end = this.loopMarkerOut;
+    const vid = this.playerService.getDuration();
+
+    if (start == null || end == null) {
+      this.showActionToast('Set IN and OUT markers first', 'warning', 1500);
+      return;
+    }
+    const loopStart = Math.max(0, Math.min(start, end));
+    const loopEndRaw = Math.max(start, end);
+    // If current time is beyond end, still allow loop creation; seeking will wrap
+    const loopEnd = vid > 0 ? Math.min(loopEndRaw, vid) : loopEndRaw;
+    if (loopEnd - loopStart < 0.1) {
+      this.showActionToast('Loop too short', 'warning', 1500);
+      return;
+    }
+
+    try {
+      this.playerService.createSegmentLoop(loopStart, loopEnd);
+      // Ensure we are inside the loop even if current time is after OUT (or before IN)
+      const now = this.playerService.getCurrentTime();
+      if (now < loopStart || now > loopEnd) {
+        this.playerService.seek(loopStart);
+      }
+      this.currentLoop = {
+        id: `loop_${Date.now()}`,
+        startTime: loopStart,
+        endTime: loopEnd,
+        isActive: true,
+        title: `${this.formatTime(loopStart)} - ${this.formatTime(loopEnd)}`,
+      };
+      this.updateLoopDisplay();
+      this.updateCurrentState();
+      this.showActionToast(`Loop: ${this.currentLoop.title}`, 'success', 1600);
+    } catch (error) {
+      this.logger?.error('Failed to apply marker loop', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: { error: error instanceof Error ? error.message : String(error), loopStart, loopEnd },
+      });
+      this.showActionToast('Failed to apply loop', 'error', 1600);
+    }
+  }
+
+  private handleLoopIndicatorClick(): void {
+    // 1st click: set IN, 2nd: set OUT, 3rd: clear markers + loop
+    if (this.loopMarkerIn == null) {
+      this.setLoopMarkIn();
+      return;
+    }
+    if (this.loopMarkerOut == null) {
+      this.setLoopMarkOut();
+      return;
+    }
+    // Both set -> clear all
+    this.loopMarkerIn = null;
+    this.loopMarkerOut = null;
+    if (this.currentLoop) {
+      this.clearLoop();
+    } else {
+      this.updateLoopDisplay();
+    }
+    this.showActionToast('Loop cleared', 'success', 1200);
+  }
+
   private updateLoopDisplay(): void {
     if (!this.shadowRoot) return;
 
@@ -1913,7 +2029,13 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
         loopIndicator.classList.add('active');
         loopBtn.classList.add('active');
       } else {
-        loopIndicator.textContent = 'No Loop';
+        if (this.loopMarkerIn != null || this.loopMarkerOut != null) {
+          const inTxt = this.loopMarkerIn != null ? this.formatTime(this.loopMarkerIn) : '--:--';
+          const outTxt = this.loopMarkerOut != null ? this.formatTime(this.loopMarkerOut) : '--:--';
+          loopIndicator.textContent = `IN ${inTxt} · OUT ${outTxt}`;
+        } else {
+          loopIndicator.textContent = 'No Loop';
+        }
         loopIndicator.classList.remove('active');
         loopBtn.classList.remove('active');
       }
@@ -2859,6 +2981,19 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       this.resetSpeed();
     });
 
+    // Mark In/Out and apply markers (safe keys)
+    this.keyboardShortcuts.set('KeyA', () => {
+      this.setLoopMarkIn();
+    });
+
+    this.keyboardShortcuts.set('KeyD', () => {
+      this.setLoopMarkOut();
+    });
+
+    this.keyboardShortcuts.set('KeyH', () => {
+      this.applyMarkerLoop();
+    });
+
     // Replay current sentence (safe - 'e' not used by YouTube)
     this.keyboardShortcuts.set('KeyE', () => {
       this.replayCurrentSentence();
@@ -3551,7 +3686,9 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
 
       const stateKey = `enhanced-controls-state-${currentVideoId}`;
       // Cache state for 24 hours (86400 seconds)
-      const result = await this.storageService.setCache(stateKey, this.currentState, 86400);
+      // Never persist loop across refreshes
+      const toSave = { ...this.currentState, loop: null };
+      const result = await this.storageService.setCache(stateKey, toSave, 86400);
 
       return result.success;
     } catch (error) {
@@ -3581,18 +3718,16 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       this.vocabularyListVisible = false;
       this.updateVocabularyListDisplay();
 
-      // Restore loop if it exists and is valid
-      if (savedState.loop && this.isValidLoopSegment(savedState.loop)) {
-        this.currentLoop = savedState.loop;
-        this.playerService.createSegmentLoop(savedState.loop.startTime, savedState.loop.endTime);
-        this.updateLoopDisplay();
-      }
+      // Do not restore loop state on refresh/startup
+      this.currentLoop = null;
+      this.updateLoopDisplay();
 
       // Update state tracking
       this.currentState = {
         ...savedState,
         sessionStartTime: Date.now(), // Reset session time
         lastPosition: this.playerService.getCurrentTime(),
+        loop: null, // ensure loop is not persisted/restored
       };
 
       this.logger?.info('State restored successfully', {
@@ -3643,7 +3778,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       clearInterval(this.stateUpdateInterval);
     }
 
-    // Update state every 10 seconds
+    // Update state every 10 seconds (but never persist loop)
     this.stateUpdateInterval = window.setInterval(() => {
       this.updateCurrentState();
       this.saveState();
