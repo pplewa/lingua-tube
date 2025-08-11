@@ -16,6 +16,8 @@ import { VocabularyObserver, VocabularyEventType } from '../vocabulary/Vocabular
 import { Logger } from '../logging/Logger';
 import { ComponentType } from '../logging/types';
 import { sortedPhrases } from '../subtitles/gazetter';
+import { ttsService } from '../translation/TTSService';
+import type { LanguageCode } from '../translation/types';
 
 // ========================================
 // Types and Interfaces
@@ -1261,6 +1263,30 @@ export class DualSubtitleComponent {
         });
       }
     });
+
+    // Automatically trigger TTS playback for the clicked word
+    try {
+      const currentTrack = this.playerService.getCurrentSubtitleTrack();
+      const language = (currentTrack?.language || 'auto') as LanguageCode;
+      // Fire-and-forget to avoid blocking UI
+      void ttsService
+        .speak(cleanedWord, language)
+        .catch((err) => {
+          this.logger?.warn('TTS playback failed', {
+            component: ComponentType.SUBTITLE_MANAGER,
+            metadata: {
+              word: cleanedWord,
+              language,
+              error: err instanceof Error ? err.message : String(err),
+            },
+          });
+        });
+    } catch (err) {
+      this.logger?.warn('TTS invocation error', {
+        component: ComponentType.SUBTITLE_MANAGER,
+        metadata: { error: err instanceof Error ? err.message : String(err) },
+      });
+    }
   }
 
   private showSubtitles(): void {
