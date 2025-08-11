@@ -34,7 +34,7 @@ export interface DualSubtitleConfig {
   readonly horizontalAlignment: 'left' | 'center' | 'right';
   readonly lineSpacing: number; // 1.0-2.0
   readonly wordSpacing: number; // 0.5-2.0
-  readonly containerPadding: number; // 4-20px
+  readonly containerPadding: string; // 4-20px
   readonly borderRadius: number; // 0-8px
   readonly maxWidth: number; // 50-95% of player width
   readonly animationEnabled: boolean;
@@ -94,13 +94,13 @@ const DEFAULT_CONFIG: DualSubtitleConfig = {
   fontFamily: '"YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif',
   targetLanguageColor: '#ffffff',
   nativeLanguageColor: '#cccccc',
-  backgroundColor: 'rgba(0, 0, 0, 0.8)',
+  backgroundColor: 'transparent',
   opacity: 0.95,
   verticalOffset: -20, // 20% from bottom
   horizontalAlignment: 'center',
   lineSpacing: 1.2,
   wordSpacing: 1.0,
-  containerPadding: 12,
+  containerPadding: '3px 10px',
   borderRadius: 4,
   maxWidth: 80,
   animationEnabled: true,
@@ -119,9 +119,9 @@ const SUBTITLE_CONTAINER_STYLES = `
     --subtitle-font-family: "YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif;
     --subtitle-target-color: #ffffff;
     --subtitle-native-color: #cccccc;
-    --subtitle-bg-color: rgba(0, 0, 0, 0.8);
+    --subtitle-bg-color: transparent;
     --subtitle-opacity: 0.95;
-    --subtitle-padding: 12px;
+    --subtitle-padding: 3px 10px 0px;
     --subtitle-border-radius: 4px;
     --subtitle-line-spacing: 1.2;
     --subtitle-word-spacing: 1.0;
@@ -153,6 +153,11 @@ const SUBTITLE_CONTAINER_STYLES = `
     transition: all var(--subtitle-transition-duration) ease-in-out;
   }
 
+  /* Custom drag position - override transform so left/top are respected */
+  .subtitle-container.custom-position {
+    transform: none;
+  }
+
   .subtitle-container.hidden {
     opacity: 0;
     transform: translateX(-50%) translateY(10px);
@@ -163,8 +168,8 @@ const SUBTITLE_CONTAINER_STYLES = `
     display: block;
     text-align: left;
     line-height: var(--subtitle-line-spacing);
-    margin: 0;
-    padding: 2px 0;
+    margin: 3px;
+    padding: 0;
     word-spacing: calc(var(--subtitle-word-spacing) * 0.2em);
   }
 
@@ -184,6 +189,28 @@ const SUBTITLE_CONTAINER_STYLES = `
     font-weight: 400;
     text-shadow: var(--subtitle-text-shadow);
   }
+
+  /* Drag handle for repositioning subtitles */
+  .subtitle-drag-handle {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 8px;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.08);
+    color: #fff;
+    font-size: 12px;
+    cursor: grab;
+    user-select: none;
+    pointer-events: auto;
+    z-index: 1;
+  }
+  .subtitle-drag-handle:hover { background: rgba(255,255,255,0.16); }
+  .subtitle-drag-handle:active { cursor: grabbing; }
 
   .clickable-word {
     display: inline;
@@ -386,7 +413,7 @@ const SUBTITLE_CONTAINER_STYLES = `
   @media (max-width: 768px) {
     .subtitle-container {
       max-width: 95%;
-      padding: calc(var(--subtitle-padding) * 0.8);
+      padding: var(--subtitle-padding);
     }
     
     .subtitle-line.target {
@@ -733,6 +760,12 @@ export class DualSubtitleComponent {
     this.subtitleContainer = document.createElement('div');
     this.subtitleContainer.className = 'subtitle-container hidden';
 
+    // Create drag handle
+    const dragHandle = document.createElement('div');
+    dragHandle.className = 'subtitle-drag-handle';
+    dragHandle.title = 'Drag to reposition subtitles';
+    dragHandle.textContent = '⋮';
+
     // Create target language line
     this.targetLine = document.createElement('div');
     this.targetLine.className = 'subtitle-line target';
@@ -748,10 +781,14 @@ export class DualSubtitleComponent {
     vocabularyDescription.textContent = 'This word is in your vocabulary list. The book icon indicates it has been saved for study.';
 
     // Assemble structure
+    this.subtitleContainer.appendChild(dragHandle);
     this.subtitleContainer.appendChild(this.targetLine);
     this.subtitleContainer.appendChild(this.nativeLine);
     this.subtitleContainer.appendChild(vocabularyDescription);
     this.shadowRoot.appendChild(this.subtitleContainer);
+
+    // Enable dragging
+    this.enableDragging(dragHandle);
   }
 
   // ========================================
@@ -815,7 +852,7 @@ export class DualSubtitleComponent {
     root.style.setProperty('--subtitle-native-color', this.config.nativeLanguageColor);
     root.style.setProperty('--subtitle-bg-color', this.config.backgroundColor);
     root.style.setProperty('--subtitle-opacity', this.config.opacity.toString());
-    root.style.setProperty('--subtitle-padding', `${this.config.containerPadding}px`);
+    root.style.setProperty('--subtitle-padding', `${this.config.containerPadding}`);
     root.style.setProperty('--subtitle-border-radius', `${this.config.borderRadius}px`);
     root.style.setProperty('--subtitle-line-spacing', this.config.lineSpacing.toString());
     root.style.setProperty('--subtitle-word-spacing', this.config.wordSpacing.toString());
@@ -1281,6 +1318,14 @@ export class DualSubtitleComponent {
 
     const { width, height } = playerSize;
 
+    // Preserve custom position if user dragged the container
+    if (this.subtitleContainer.hasAttribute('data-custom-x')) {
+      const x = Number(this.subtitleContainer.getAttribute('data-custom-x'));
+      const y = Number(this.subtitleContainer.getAttribute('data-custom-y'));
+      this.applyCustomPosition(x, y);
+      return;
+    }
+
     // Calculate vertical position based on offset percentage
     const verticalPixels = (this.config.verticalOffset / 100) * height;
     const bottomPosition = Math.max(50, Math.abs(verticalPixels) - height * 0.1);
@@ -1296,6 +1341,65 @@ export class DualSubtitleComponent {
     this.subtitleContainer.style.bottom = `${bottomPosition}px`;
     this.subtitleContainer.style.left = leftPosition;
     this.subtitleContainer.style.maxWidth = `${this.config.maxWidth}%`;
+  }
+
+  private enableDragging(handle: HTMLElement): void {
+    if (!this.subtitleContainer || !this.container) return;
+    let isDragging = false;
+    let offsetX = 0;
+    let offsetY = 0;
+
+    const onMouseDown = (e: MouseEvent) => {
+      if (!this.subtitleContainer || !this.container) return;
+      const overlayRect = this.container.getBoundingClientRect();
+      const subtitleRect = this.subtitleContainer.getBoundingClientRect();
+      // Compute pointer offset within the subtitle container, using overlay-relative coords
+      const pointerX = e.clientX - overlayRect.left;
+      const pointerY = e.clientY - overlayRect.top;
+      offsetX = pointerX - (subtitleRect.left - overlayRect.left);
+      offsetY = pointerY - (subtitleRect.top - overlayRect.top);
+
+      isDragging = true;
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+      document.body.style.userSelect = 'none';
+    };
+
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isDragging || !this.subtitleContainer || !this.container) return;
+      const overlayRect = this.container.getBoundingClientRect();
+      const pointerX = e.clientX - overlayRect.left;
+      const pointerY = e.clientY - overlayRect.top;
+      const x = pointerX - offsetX;
+      const y = pointerY - offsetY;
+      this.applyCustomPosition(x, y);
+    };
+
+    const onMouseUp = () => {
+      isDragging = false;
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      document.body.style.userSelect = '';
+    };
+
+    handle.addEventListener('mousedown', onMouseDown);
+  }
+
+  private applyCustomPosition(x: number, y: number): void {
+    if (!this.subtitleContainer || !this.container) return;
+    const overlayRect = this.container.getBoundingClientRect();
+    const maxX = overlayRect.width - this.subtitleContainer.offsetWidth - 8;
+    const maxY = overlayRect.height - this.subtitleContainer.offsetHeight - 8;
+    const clampedX = Math.max(8, Math.min(Math.round(x), Math.round(maxX)));
+    const clampedY = Math.max(8, Math.min(Math.round(y), Math.round(maxY)));
+
+    this.subtitleContainer.classList.add('custom-position');
+    this.subtitleContainer.style.left = `${clampedX}px`;
+    this.subtitleContainer.style.top = `${clampedY}px`;
+    this.subtitleContainer.style.right = 'auto';
+    this.subtitleContainer.style.bottom = 'auto';
+    this.subtitleContainer.setAttribute('data-custom-x', String(clampedX));
+    this.subtitleContainer.setAttribute('data-custom-y', String(clampedY));
   }
 
   private getPlayerSize(): { width: number; height: number } | null {

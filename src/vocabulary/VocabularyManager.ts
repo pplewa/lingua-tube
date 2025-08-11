@@ -746,6 +746,7 @@ export class VocabularyManager {
   async exportVocabulary(
     format: 'json' | 'csv' | 'anki',
     filters?: VocabularyFilters,
+    ids?: string[],
   ): Promise<StorageResult<string>> {
     try {
       const vocabularyResult = await this.getVocabulary(filters);
@@ -761,7 +762,12 @@ export class VocabularyManager {
         };
       }
 
-      const vocabulary = vocabularyResult.data;
+      let vocabulary = vocabularyResult.data;
+      // If a specific set of IDs is provided, filter to those items only
+      if (Array.isArray(ids) && ids.length > 0) {
+        const idSet = new Set(ids);
+        vocabulary = vocabulary.filter((item) => idSet.has(item.id));
+      }
       let exportData: string;
 
       switch (format) {
@@ -1363,9 +1369,8 @@ export class VocabularyManager {
   }
 
   private formatAnkiExport(vocabulary: VocabularyItem[]): string {
-    return vocabulary
-      .map((item) => `${item.word}\t${item.translation}\t${item.context}`)
-      .join('\n');
+    // ANKI export: only word and translation (front\tback), no context
+    return vocabulary.map((item) => `${item.word}\t${item.translation}`).join('\n');
   }
 
   /**

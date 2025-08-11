@@ -2202,7 +2202,14 @@ export class VocabularyListComponent {
     this.exportInProgress = true;
     
     try {
-      const result = await this.vocabularyManager.exportVocabulary(format);
+      // Allow ANKI export for a selected subset when any items are selected
+      const selectedIds = Array.from(this.state.selectedWords);
+      const useSelected = format === 'anki' && selectedIds.length > 0;
+      const result = await this.vocabularyManager.exportVocabulary(
+        format,
+        undefined,
+        useSelected ? selectedIds : undefined,
+      );
       if (result.success && result.data) {
         // Create and trigger download
         const filename = `vocabulary-export.${format === 'anki' ? 'txt' : format}`;
@@ -2219,12 +2226,13 @@ export class VocabularyListComponent {
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
 
-        this.logger?.info(`Successfully exported ${this.state.words.length} words`, {
+        const exportedCount = useSelected ? selectedIds.length : this.state.words.length;
+        this.logger?.info(`Successfully exported ${exportedCount} words`, {
           component: ComponentType.VOCABULARY_LIST,
           metadata: {
             format: format,
             filename: filename,
-            wordCount: this.state.words.length,
+            wordCount: exportedCount,
           },
         });
       } else {
