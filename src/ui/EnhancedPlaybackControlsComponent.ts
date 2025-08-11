@@ -1243,21 +1243,21 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     const decreaseBtn = document.createElement('button');
     decreaseBtn.className = 'control-button';
     decreaseBtn.innerHTML = '◀️';
-    decreaseBtn.title = 'Decrease Speed';
+    decreaseBtn.title = 'Decrease Speed (ArrowDown)';
     decreaseBtn.addEventListener('click', () => this.adjustSpeed(-0.25));
 
     // Current speed display
     const speedDisplay = document.createElement('button');
     speedDisplay.className = 'speed-button active';
     speedDisplay.textContent = '1×';
-    speedDisplay.title = 'Current Speed';
+    speedDisplay.title = 'Reset Speed (R)';
     speedDisplay.addEventListener('click', () => this.resetSpeed());
 
     // Speed increase button
     const increaseBtn = document.createElement('button');
     increaseBtn.className = 'control-button';
     increaseBtn.innerHTML = '▶️';
-    increaseBtn.title = 'Increase Speed';
+    increaseBtn.title = 'Increase Speed (ArrowUp)';
     increaseBtn.addEventListener('click', () => this.adjustSpeed(0.25));
 
     group.appendChild(decreaseBtn);
@@ -1275,7 +1275,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     const loopBtn = document.createElement('button');
     loopBtn.className = 'control-button';
     loopBtn.innerHTML = '🔁';
-    loopBtn.title = 'Toggle Loop';
+    loopBtn.title = 'Toggle Loop (G)';
     loopBtn.addEventListener('click', () => this.toggleLoop());
 
     // Loop indicator acts as IN/OUT/clear toggler
@@ -1298,7 +1298,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     const skip5BackBtn = document.createElement('button');
     skip5BackBtn.className = 'control-button skip-button';
     skip5BackBtn.innerHTML = '⏪';
-    skip5BackBtn.title = 'Skip Back 5 Seconds';
+    skip5BackBtn.title = 'Skip Back 5 Seconds (Z)';
     skip5BackBtn.addEventListener('click', () => {
       this.showButtonClickFeedback(skip5BackBtn);
       this.skipTime(-5);
@@ -1308,7 +1308,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     const prevBtn = document.createElement('button');
     prevBtn.className = 'control-button';
     prevBtn.innerHTML = '⏮️';
-    prevBtn.title = 'Previous Sentence';
+    prevBtn.title = 'Previous Sentence (ArrowLeft)';
     prevBtn.addEventListener('click', () => {
       this.showButtonClickFeedback(prevBtn);
       this.showNavigationFeedback(prevBtn);
@@ -1319,7 +1319,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     const replayBtn = document.createElement('button');
     replayBtn.className = 'control-button replay-button';
     replayBtn.innerHTML = '🔄';
-    replayBtn.title = 'Replay Current Sentence';
+    replayBtn.title = 'Replay Current Sentence (E)';
     replayBtn.addEventListener('click', () => {
       this.showButtonClickFeedback(replayBtn);
       this.replayCurrentSentence();
@@ -1329,7 +1329,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     const nextBtn = document.createElement('button');
     nextBtn.className = 'control-button';
     nextBtn.innerHTML = '⏭️';
-    nextBtn.title = 'Next Sentence';
+    nextBtn.title = 'Next Sentence (ArrowRight)';
     nextBtn.addEventListener('click', () => {
       this.showButtonClickFeedback(nextBtn);
       this.showNavigationFeedback(nextBtn);
@@ -1340,7 +1340,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     const skip5ForwardBtn = document.createElement('button');
     skip5ForwardBtn.className = 'control-button skip-button';
     skip5ForwardBtn.innerHTML = '⏩';
-    skip5ForwardBtn.title = 'Skip Forward 5 Seconds';
+    skip5ForwardBtn.title = 'Skip Forward 5 Seconds (X)';
     skip5ForwardBtn.addEventListener('click', () => {
       this.showButtonClickFeedback(skip5ForwardBtn);
       this.skipTime(5);
@@ -1363,14 +1363,14 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     const vocabBtn = document.createElement('button');
     vocabBtn.className = 'control-button vocabulary-mode-btn';
     vocabBtn.innerHTML = '📚';
-    vocabBtn.title = 'Toggle Vocabulary Mode';
+    vocabBtn.title = 'Toggle Vocabulary Mode (V)';
     vocabBtn.addEventListener('click', () => this.toggleVocabularyMode());
 
     // Vocabulary list toggle
     const vocabListBtn = document.createElement('button');
     vocabListBtn.className = 'control-button vocabulary-list-btn';
     vocabListBtn.innerHTML = '📝';
-    vocabListBtn.title = 'Toggle Vocabulary List';
+    vocabListBtn.title = 'Toggle Vocabulary List (Q / Ctrl+V / ⌘V)';
     vocabListBtn.addEventListener('click', () => this.toggleVocabularyList());
 
     // Vocabulary indicator
@@ -1393,7 +1393,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     const subtitleBtn = document.createElement('button');
     subtitleBtn.className = 'control-button subtitle-toggle-btn';
     subtitleBtn.innerHTML = '💬';
-    subtitleBtn.title = 'Toggle Subtitles';
+    subtitleBtn.title = 'Toggle Subtitles (S)';
     subtitleBtn.addEventListener('click', () => this.toggleSubtitles());
 
     // Subtitle indicator
