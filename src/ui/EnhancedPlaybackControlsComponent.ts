@@ -1931,21 +1931,116 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
         const currentSentence = this.sentenceLoopingService.getSentenceAtTime(currentTime);
 
         if (sentences.length > 0) {
+          this.logger?.debug('Sentence navigation - computing target', {
+            component: ComponentType.YOUTUBE_INTEGRATION,
+            metadata: {
+              direction,
+              currentTime,
+              sentences: sentences.length,
+              hasCurrentSentence: !!currentSentence,
+            },
+          });
           const currentIndex = currentSentence
             ? sentences.findIndex((s) => s.startIndex === currentSentence.startIndex)
             : -1;
-          let targetIndex: number;
+          let targetIndex = -1;
 
           if (direction === 'next') {
-            targetIndex =
-              currentIndex < sentences.length - 1 ? currentIndex + 1 : sentences.length - 1;
+            if (currentIndex >= 0 && currentIndex < sentences.length - 1) {
+              targetIndex = currentIndex + 1;
+            } else {
+              // Find first sentence starting after current time
+              targetIndex = sentences.findIndex(
+                (s) => s.segments[0].startTime > currentTime,
+              );
+              if (targetIndex === -1) targetIndex = sentences.length - 1;
+            }
           } else {
-            targetIndex = currentIndex > 0 ? currentIndex - 1 : 0;
+            if (currentIndex > 0) {
+              targetIndex = currentIndex - 1;
+            } else {
+              // Find last sentence ending before current time
+              for (let i = sentences.length - 1; i >= 0; i--) {
+                const end = sentences[i].segments[sentences[i].segments.length - 1].endTime;
+                if (end < currentTime) {
+                  targetIndex = i;
+                  break;
+                }
+              }
+              if (targetIndex === -1) targetIndex = 0;
+            }
           }
 
-          const targetSentence = sentences[targetIndex];
+          let targetSentence = sentences[Math.max(0, Math.min(targetIndex, sentences.length - 1))];
           if (targetSentence && targetSentence.segments.length > 0) {
-            targetTime = targetSentence.segments[0].startTime;
+            // Clamp target time within video duration and apply a tiny buffer to avoid overshoot
+            const duration = this.playerService.getDuration();
+            const safeDuration = Number.isFinite(duration) && duration > 0 ? duration : Number.POSITIVE_INFINITY;
+            targetTime = Math.max(0, Math.min(safeDuration, targetSentence.segments[0].startTime));
+
+            // Ensure forward navigation produces a meaningful jump
+            const minForwardDelta = 0.5; // seconds
+            if (direction === 'next' && targetTime <= currentTime + minForwardDelta) {
+              // Try to find the first sentence that starts sufficiently after current time
+              const s2 = sentences.find(
+                (s) => s.segments[0].startTime > currentTime + minForwardDelta,
+              );
+              if (s2) {
+                targetSentence = s2;
+                targetTime = Math.max(0, Math.min(safeDuration, s2.segments[0].startTime));
+                this.logger?.debug('Sentence navigation - advanced to farther next sentence', {
+                  component: ComponentType.YOUTUBE_INTEGRATION,
+                  metadata: {
+                    fromTime: currentTime,
+                    toTime: targetTime,
+                  },
+                });
+              } else {
+                // As a last resort, use cue fallback beyond the delta or add small step
+                const cueAfter = this.findCueTarget('next', currentTime + minForwardDelta);
+                if (cueAfter !== null && cueAfter > currentTime + minForwardDelta) {
+                  targetTime = Math.min(safeDuration, cueAfter);
+                  this.logger?.debug('Sentence navigation - next using cue-after fallback', {
+                    component: ComponentType.YOUTUBE_INTEGRATION,
+                    metadata: {
+                      fromTime: currentTime,
+                      toTime: targetTime,
+                    },
+                  });
+                } else {
+                  targetTime = Math.min(safeDuration, currentTime + 1.0);
+                  this.logger?.debug('Sentence navigation - next minimal step fallback', {
+                    component: ComponentType.YOUTUBE_INTEGRATION,
+                    metadata: {
+                      fromTime: currentTime,
+                      toTime: targetTime,
+                    },
+                  });
+                }
+              }
+            }
+            this.logger?.debug('Sentence navigation - seeking', {
+              component: ComponentType.YOUTUBE_INTEGRATION,
+              metadata: {
+                direction,
+                currentIndex,
+                targetIndex: Math.max(0, Math.min(targetIndex, sentences.length - 1)),
+                fromTime: currentTime,
+                toTime: targetTime,
+                duration,
+              },
+            });
+            // If computed jump is unreasonably large, fall back to cue-level navigation
+            const largeJump = Math.abs(targetTime - currentTime) > 20;
+            const cueFallback = largeJump ? this.findCueTarget(direction, currentTime) : null;
+            if (cueFallback !== null) {
+              this.logger?.debug('Sentence navigation - using cue fallback', {
+                component: ComponentType.YOUTUBE_INTEGRATION,
+                metadata: { fromTime: currentTime, toTime: cueFallback },
+              });
+              targetTime = cueFallback;
+            }
+
             this.playerService.seek(targetTime);
 
             // Show visual feedback
@@ -1962,7 +2057,7 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
                 fromTime: currentTime,
                 toTime: targetTime,
                 sentence: targetSentence.combinedText,
-                sentenceIndex: targetIndex,
+                sentenceIndex: Math.max(0, Math.min(targetIndex, sentences.length - 1)),
               },
               timestamp: Date.now(),
             });
@@ -2038,11 +2133,55 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
       if (this.sentenceLoopingService && this.isInitialized) {
         const currentSentence = this.sentenceLoopingService.getSentenceAtTime(currentTime);
 
-        if (currentSentence && currentSentence.segments.length > 0) {
-          const startTime = currentSentence.segments[0].startTime;
+        let sentenceToReplay = currentSentence;
 
-          // Seek to the beginning of the current sentence
-          this.playerService.seek(startTime);
+        // If not inside a sentence (e.g., in a gap), choose the nearest previous sentence
+        if (!sentenceToReplay) {
+          const sentences = this.sentenceLoopingService.getAvailableSentences();
+          if (sentences.length > 0) {
+            let idx = -1;
+            for (let i = sentences.length - 1; i >= 0; i--) {
+              const end = sentences[i].segments[sentences[i].segments.length - 1].endTime;
+              if (end <= currentTime) {
+                idx = i;
+                break;
+              }
+            }
+            if (idx === -1) idx = 0;
+            sentenceToReplay = sentences[idx];
+          }
+        }
+
+        if (sentenceToReplay && sentenceToReplay.segments.length > 0) {
+          const duration = this.playerService.getDuration();
+          const safeDuration = Number.isFinite(duration) && duration > 0 ? duration : Number.POSITIVE_INFINITY;
+          const startTime = Math.max(0, Math.min(safeDuration, sentenceToReplay.segments[0].startTime));
+          // If computed jump is unreasonably large, fall back to previous cue start
+          const largeJump = Math.abs(startTime - currentTime) > 20;
+          let finalStart = startTime;
+          if (largeJump) {
+            const cueFallback = this.findCueTarget('previous', currentTime);
+            if (cueFallback !== null) {
+              this.logger?.debug('Sentence replay - using cue fallback', {
+                component: ComponentType.YOUTUBE_INTEGRATION,
+                metadata: { fromTime: currentTime, toTime: cueFallback },
+              });
+              finalStart = cueFallback;
+            }
+          }
+
+          this.logger?.debug('Sentence replay - seeking', {
+            component: ComponentType.YOUTUBE_INTEGRATION,
+            metadata: {
+              fromTime: currentTime,
+              toTime: finalStart,
+              duration,
+              hasCurrentSentence: !!currentSentence,
+            },
+          });
+
+          // Seek to the beginning of the sentence (or cue fallback)
+          this.playerService.seek(finalStart);
 
           // Show visual feedback
           this.showActionToast('Replaying sentence', 'success', 1000);
@@ -2052,11 +2191,11 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
             value: {
               direction: 'replay',
               fromTime: currentTime,
-              toTime: startTime,
-              sentence: currentSentence.combinedText,
+              toTime: finalStart,
+              sentence: sentenceToReplay.combinedText,
               sentenceIndex: this.sentenceLoopingService
                 .getAvailableSentences()
-                .findIndex((s) => s.startIndex === currentSentence.startIndex),
+                .findIndex((s) => s.startIndex === sentenceToReplay!.startIndex),
             },
             timestamp: Date.now(),
           });
@@ -2446,6 +2585,36 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
         subtitleBtn.classList.remove('active');
         subtitleBtn.setAttribute('title', 'Show Subtitles');
       }
+    }
+  }
+
+  // ========================================
+  // Cue-level Fallback Navigation
+  // ========================================
+  // Fall back to raw cue edges if sentence detection yields implausible jumps
+  private findCueTarget(direction: 'previous' | 'next', currentTime: number): number | null {
+    try {
+      const track = this.playerService.getCurrentSubtitleTrack();
+      if (!track || !track.cues || track.cues.length === 0) return null;
+
+      // Build a simple ordered list of cue start times
+      const cues = track.cues
+        .slice()
+        .sort((a, b) => a.startTime - b.startTime);
+
+      if (direction === 'next') {
+        const nextCue = cues.find((c) => c.startTime > currentTime);
+        return typeof nextCue?.startTime === 'number' ? Math.max(0, nextCue.startTime) : null;
+      } else {
+        for (let i = cues.length - 1; i >= 0; i--) {
+          if (cues[i].endTime < currentTime) {
+            return Math.max(0, cues[i].startTime);
+          }
+        }
+        return Math.max(0, cues[0].startTime);
+      }
+    } catch {
+      return null;
     }
   }
 
