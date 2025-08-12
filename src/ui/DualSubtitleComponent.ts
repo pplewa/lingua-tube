@@ -906,6 +906,8 @@ export class DualSubtitleComponent {
         this.clearSubtitles();
         break;
     }
+
+    // Revert recent auto-unhide behavior – rely on existing show/hide logic
   }
 
   private addActiveCue(cue: ActiveSubtitleCue): void {
@@ -1088,9 +1090,7 @@ export class DualSubtitleComponent {
       this.nativeLine.innerHTML = (combinedNative || '').replace(/\n/g, '<br>');
     }
 
-    if (combinedNative || combinedTarget) {
-      this.showSubtitles();
-    }
+    this.showSubtitles();
   }
 
   private renderTargetLine(text: string): void {

@@ -316,10 +316,10 @@ const CONTROLS_STYLES = `
     --controls-text-color: #ffffff;
     --controls-accent-color: #ff4444;
     --controls-hover-color: #ff6666;
-    --controls-border-radius: 8px;
-    --controls-padding: 12px;
-    --controls-gap: 8px;
-    --controls-button-size: 36px;
+    --controls-border-radius: 6px;
+    --controls-padding: 8px;
+    --controls-gap: 0;
+    --controls-button-size: 32px;
     --controls-opacity: 0.9;
     --controls-transition: all 0.3s ease;
     
@@ -448,7 +448,7 @@ const CONTROLS_STYLES = `
     display: flex;
     align-items: center;
     justify-content: center;
-    width: var(--controls-button-size);
+    min-width: var(--controls-button-size);
     height: var(--controls-button-size);
     background: transparent;
     border: none;
@@ -760,7 +760,7 @@ const CONTROLS_STYLES = `
     }
     
     .control-button {
-      width: 32px;
+      min-width: 32px;
       height: 32px;
       font-size: 14px;
     }
@@ -1396,12 +1396,28 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     subtitleBtn.title = 'Toggle Subtitles (S)';
     subtitleBtn.addEventListener('click', () => this.toggleSubtitles());
 
+    // Subtitle font size decrease
+    const fontDownBtn = document.createElement('button');
+    fontDownBtn.className = 'control-button';
+    fontDownBtn.innerHTML = 'A-';
+    fontDownBtn.title = 'Smaller Subtitles (Alt+ArrowDown)';
+    fontDownBtn.addEventListener('click', () => this.adjustSubtitleFontSize(-2));
+
+    // Subtitle font size increase
+    const fontUpBtn = document.createElement('button');
+    fontUpBtn.className = 'control-button';
+    fontUpBtn.innerHTML = 'A+';
+    fontUpBtn.title = 'Larger Subtitles (Alt+ArrowUp)';
+    fontUpBtn.addEventListener('click', () => this.adjustSubtitleFontSize(2));
+
     // Subtitle indicator
     const subtitleIndicator = document.createElement('div');
     subtitleIndicator.className = 'subtitle-indicator';
     subtitleIndicator.textContent = 'ON';
 
     group.appendChild(subtitleBtn);
+    group.appendChild(fontDownBtn);
+    group.appendChild(fontUpBtn);
     group.appendChild(subtitleIndicator);
 
     return group;
@@ -2716,6 +2732,24 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
     });
   }
 
+  // Adjust subtitle font size via DualSubtitleComponent CSS variable
+  private adjustSubtitleFontSize(delta: number): void {
+    try {
+      if (!this.dualSubtitleManager) return;
+      const component = this.dualSubtitleManager.getSubtitleComponent();
+      if (!component) return;
+      const current = component.getConfig().fontSize;
+      const next = Math.max(12, Math.min(64, current + delta));
+      component.updateConfig({ fontSize: next });
+      this.showActionToast(`Subtitles: ${next}px`, 'success', 1000);
+    } catch (error) {
+      this.logger?.warn('Failed to adjust subtitle font size', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: { error: error instanceof Error ? error.message : String(error) },
+      });
+    }
+  }
+
   private updateSubtitleDisplay(): void {
     if (!this.shadowRoot) return;
 
@@ -2945,6 +2979,14 @@ export class EnhancedPlaybackControlsComponent implements EnhancedPlaybackContro
 
     this.keyboardShortcuts.set('ArrowDown', () => {
       this.adjustSpeed(-0.25);
+    });
+
+    // Subtitle font size controls (use Alt+ArrowUp/Alt+ArrowDown to avoid conflicts)
+    this.keyboardShortcuts.set('Alt+ArrowUp', () => {
+      this.adjustSubtitleFontSize(2);
+    });
+    this.keyboardShortcuts.set('Alt+ArrowDown', () => {
+      this.adjustSubtitleFontSize(-2);
     });
 
     // Loop control - CHANGED from 'n' to 'g' (YouTube uses Shift+N for next video)
