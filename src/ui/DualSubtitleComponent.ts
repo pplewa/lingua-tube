@@ -972,10 +972,18 @@ export class DualSubtitleComponent {
    * Thai word segmentation using linguistic rules
    */
   private segmentThaiText(text: string): WordSegment[] {
+    const normalizeThai = (s: string) =>
+      (s || '')
+        .trim()
+        .normalize('NFC')
+        .replace(/[\u200B-\u200D\uFE00-\uFE0F]/g, '');
+
+    const cleanText = normalizeThai(text);
+
     const segmenter = new Intl.Segmenter('th', { granularity: 'word' });
-    const wordSegments = Array.from(segmenter.segment(text))
-      .map((s) => s.segment.trim())
-      .filter((s) => s.replace(/\s+/g, '').length > 0);
+    const wordSegments = Array.from(segmenter.segment(cleanText))
+      .map((s) => normalizeThai(s.segment))
+      .filter((s) => s.length > 0);
 
     const words: string[] = [];
     let i = 0;
@@ -985,7 +993,7 @@ export class DualSubtitleComponent {
       // Step 2: Attempt to match the longest possible phrase first.
       // We check for phrases up to a reasonable length (e.g., 30 words).
       for (let len = Math.min(30, wordSegments.length - i); len > 1; len--) {
-        const potentialPhrase = wordSegments.slice(i, i + len).join('');
+        const potentialPhrase = normalizeThai(wordSegments.slice(i, i + len).join(''));
 
         if (sortedPhrases.includes(potentialPhrase)) {
           words.push(potentialPhrase);
