@@ -2180,11 +2180,86 @@
         ],
         "priority": "medium",
         "subtasks": []
+      },
+      {
+        "id": 38,
+        "title": "Implement Hybrid Thai Segmenter (runtime-local, optional per-video AI hints)",
+        "description": "Improve Thai word splitting for subtitles without per-click AI. Use a hybrid approach combining Intl.Segmenter, per-video collocations, dictionary phrases, and an optional single AI hint pass per video. No runtime network calls during playback; enable AI hints behind a flag.",
+        "details": "Design and implement a low-latency Thai segmentation pipeline:\n- Provide a new service ThaiSegmenterService with segment() and warmUpForVideo() APIs.\n- Build per-video collocation stats (bigrams/trigrams) once on track load; compute PMI; cache merges.\n- Use dynamic programming to choose optimal segmentation with costs: unknown penalty, dictionary bonus, PMI bonus, AI hint bonus (optional), boundary penalties. Cap span length and require thresholds.\n- Integrate behind a feature flag; keep existing behavior as fallback.\n- No network calls during playback; optional single AI call per video to fetch merge hints when enabled.\n- Add tests, debug overlay, and documentation.",
+        "testStrategy": "Add golden test cases for representative Thai lines; unit-test DP path and PMI thresholds; verify no regressions on non-Thai; measure per-line latency (<1ms typical).",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Design API and data flow",
+            "description": "Define ThaiSegmenterService API (segment, warmUpForVideo, setAiMergeHints) and collocation storage. Specify inputs/outputs, config, and integration points with PlayerInteractionService (on track load) and DualSubtitleComponent (segmentThaiText).",
+            "details": "- Create interface and types in src/subtitles/ThaiSegmenterService.ts\n- Define configuration (max span length, PMI thresholds, min counts) and feature flags\n- Plan storage: per-video caches in StorageService with TTL\n- Document flow diagrams and latency targets",
+            "status": "pending",
+            "dependencies": [],
+            "parentTaskId": 38
+          },
+          {
+            "id": 2,
+            "title": "Implement collocation builder (per-video warm-up)",
+            "description": "On track load, build bigram/trigram counts from Intl.Segmenter tokens across all cues; compute PMI/LLR; keep merges above thresholds; persist to cache by videoId.",
+            "details": "- Add warmUpForVideo(videoId, cuesText[]) to ThaiSegmenterService\n- Tokenize with Intl.Segmenter('th', 'word')\n- Count n-grams, compute PMI, threshold by minCount and PMI\n- Store top merges (with scores) in storage; memory cache hot-path\n- Unit tests for PMI math and thresholds",
+            "status": "pending",
+            "dependencies": [],
+            "parentTaskId": 38
+          },
+          {
+            "id": 3,
+            "title": "DP segmenter with cost model",
+            "description": "Implement Viterbi/DP over characters/tokens with bounded span length, combining costs: unknown penalty, dictionary bonus (sortedPhrases), per-video PMI bonus, AI hint bonus (optional), boundary penalties; output tokens.",
+            "details": "- Implement efficient DP (O(n·maxLen)) with backpointers\n- Add feature weight config; cap maxLen (~10)\n- Enforce boundary rules (don’t merge across punctuation/strong gaps)\n- Unit tests with golden Thai lines",
+            "status": "pending",
+            "dependencies": [],
+            "parentTaskId": 38
+          },
+          {
+            "id": 4,
+            "title": "Integration: Player warm-up + DualSubtitleComponent",
+            "description": "Wire warmUpForVideo into PlayerInteractionService when a subtitle track loads; switch DualSubtitleComponent.segmentThaiText to ThaiSegmenterService.segment with fallback flag.",
+            "details": "- On track load/update: collect cuesText[], call ThaiSegmenterService.warmUpForVideo(videoId, cuesText)\n- In DualSubtitleComponent: behind feature flag, use ThaiSegmenterService for Thai segmentation; fallback to Intl.Segmenter if disabled\n- Ensure no runtime network calls",
+            "status": "pending",
+            "dependencies": [],
+            "parentTaskId": 38
+          },
+          {
+            "id": 5,
+            "title": "Optional AI hint ingestion (single call per video)",
+            "description": "Add optional endpoint to send top-N collocations to AI and receive merge hints; store and use as strong feature. Must be disabled by default and respect API keys/pricing.",
+            "details": "- Define hint schema and storage by videoId\n- Implement toggle in settings; guard by keys\n- Batched request; fallback silently if unavailable",
+            "status": "pending",
+            "dependencies": [],
+            "parentTaskId": 38
+          },
+          {
+            "id": 6,
+            "title": "Debug overlay + metrics",
+            "description": "Add a dev-only overlay to visualize tokenization/merges per line and show top video merges with counts/PMI; measure per-line latency.",
+            "details": "- Toggle via settings / query param\n- Render token boundaries; list top merges in a panel\n- Log latency and cache hit rates",
+            "status": "pending",
+            "dependencies": [],
+            "parentTaskId": 38
+          },
+          {
+            "id": 7,
+            "title": "Settings, flags, and docs",
+            "description": "Expose feature flags (hybrid segmenter, AI assist). Provide configuration defaults and short docs. Ensure safe fallback and no network calls during playback.",
+            "details": "- Add settings keys with defaults\n- Wire to UI where relevant (dev-only overlay)\n- Update README or docs with usage and tradeoffs",
+            "status": "pending",
+            "dependencies": [],
+            "parentTaskId": 38
+          }
+        ]
       }
     ],
     "metadata": {
       "created": "2025-07-08T23:43:19.534Z",
-      "updated": "2025-08-08T10:11:35.019Z",
+      "updated": "2025-08-13T02:56:50.323Z",
       "description": "Tasks for master context"
     }
   }
