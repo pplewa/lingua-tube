@@ -2759,7 +2759,7 @@ ${text}`;
     try {
       // Be tolerant of language code mismatches by checking a small language set
       const primary = (this.currentSourceLanguage || 'auto').toLowerCase();
-      const candidates = Array.from(new Set([primary, 'auto', 'th', 'en', 'es', 'fr', 'de']));
+      const candidates = Array.from(new Set([primary, 'auto', 'th', 'en', 'es', 'fr', 'de', 'pl']));
 
       let found = false;
       for (const lang of candidates) {

@@ -1545,9 +1545,9 @@ export class DualSubtitleComponent {
     });
 
     // Clear any existing timeout
-    if (this.vocabularyUpdateTimeout !== null) {
-      window.clearTimeout(this.vocabularyUpdateTimeout);
-    }
+      if (this.vocabularyUpdateTimeout !== null) {
+        window.clearTimeout(this.vocabularyUpdateTimeout);
+      }
 
     // Debounce vocabulary updates to prevent excessive re-rendering
     this.vocabularyUpdateTimeout = window.setTimeout(() => {
@@ -1564,12 +1564,10 @@ export class DualSubtitleComponent {
       this.vocabularyCache.clear();
 
       // Re-render current subtitles and ensure new vocabulary words are highlighted immediately
-      if (this.isVisible && this.currentCues.length > 0) {
-        this.updateSubtitleDisplay();
-        if (this.vocabularyModeEnabled) {
-          // Force a pass to add vocabulary highlighting without needing a mode toggle
-          this.highlightVocabularyWords().catch(() => {});
-        }
+      // Always attempt a refresh of spans to reflect immediate change when saving/removing
+      this.updateSubtitleDisplay();
+      if (this.vocabularyModeEnabled) {
+        void this.highlightVocabularyWords();
       }
 
       this.vocabularyUpdateTimeout = null;
@@ -1646,12 +1644,19 @@ export class DualSubtitleComponent {
   public highlightWord(word: string, highlight: boolean = true): void {
     if (!this.targetLine) return;
 
-    const cleanWord = word.replace(/[^\w]/g, '').toLowerCase();
+    const normalize = (s: string) =>
+      (s || '')
+        .normalize('NFC')
+        .replace(/[\u200B-\u200D\uFE00-\uFE0F]/g, '') // remove zero-width and variation selectors
+        .trim()
+        .toLowerCase();
+
+    const target = normalize(word);
     const wordSpans = this.targetLine.querySelectorAll('.clickable-word');
 
     wordSpans.forEach((span) => {
-      const spanText = span.textContent?.replace(/[^\w]/g, '').toLowerCase();
-      if (spanText === cleanWord) {
+      const spanText = normalize(span.textContent || '');
+      if (spanText === target) {
         if (highlight) {
           span.classList.add('highlighted');
         } else {
@@ -1669,8 +1674,14 @@ export class DualSubtitleComponent {
 
     const wordSpans = this.targetLine.querySelectorAll('.clickable-word');
 
+    const normalize = (s: string) =>
+      (s || '')
+        .normalize('NFC')
+        .replace(/[\u200B-\u200D\uFE00-\uFE0F]/g, '')
+        .trim();
+
     for (const span of wordSpans) {
-      const word = span.textContent?.replace(/[^\w]/g, '') || '';
+      const word = normalize(span.textContent || '');
       if (word) {
         const isVocabularyWord = await this.checkVocabularyWord(word);
         if (isVocabularyWord && this.vocabularyModeEnabled) {
@@ -1780,12 +1791,16 @@ export class DualSubtitleComponent {
       const currentTrack = this.playerService.getCurrentSubtitleTrack();
       const sourceLanguage = (currentTrack?.language || 'auto').toLowerCase();
 
-      // Normalize the word - less aggressive than before, preserving more characters
-      const cleanWord = word.trim().toLowerCase();
+      // Normalize word for robust matching (Unicode-safe)
+      const cleanWord = (word || '')
+        .normalize('NFC')
+        .replace(/[\u200B-\u200D\uFE00-\uFE0F]/g, '')
+        .trim()
+        .toLowerCase();
 
       // Always attempt a small set of fallback languages to tolerate mismatches
       const candidateLanguages = Array.from(
-        new Set([sourceLanguage, 'auto', 'th', 'en', 'es', 'fr', 'de'])
+        new Set([sourceLanguage, 'auto', 'th', 'en', 'es', 'fr', 'de', 'pl'])
       );
 
       let isVocabularyWord = false;
@@ -1798,7 +1813,7 @@ export class DualSubtitleComponent {
       }
 
       // Cache the result and manage cache size
-      this.vocabularyCache.set(word, isVocabularyWord);
+      this.vocabularyCache.set(cleanWord, isVocabularyWord);
       
       // Prevent cache from growing indefinitely
       if (this.vocabularyCache.size > this.MAX_CACHE_SIZE) {
