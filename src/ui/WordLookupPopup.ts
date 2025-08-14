@@ -1471,6 +1471,7 @@ export class WordLookupPopup {
   private isLoading: boolean = false;
   private currentWord: string = '';
   private currentContext: string = '';
+  private currentContextTranslation: string = '';
   private translation: string = '';
   private currentSourceLanguage: string = 'en'; // Default fallback
   private currentTargetLanguage: string = 'es'; // Default fallback
@@ -1726,6 +1727,7 @@ export class WordLookupPopup {
       // Store current word
       this.currentWord = processedWord;
       this.currentContext = context;
+      this.currentContextTranslation = '';
 
       // Show popup immediately with loading state
       this.showLoadingState();
@@ -2008,6 +2010,66 @@ export class WordLookupPopup {
         metadata: { word, translation: this.translation.substring(0, 50) },
       });
 
+      // Context translation (same logic as word translation)
+      if (this.currentContext && this.currentContext.trim().length > 0) {
+        try {
+          const cachedContext = await translationCacheService.get(
+            this.currentContext,
+            this.currentSourceLanguage,
+            this.currentTargetLanguage,
+          );
+          if (cachedContext) {
+            this.logger?.debug('Found cached context translation', {
+              component: ComponentType.WORD_LOOKUP,
+              metadata: {
+                sourceLanguage: this.currentSourceLanguage,
+                targetLanguage: this.currentTargetLanguage,
+                contextLength: this.currentContext.length,
+              },
+            });
+            this.currentContextTranslation = cachedContext;
+          } else {
+            this.logger?.debug('Getting context translation', {
+              component: ComponentType.WORD_LOOKUP,
+              metadata: {
+                sourceLanguage: this.currentSourceLanguage,
+                targetLanguage: this.currentTargetLanguage,
+                contextLength: this.currentContext.length,
+              },
+            });
+            const ctxPromise = this.translationService.translateText({
+              text: this.currentContext,
+              fromLanguage: this.currentSourceLanguage,
+              toLanguage: this.currentTargetLanguage,
+            });
+            this.currentContextTranslation = await this.trackOperation(ctxPromise);
+          }
+
+          await translationCacheService.set(
+            this.currentContext,
+            this.currentContextTranslation,
+            this.currentSourceLanguage,
+            this.currentTargetLanguage,
+          );
+
+          this.logger?.debug('Context translation received', {
+            component: ComponentType.WORD_LOOKUP,
+            metadata: {
+              contextPreview: this.currentContext.substring(0, 30),
+              translationPreview: this.currentContextTranslation.substring(0, 50),
+            },
+          });
+        } catch (ctxErr) {
+          this.logger?.warn('Context translation failed', {
+            component: ComponentType.WORD_LOOKUP,
+            metadata: {
+              error: ctxErr instanceof Error ? ctxErr.message : String(ctxErr),
+            },
+          });
+          this.currentContextTranslation = '';
+        }
+      }
+
       // Only try to get definition if the source language is English
       // (since DictionaryApiService only supports English)
       if (this.currentSourceLanguage === 'en') {
@@ -2247,6 +2309,11 @@ export class WordLookupPopup {
               </button>
             </div>
             <p class="context-text">${this.escapeHtml(this.currentContext).replace(this.escapeHtml(content.word), `<span class="highlight">${this.escapeHtml(content.word)}</span>`)}</p>
+            ${
+              this.currentContextTranslation && this.currentContextTranslation.trim().length > 0
+                ? `<p class="context-translation">${this.escapeHtml(this.currentContextTranslation)}</p>`
+                : ''
+            }
           </div>
         `
             : ''
