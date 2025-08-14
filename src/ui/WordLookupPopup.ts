@@ -526,6 +526,29 @@ const POPUP_STYLES = `
     flex: 1;
   }
 
+  .word-combine {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .combine-button {
+    background: transparent;
+    border: 1px solid rgba(0,0,0,0.15);
+    border-radius: 6px;
+    color: var(--popup-accent-color);
+    font-size: 14px;
+    padding: 3px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    height: 24px;
+  }
+
+  .combine-button:hover {
+    background: var(--popup-accent-color);
+    color: white;
+  }
+
   .phonetic {
     font-size: 14px;
     color: #718096;
@@ -661,6 +684,12 @@ const POPUP_STYLES = `
     line-height: 1.5;
     margin: 0 0 8px 0;
     font-style: italic;
+  }
+
+  .context-translation {
+    font-size: 13px;
+    color: #718096;
+    margin: 4px 0 0 0;
   }
 
   .context-controls {
@@ -1499,6 +1528,8 @@ export class WordLookupPopup {
   private readonly logger = Logger.getInstance();
 
   private events: { [K in keyof PopupEvents]?: PopupEvents[K] } = {};
+  private combineLock: boolean = false;
+  private lastPosition: { x: number; y: number } | null = null;
 
   // Enhanced error state management
   private errorState: ErrorState = {
@@ -1728,6 +1759,7 @@ export class WordLookupPopup {
       this.currentWord = processedWord;
       this.currentContext = context;
       this.currentContextTranslation = '';
+      this.lastPosition = pos;
 
       // Show popup immediately with loading state
       this.showLoadingState();
@@ -2196,11 +2228,14 @@ export class WordLookupPopup {
     if (!this.popupContainer || !this.isLoading) return;
 
     this.popupContainer.classList.remove('loading');
+    const { left, right } = this.getAdjacentTokens(word, this.currentContext || '');
     this.popupContainer.innerHTML = `
       <div class="popup-content">
         <div class="popup-header">
-          <div>
+          <div class="word-combine">
+            <button class="combine-button" type="button" data-action="combine-left" aria-label="Combine with previous word" ${left ? '' : 'disabled'}>⟵</button>
             <h3 class="word-title">${this.escapeHtml(word)}</h3>
+            <button class="combine-button" type="button" data-action="combine-right" aria-label="Combine with next word" ${right ? '' : 'disabled'}>⟶</button>
           </div>
           <button class="close-button" type="button" aria-label="Close">×</button>
         </div>
@@ -2266,11 +2301,14 @@ export class WordLookupPopup {
   }
 
   private renderContent(content: PopupContent): string {
+    const { left, right } = this.getAdjacentTokens(content.word, this.currentContext || '');
     return `
       <div class="popup-content">
         <div class="popup-header">
-          <div>
+          <div class="word-combine">
+            <button class="combine-button" type="button" data-action="combine-left" aria-label="Combine with previous word" ${left ? '' : 'disabled'}>⬅️</button>
             <h3 class="word-title" id="popup-title">${this.escapeHtml(content.word)}</h3>
+            <button class="combine-button" type="button" data-action="combine-right" aria-label="Combine with next word" ${right ? '' : 'disabled'}>➡️</button>
             ${
               content.phonetic && this.config.showPhonetics
                 ? `<span class="phonetic" aria-label="Pronunciation: ${this.escapeHtml(content.phonetic)}">/${this.escapeHtml(content.phonetic)}/</span>`
@@ -2619,10 +2657,94 @@ export class WordLookupPopup {
       case 'save':
         await this.saveWord();
         break;
+      case 'combine-left':
+        await this.combineWithAdjacent('left');
+        break;
+      case 'combine-right':
+        await this.combineWithAdjacent('right');
+        break;
       case 'retry':
         await this.retryLoad();
         break;
     }
+  }
+
+  private async combineWithAdjacent(direction: 'left' | 'right'): Promise<void> {
+    if (this.combineLock || !this.currentWord) return;
+    const { left, right } = this.getAdjacentTokens(this.currentWord, this.currentContext || '');
+    let newWord = this.currentWord;
+    if (direction === 'left' && left) newWord = left + newWord;
+    else if (direction === 'right' && right) newWord = newWord + right;
+    else return;
+
+    this.combineLock = true;
+    try {
+      await this.show({
+        word: newWord,
+        position: this.lastPosition || { x: window.innerWidth / 2, y: window.innerHeight / 2 },
+        sourceLanguage: this.currentSourceLanguage,
+        targetLanguage: this.currentTargetLanguage,
+        context: this.currentContext,
+      });
+      if (this.config.enableTTS) {
+        // Auto-play pronunciation for the combined word (mirrors initial popup behavior)
+        await this.playTTS();
+      }
+    } finally {
+      this.combineLock = false;
+    }
+  }
+
+  private getAdjacentTokens(word: string, context: string): { left: string | null; right: string | null } {
+    if (!word || !context) return { left: null, right: null };
+    const occurrenceIndex = context.indexOf(word);
+    if (occurrenceIndex === -1) return { left: null, right: null };
+
+    // Prefer Intl.Segmenter for precise tokenization (works well for Thai)
+    try {
+      const containsThai = /[\u0E00-\u0E7F]/.test(context);
+      const locale = containsThai ? 'th' : (this.currentSourceLanguage || 'en');
+      const segmenter: any = new (Intl as any).Segmenter(locale, { granularity: 'word' });
+      const rawSegs = Array.from(segmenter.segment(context)) as Array<any>;
+      const words = rawSegs.filter((s) => (s.isWordLike ?? true) && (s.segment?.trim()?.length > 0));
+
+      // Find the index of the segment that contains our word occurrence
+      const idx = words.findIndex((s) => occurrenceIndex >= s.index && occurrenceIndex < s.index + s.segment.length);
+      const left = idx > 0 ? (words[idx - 1].segment as string) : null;
+      const right = idx >= 0 && idx < words.length - 1 ? (words[idx + 1].segment as string) : null;
+      return { left, right };
+    } catch {
+      // Fallback to simple boundary-based extraction
+      const boundary = /[\s\u0000-\u001F\u007F]|[.,!?;:()\[\]{}"'`“”‘’«»、。。，！：；？…—–\-\/\\|]|[\u0E2F\u0E46]/;
+
+      // Left token
+      let i = occurrenceIndex - 1;
+      while (i >= 0 && boundary.test(context[i])) i--;
+      let left: string | null = null;
+      if (i >= 0) {
+        let start = i;
+        while (start >= 0 && !boundary.test(context[start])) start--;
+        left = context.slice(start + 1, i + 1).trim() || null;
+      }
+
+      // Right token
+      let j = occurrenceIndex + word.length;
+      while (j < context.length && boundary.test(context[j])) j++;
+      let right: string | null = null;
+      if (j < context.length) {
+        let end = j;
+        while (end < context.length && !boundary.test(context[end])) end++;
+        right = context.slice(j, end).trim() || null;
+      }
+
+      return { left, right };
+    }
+  }
+
+  private isBoundaryChar(ch: string): boolean {
+    if (!ch) return true;
+    const boundaryRegex = /[\s\u0000-\u001F\u007F]|[.,!?;:()\[\]{}"'`“”‘’«»、。。，！：；？…—–\-\/\\|]|[\u0E2F\u0E46]/;
+    return boundaryRegex.test(ch);
   }
 
   private async playTTS(): Promise<void> {
