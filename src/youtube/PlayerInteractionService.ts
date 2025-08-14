@@ -7,6 +7,7 @@
 import { YouTubePageContext, SubtitleDiscoveryEvent } from './types';
 import { Logger } from '../logging/Logger';
 import { ComponentType } from '../logging/types';
+import { thaiSegmenterService } from '../subtitles/ThaiSegmenterService';
 
 const logger = Logger?.getInstance();
 
@@ -3085,6 +3086,22 @@ export class PlayerInteractionService {
    */
   public loadSubtitleTrack(track: SubtitleTrack): void {
     this.currentSubtitleTrack = track;
+    try {
+      const videoId = (window && (window as any).location ? new URL(window.location.href).searchParams.get('v') : null);
+      // Warm-up only for Thai language tracks (th or th-*)
+      const isThai = typeof track?.language === 'string' && /^th(\b|[-_])/i.test(track.language);
+      if (videoId && isThai && track?.cues?.length > 0) {
+        const texts = track.cues.map((c) => c.text || '').filter(Boolean);
+        // Debug log removed for production noise reduction
+        // Fire-and-forget warm-up; no await to avoid blocking UI
+        void thaiSegmenterService.warmUpForVideo(videoId, texts);
+      }
+    } catch (e) {
+      Logger.getInstance()?.warn('ThaiSegmenter warm-up skipped', {
+        component: ComponentType.YOUTUBE_INTEGRATION,
+        metadata: { error: e instanceof Error ? e.message : String(e) },
+      });
+    }
     this.activeCues = [];
     this.lastSyncTime = 0;
 

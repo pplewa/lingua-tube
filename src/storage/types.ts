@@ -169,6 +169,9 @@ export interface DeveloperSettings {
   readonly consoleLogLevel: 'debug' | 'info' | 'warn' | 'error' | 'critical';
   readonly enabledComponents: string[];
   readonly autoExportDebugData: boolean;
+  // Thai segmentation feature flags (hybrid DP segmenter)
+  readonly enableThaiHybridSegmenter?: boolean;
+  readonly enableThaiSegmentationOverlay?: boolean;
 }
 
 // ========================================

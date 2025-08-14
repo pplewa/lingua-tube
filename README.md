@@ -43,6 +43,12 @@ LinguaTube transforms YouTube into a powerful language learning platform by enha
 - **Speed Controls**: Adjust playback speed for better comprehension
 - **Direct Video API**: Uses HTML5 video element API for reliable control
 
+### 🇹🇭 Thai Subtitle Segmentation (Hybrid)
+
+- Hybrid segmenter combines Intl.Segmenter with per-video collocation merges and dictionary hints
+- No runtime network calls during playback; optional single AI hint fetch per video (disabled by default)
+- Dev overlay available to visualize tokenization/merges
+
 ## 🏗️ Technical Architecture
 
 ### Core Architecture
@@ -177,6 +183,7 @@ Access settings through the extension popup:
 - **Subtitle Appearance**: Customize fonts, colors, and positioning
 - **Translation Services**: Configure API keys and preferences
 - **Vocabulary Options**: Set highlight colors and learning preferences
+ - **Developer Flags**: Enable hybrid Thai segmenter and optional segmentation overlay for debugging
 
 ### API Configuration
 

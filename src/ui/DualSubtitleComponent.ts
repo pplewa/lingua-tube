@@ -16,6 +16,7 @@ import { VocabularyObserver, VocabularyEventType } from '../vocabulary/Vocabular
 import { Logger } from '../logging/Logger';
 import { ComponentType } from '../logging/types';
 import { sortedPhrases } from '../subtitles/gazetter';
+import { thaiSegmenterService } from '../subtitles/ThaiSegmenterService';
 import { ttsService } from '../translation/TTSService';
 import type { LanguageCode } from '../translation/types';
 
@@ -498,6 +499,9 @@ export class DualSubtitleComponent {
   private vocabularyUpdateTimeout: number | null = null;
   private readonly VOCABULARY_UPDATE_DEBOUNCE_MS = 300; // Debounce rapid vocabulary changes
   private readonly logger = Logger.getInstance();
+  // Debug overlay flag and element for Thai segmentation visualization
+  private thaiOverlayEnabled: boolean = false;
+  private thaiOverlayEl: HTMLElement | null = null;
 
   constructor(
     playerService: PlayerInteractionService,
@@ -791,6 +795,17 @@ export class DualSubtitleComponent {
 
     // Enable dragging
     this.enableDragging(dragHandle);
+
+    // Dev-only segmentation overlay (hidden by default)
+    const overlay = document.createElement('div');
+    overlay.className = 'thai-seg-overlay';
+    overlay.style.cssText = `
+      position: absolute; bottom: 100%; left: 0; transform: translateY(-8px);
+      background: rgba(0,0,0,0.75); color: #fff; font-size: 11px; padding: 6px 8px;
+      border-radius: 4px; display: none; white-space: pre-wrap; max-width: 60vw; z-index: 2;
+    `;
+    this.subtitleContainer.appendChild(overlay);
+    this.thaiOverlayEl = overlay;
   }
 
   // ========================================
@@ -812,7 +827,7 @@ export class DualSubtitleComponent {
   }
 
   private updateConfigFromSettings(settings: UserSettings): void {
-    const { subtitle, ui } = settings;
+    const { subtitle, ui, developer } = settings;
 
     this.config = {
       ...this.config,
@@ -828,6 +843,11 @@ export class DualSubtitleComponent {
       animationEnabled: ui.animationsEnabled,
       verticalOffset: subtitle.position === 'top' ? 10 : subtitle.position === 'center' ? 0 : -20,
     };
+
+    // Apply developer flags for thai segmentation overlay
+    if (developer && typeof developer.enableThaiSegmentationOverlay === 'boolean') {
+      this.thaiOverlayEnabled = developer.enableThaiSegmentationOverlay;
+    }
 
     if (this.isInitialized) {
       this.applyConfiguration();
@@ -974,44 +994,96 @@ export class DualSubtitleComponent {
    * Thai word segmentation using linguistic rules
    */
   private segmentThaiText(text: string): WordSegment[] {
-    const normalizeThai = (s: string) =>
-      (s || '')
-        .trim()
-        .normalize('NFC')
-        .replace(/[\u200B-\u200D\uFE00-\uFE0F]/g, '');
+    // Derive videoId from URL; honor feature flag later when settings wiring is added
+    const videoId = (window && (window as any).location ? new URL(window.location.href).searchParams.get('v') : null) || undefined;
+    const debugSnapshots: any[] = [];
+    const words = thaiSegmenterService.segment(text, videoId, {
+      capture: !!this.thaiOverlayEnabled,
+      sink: (snapshot) => {
+        debugSnapshots.push(snapshot);
+      },
+    });
 
-    const cleanText = normalizeThai(text);
-
-    const segmenter = new Intl.Segmenter('th', { granularity: 'word' });
-    const wordSegments = Array.from(segmenter.segment(cleanText))
-      .map((s) => normalizeThai(s.segment))
-      .filter((s) => s.length > 0);
-
-    const words: string[] = [];
-    let i = 0;
-    while (i < wordSegments.length) {
-      let matched = false;
-
-      // Step 2: Attempt to match the longest possible phrase first.
-      // We check for phrases up to a reasonable length (e.g., 30 words).
-      for (let len = Math.min(30, wordSegments.length - i); len > 1; len--) {
-        const potentialPhrase = normalizeThai(wordSegments.slice(i, i + len).join(''));
-
-        if (sortedPhrases.includes(potentialPhrase)) {
-          words.push(potentialPhrase);
-          i += len; // Advance the index by the length of the matched phrase
-          matched = true;
-          break; // Exit the inner loop once the longest match is found
+    // If AI provider is active, attempt asynchronous improvement for low-confidence lines
+    (async () => {
+      try {
+        const baseline = debugSnapshots[0]?.original || [];
+        const current = debugSnapshots[0]?.collocationApplied || words;
+        const improved = await thaiSegmenterService.improveSegmentationAsync(
+          videoId,
+          text,
+          baseline,
+          current,
+        );
+        if (improved && improved.join('') !== words.join('')) {
+          // Re-render this line with improved tokens
+          const segments = improved.map((w, idx) => ({
+            text: w,
+            index: idx,
+            isClickable: w.length > 1,
+            translation: undefined,
+            partOfSpeech: undefined,
+          }));
+          // Update overlay compare as well
+          if (this.thaiOverlayEnabled && this.thaiOverlayEl) {
+            const original = baseline.join(' ');
+            const aiMerged = improved.join(' ');
+            const textContent = `orig: ${original}\nmerged: ${aiMerged}`;
+            this.thaiOverlayEl.textContent = textContent;
+            this.thaiOverlayEl.style.display = 'block';
+          }
+          // Replace the rendered target line content
+          if (this.targetLine) {
+            this.targetLine.innerHTML = '';
+            // Render improved segments
+            let lastEnd = 0;
+            const line = text;
+            segments.forEach((seg) => {
+              const wordStart = line.indexOf(seg.text, lastEnd);
+              if (wordStart > lastEnd) {
+                const beforeText = line.substring(lastEnd, wordStart);
+                this.targetLine?.appendChild(document.createTextNode(beforeText));
+              }
+              const wordSpan = document.createElement('span');
+              wordSpan.className = 'clickable-word';
+              wordSpan.textContent = seg.text;
+              wordSpan.setAttribute('role', 'button');
+              wordSpan.setAttribute('tabindex', '0');
+              wordSpan.setAttribute('aria-label', `Click to translate word: ${seg.text}`);
+              wordSpan.addEventListener('click', (event) => {
+                this.handleWordClick(seg.text, event as any);
+              });
+              wordSpan.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  this.handleWordClick(seg.text, event as any);
+                }
+              });
+              this.targetLine?.appendChild(wordSpan);
+              lastEnd = wordStart + seg.text.length;
+            });
+            if (lastEnd < line.length) {
+              const remainingText = line.substring(lastEnd);
+              this.targetLine?.appendChild(document.createTextNode(remainingText));
+            }
+          }
         }
+      } catch {}
+    })();
+    // When overlay enabled, show A/B tokens (baseline vs post-collocation). If AI hints change later lines, subsequent renders will update.
+    try {
+      if (this.thaiOverlayEnabled && this.thaiOverlayEl && debugSnapshots.length > 0) {
+        const snap = debugSnapshots[0];
+        const original = snap.original.join(' ');
+        const colloc = snap.collocationApplied.join(' ');
+        const textContent = `orig: ${original}\nmerged: ${colloc}`;
+        this.thaiOverlayEl.textContent = textContent;
+        this.thaiOverlayEl.style.display = 'block';
+      } else if (this.thaiOverlayEl) {
+        this.thaiOverlayEl.style.display = 'none';
       }
-
-      // Step 3: If no multi-word phrase was matched, add the single token.
-      if (!matched) {
-        words.push(wordSegments[i]);
-        i++;
-      }
-    }
-
+    } catch {}
     const segments = words.map((word, index) => ({
       text: word,
       index,
@@ -1019,14 +1091,6 @@ export class DualSubtitleComponent {
       translation: undefined,
       partOfSpeech: undefined,
     }));
-
-    this.logger?.debug('Thai text segmented', {
-      component: ComponentType.SUBTITLE_MANAGER,
-      metadata: {
-        segmentCount: segments.length,
-        words: segments.map((s) => s.text),
-      },
-    });
     return segments;
   }
 
@@ -1214,10 +1278,16 @@ export class DualSubtitleComponent {
       }
     });
 
-    this.logger?.debug('Rendered clickable words', {
-      component: ComponentType.SUBTITLE_MANAGER,
-      metadata: { lineCount: lines.length },
-    });
+    // Dev-only segmentation overlay: show tokenization when debugMode + overlay flag is enabled (wiring later)
+    try {
+      if (this.thaiOverlayEnabled && this.thaiOverlayEl) {
+        const tokens = this.currentCues.map((c) => c.words.map((w) => w.text).join(' ')).join(' | ');
+        this.thaiOverlayEl.textContent = tokens;
+        this.thaiOverlayEl.style.display = tokens ? 'block' : 'none';
+      } else if (this.thaiOverlayEl) {
+        this.thaiOverlayEl.style.display = 'none';
+      }
+    } catch {}
   }
 
   private handleWordClick(word: string, event: MouseEvent): void {

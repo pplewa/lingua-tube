@@ -151,6 +151,8 @@ export const DEFAULT_DEVELOPER_SETTINGS: DeveloperSettings = {
   consoleLogLevel: 'info',
   enabledComponents: [], // All components enabled when empty
   autoExportDebugData: false,
+  enableThaiHybridSegmenter: true,
+  enableThaiSegmentationOverlay: true,
 };
 
 // ========================================
