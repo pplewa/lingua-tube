@@ -239,7 +239,7 @@ const SUBTITLE_CONTAINER_STYLES = `
   }
 
   /* Real-time timed highlight: blue */
-  .clickable-word.highlighted {
+  .highlighted {
     background-color: rgba(25, 60, 184, 0.85); 
     color: #ffffff;
     text-shadow: none;

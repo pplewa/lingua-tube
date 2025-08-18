@@ -98,6 +98,20 @@ class LinguaTubeContentScript {
   public async initialize(): Promise<boolean> {
     this.logger?.info('Starting initialization...', { component: ComponentType.CONTENT_SCRIPT });
     try {
+      // Enable addon only when query param is present (?lt=1 or ?linguatube=1)
+      const params = new URLSearchParams(
+        window.location.hash.substring(1) // any_hash_key=any_value
+      );
+      const enabledParam = params.get('lt') ?? params.get('linguatube') ?? params.get('lingua');
+      const shouldEnable = enabledParam === '1' || enabledParam === 'true' || enabledParam === 'on';
+      if (!shouldEnable) {
+        this.logger?.info('LinguaTube disabled for this video (missing ?lt=1 param). Skipping init.', {
+          component: ComponentType.CONTENT_SCRIPT,
+          metadata: { url: window.location.href },
+        });
+        return false;
+      }
+
       if (this.state.isInitialized) {
         this.logger?.info('Already initialized, skipping', {
           component: ComponentType.CONTENT_SCRIPT,
@@ -747,7 +761,20 @@ class LinguaTubeContentScript {
       if (window.location.href !== currentUrl) {
         const newVideoId = this.extractVideoId(window.location.href);
         if (newVideoId !== this.state.currentVideoId) {
-          this.handleVideoChange(newVideoId);
+          // Respect enable param on navigation
+          const params = new URLSearchParams(window.location.search);
+          const enabledParam = params.get('lt') ?? params.get('linguatube') ?? params.get('lingua');
+          const shouldEnable = enabledParam === '1' || enabledParam === 'true' || enabledParam === 'on';
+          if (shouldEnable) {
+            this.handleVideoChange(newVideoId);
+          } else {
+            this.logger?.info('LinguaTube disabled on navigated video (missing ?lt=1). Clearing track.', {
+              component: ComponentType.CONTENT_SCRIPT,
+            });
+            if (this.state.components.playerService) {
+              this.state.components.playerService.clearSubtitleTrack();
+            }
+          }
         }
         currentUrl = window.location.href;
       }
