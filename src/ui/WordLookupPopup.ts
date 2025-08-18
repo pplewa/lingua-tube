@@ -2492,6 +2492,39 @@ export class WordLookupPopup {
     }
   }
 
+  // Real-time TTS highlighting (word-level)
+  private startTTSHighlighting(boundary: number): void {
+    if (!this.popupContainer) return;
+    const ctx = this.currentContext || '';
+    if (!ctx) return;
+    // Determine which token contains the boundary index using Intl.Segmenter
+    try {
+      const containsThai = /[\u0E00-\u0E7F]/.test(ctx);
+      const segmenter: any = new (Intl as any).Segmenter(containsThai ? 'th' : (this.currentSourceLanguage || 'en'), { granularity: 'word' });
+      const segs = Array.from(segmenter.segment(ctx)) as Array<any>;
+      let running = 0;
+      let activeText = '';
+      for (const s of segs) {
+        const start = s.index as number;
+        const end = start + (s.segment as string).length;
+        if (boundary >= start && boundary < end) {
+          activeText = s.segment as string;
+          break;
+        }
+        running = end;
+      }
+      if (!activeText) return;
+      const contextEl = this.popupContainer.querySelector('.context-text') as HTMLElement | null;
+      if (!contextEl) return;
+      const safeWord = this.escapeHtml(this.currentWord);
+      const safeCtx = this.escapeHtml(ctx);
+      const highlightedCtx = safeCtx
+        .replace(safeWord, `<span class="highlight">${safeWord}</span>`) // keep base highlight
+        .replace(activeText, `<span class="highlight">${this.escapeHtml(activeText)}</span>`);
+      contextEl.innerHTML = highlightedCtx;
+    } catch {}
+  }
+
   private setContextTTSLoading(isLoading: boolean): void {
     if (!this.popupContainer) return;
 
@@ -2754,7 +2787,17 @@ export class WordLookupPopup {
     this.setActionLoading(actionKey, true);
 
     try {
-      const ttsPromise = this.ttsService.speak(this.currentWord);
+      const ttsPromise = this.ttsService.speakWithOptions({
+        text: this.currentWord,
+        language: this.currentSourceLanguage as any,
+        onBoundary: (data: { charIndex: number }) => {
+          // If we have context timing information in future, we can map to word indices
+          // For now, use boundary char index to re-highlight the active token in context
+          if (typeof data.charIndex === 'number') {
+            this.startTTSHighlighting(data.charIndex);
+          }
+        },
+      } as any);
       await this.trackOperation(ttsPromise);
 
       if (!this.isDestroyed) {

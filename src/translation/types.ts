@@ -536,6 +536,7 @@ export interface TTSRequest {
   pitch?: number;
   volume?: number;
   priority?: number;
+  onBoundary?: (data: { charIndex: number; charLength?: number; elapsedTime?: number; name?: string }) => void;
 }
 
 export interface TTSQueueItem extends TTSRequest {

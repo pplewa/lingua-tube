@@ -504,6 +504,20 @@ export class TTSService implements ITTSService {
     utterance.pitch = item.pitch || this.config.defaultPitch;
     utterance.volume = item.volume || this.config.defaultVolume;
 
+    // Boundary events for real-time highlighting
+    if (typeof item.onBoundary === 'function') {
+      utterance.onboundary = (ev: SpeechSynthesisEvent) => {
+        try {
+          item.onBoundary?.({
+            charIndex: (ev as any).charIndex ?? 0,
+            charLength: (ev as any).charLength ?? undefined,
+            elapsedTime: (ev as any).elapsedTime ?? undefined,
+            name: (ev as any).name ?? undefined,
+          });
+        } catch {}
+      };
+    }
+
     return utterance;
   }
 

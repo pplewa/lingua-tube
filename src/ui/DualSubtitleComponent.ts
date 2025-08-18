@@ -223,26 +223,40 @@ const SUBTITLE_CONTAINER_STYLES = `
     position: relative;
   }
 
+  /* Hover color: blue */
   .clickable-word:hover {
-    background-color: var(--subtitle-highlight-color);
-    color: #000000;
+    background-color: var(--subtitle-highlight-color) !important;
+    color: #000000 !important;
     text-shadow: none;
+    box-shadow: none;
   }
 
   .clickable-word:active {
-    background-color: var(--subtitle-highlight-color);
-    color: #000000;
+    background-color: var(--subtitle-highlight-color) !important;
+    color: #000000 !important;
     transform: scale(0.98);
+    box-shadow: none;
   }
 
-  /* Vocabulary highlighting styles */
-  .clickable-word.highlighted,
+  /* Real-time timed highlight: blue */
+  .clickable-word.highlighted {
+    background-color: rgba(25, 60, 184, 0.85); 
+    color: #ffffff;
+    text-shadow: none;
+    box-shadow: 0 0 6px rgba(25, 60, 184, 0.8);
+    font-weight: 700;
+    transition: all 0.12s linear;
+    border-radius: 3px;
+    outline: none;
+  }
+
+  /* Vocabulary word highlight: amber */
   .clickable-word.vocabulary-word {
-    background-color: rgba(255, 235, 59, 0.8) !important;
+    background-color: rgba(255, 193, 7, 0.9) !important; /* amber */
     color: #000000 !important;
     text-shadow: none !important;
-    border: 1px solid #ffc107;
-    box-shadow: 0 0 4px rgba(255, 193, 7, 0.5);
+    border: 1px solid #ffb300;
+    box-shadow: 0 0 4px rgba(255, 193, 7, 0.6);
     font-weight: 600;
     transition: all 0.2s ease-in-out;
     border-radius: 3px;
@@ -498,6 +512,14 @@ export class DualSubtitleComponent {
   private vocabularyUpdateTimeout: number | null = null;
   private readonly VOCABULARY_UPDATE_DEBOUNCE_MS = 300; // Debounce rapid vocabulary changes
   private readonly logger = Logger.getInstance();
+  // Timed highlighting bookkeeping
+  private lastRenderedCueKey: string = '';
+  private currentSegmentSpans: Array<{
+    span: HTMLElement;
+    startMs: number;
+    endMs: number;
+    text: string;
+  }> = [];
 
   constructor(
     playerService: PlayerInteractionService,
@@ -780,7 +802,8 @@ export class DualSubtitleComponent {
     const vocabularyDescription = document.createElement('div');
     vocabularyDescription.id = 'vocabulary-word-description';
     vocabularyDescription.className = 'sr-only';
-    vocabularyDescription.textContent = 'This word is in your vocabulary list. The book icon indicates it has been saved for study.';
+    vocabularyDescription.textContent =
+      'This word is in your vocabulary list. The book icon indicates it has been saved for study.';
 
     // Assemble structure
     this.subtitleContainer.appendChild(dragHandle);
@@ -943,6 +966,167 @@ export class DualSubtitleComponent {
       const existingIndex = this.currentCues.findIndex((c) => c.id === cue.id);
       if (existingIndex === -1) {
         this.addActiveCue(cue);
+      }
+    }
+
+    // Re-render spans from native segments if cue set changed
+    try {
+      const cueKey = activeCues
+        .map((c) => `${c.id}:${(c as any).segments?.length || 0}:${(c as any).startTime}`)
+        .join('|');
+      if (cueKey !== this.lastRenderedCueKey) {
+        this.renderTargetLineFromSegments(activeCues);
+        this.lastRenderedCueKey = cueKey;
+      }
+      // Update timed highlight each tick using absolute times
+      const nowMs = this.playerService.getCurrentTime() * 1000;
+      this.updateTimedHighlight(nowMs);
+    } catch {}
+  }
+
+  private clearAllWordHighlights(): void {
+    if (!this.targetLine) return;
+    const spans = this.targetLine.querySelectorAll('.clickable-word.highlighted');
+    spans.forEach((s) => s.classList.remove('highlighted'));
+  }
+
+  private highlightFromSegmentText(segmentText: string): void {
+    if (!this.targetLine) return;
+    const normalize = (s: string) =>
+      (s || '')
+        .normalize('NFC')
+        .replace(/[\u200B-\u200D\uFE00-\uFE0F]/g, '')
+        .trim();
+
+    const segNorm = normalize(segmentText);
+    const spans = Array.from(this.targetLine.querySelectorAll('.clickable-word')) as HTMLElement[];
+    if (spans.length === 0) return;
+
+    // Clear previous highlights
+    spans.forEach((s) => s.classList.remove('highlighted'));
+
+    // 1) Exact match
+    let best: HTMLElement | null = null;
+    for (const span of spans) {
+      if (normalize(span.textContent || '') === segNorm) {
+        best = span;
+        break;
+      }
+    }
+
+    // 2) Overlap-based fallback (max common substring length)
+    if (!best) {
+      const score = (a: string, b: string) => {
+        const minLen = Math.min(a.length, b.length);
+        let max = 0;
+        for (let len = minLen; len >= 1 && max === 0; len--) {
+          for (let i = 0; i + len <= a.length; i++) {
+            const sub = a.slice(i, i + len);
+            if (b.includes(sub)) {
+              max = len;
+              break;
+            }
+          }
+        }
+        return max;
+      };
+      let bestScore = 0;
+      for (const span of spans) {
+        const spanNorm = normalize(span.textContent || '');
+        if (!spanNorm) continue;
+        const s = score(spanNorm, segNorm);
+        if (s > bestScore) {
+          bestScore = s;
+          best = span;
+        }
+      }
+    }
+
+    if (best) {
+      best.classList.add('highlighted');
+    }
+  }
+
+  // Build exact word spans from YouTube JSON3 segments with timing
+  private renderTargetLineFromSegments(activeCues: ActiveSubtitleCue[]): void {
+    if (!this.targetLine) return;
+    this.targetLine.innerHTML = '';
+    this.currentSegmentSpans = [];
+
+    // Iterate cues in order; render segments faithfully
+    for (let ci = 0; ci < activeCues.length; ci++) {
+      const cue = activeCues[ci] as any;
+      const segments: Array<{ utf8: string; tOffsetMs?: number }> = Array.isArray(cue.segments)
+        ? cue.segments
+        : [];
+      const baseMs = cue.startTime * 1000;
+      for (let i = 0; i < segments.length; i++) {
+        const seg = segments[i];
+        const text = String(seg?.utf8 || '');
+        // Handle hard line breaks inside segments
+        const parts = text.split('\n');
+        for (let p = 0; p < parts.length; p++) {
+          const part = parts[p];
+          if (part.length === 0) {
+            // pure newline or empty – emit line break
+            if (p < parts.length - 1) this.targetLine.appendChild(document.createElement('br'));
+            continue;
+          }
+          const isWhitespaceOnly = /^\s+$/.test(part);
+          const segStart = baseMs + (typeof seg.tOffsetMs === 'number' ? seg.tOffsetMs : 0);
+          const nextSeg = segments[i + 1];
+          const nextStart =
+            nextSeg && typeof nextSeg.tOffsetMs === 'number'
+              ? baseMs + nextSeg.tOffsetMs
+              : cue.endTime * 1000;
+          if (isWhitespaceOnly) {
+            this.targetLine.appendChild(document.createTextNode(part));
+          } else {
+            const span = document.createElement('span');
+            span.className = 'clickable-word';
+            span.textContent = part;
+            span.setAttribute('role', 'button');
+            span.setAttribute('tabindex', '0');
+            // Click/keyboard handlers (reuse existing logic)
+            span.addEventListener('click', (ev) => this.handleWordClick(part, ev as any));
+            span.addEventListener('keydown', (ev) => {
+              if ((ev as KeyboardEvent).key === 'Enter' || (ev as KeyboardEvent).key === ' ') {
+                ev.preventDefault();
+                this.handleWordClick(part, ev as any);
+              }
+            });
+            // Vocabulary marker
+            void this.checkVocabularyWord(part).then((isVocab) => {
+              if (isVocab && this.vocabularyModeEnabled) span.classList.add('vocabulary-word');
+            });
+            this.targetLine.appendChild(span);
+            this.currentSegmentSpans.push({
+              span,
+              startMs: segStart,
+              endMs: nextStart,
+              text: part,
+            });
+          }
+          if (p < parts.length - 1) this.targetLine.appendChild(document.createElement('br'));
+        }
+      }
+      if (ci < activeCues.length - 1) {
+        // Space between cues to avoid sticking
+        this.targetLine.appendChild(document.createTextNode(' '));
+      }
+    }
+  }
+
+  private updateTimedHighlight(nowMs: number): void {
+    if (!this.targetLine || this.currentSegmentSpans.length === 0) return;
+    // Clear previous
+    this.clearAllWordHighlights();
+    // Find active span
+    for (let i = this.currentSegmentSpans.length - 1; i >= 0; i--) {
+      const entry = this.currentSegmentSpans[i];
+      if (nowMs >= entry.startMs && nowMs < entry.endMs) {
+        entry.span.classList.add('highlighted');
+        break;
       }
     }
   }
@@ -1112,60 +1296,63 @@ export class DualSubtitleComponent {
 
     // Split text by line breaks first, then process each line
     const lines = text.split('\n');
-    
+
     lines.forEach((line, lineIndex) => {
       if (lineIndex > 0) {
         // Add line break between lines
         this.targetLine?.appendChild(document.createElement('br'));
       }
-      
+
       if (line.trim() === '') {
         // Empty line, skip processing
         return;
       }
-      
+
       // Get words for this line
       const words = this.segmentWords(line);
-      
+
       if (words.length === 0) {
         // No words found, add the line as text
         this.targetLine?.appendChild(document.createTextNode(line));
         return;
       }
-      
+
       // Process words in this line
       let lastEnd = 0;
-      
+
       words.forEach((word) => {
         const wordStart = line.indexOf(word.text, lastEnd);
-        
+
         if (wordStart === -1) {
           // Word not found, skip
           return;
         }
-        
+
         // Add any text before this word
         if (wordStart > lastEnd) {
           const beforeText = line.substring(lastEnd, wordStart);
           this.targetLine?.appendChild(document.createTextNode(beforeText));
         }
-        
+
         // Create clickable word span
         const wordSpan = document.createElement('span');
         wordSpan.className = 'clickable-word';
         wordSpan.textContent = word.text;
-        
+
         // Add accessibility attributes
         wordSpan.setAttribute('role', 'button');
         wordSpan.setAttribute('tabindex', '0');
         wordSpan.setAttribute('aria-label', `Click to translate word: ${word.text}`);
-        
+
         // Check if word is in vocabulary and add appropriate class (only when vocabulary mode is enabled)
         this.checkVocabularyWord(word.text)
           .then((isVocabularyWord: boolean) => {
             if (isVocabularyWord && this.vocabularyModeEnabled) {
               wordSpan.classList.add('vocabulary-word');
-              wordSpan.setAttribute('aria-label', `Vocabulary word: ${word.text}. Click to translate.`);
+              wordSpan.setAttribute(
+                'aria-label',
+                `Vocabulary word: ${word.text}. Click to translate.`,
+              );
               wordSpan.setAttribute('aria-describedby', 'vocabulary-word-description');
             } else {
               wordSpan.setAttribute('aria-label', `Click to translate word: ${word.text}`);
@@ -1180,7 +1367,7 @@ export class DualSubtitleComponent {
               },
             });
           });
-        
+
         // Add click event listener
         wordSpan.addEventListener('click', (event) => {
           this.logger?.debug('Word clicked', {
@@ -1189,7 +1376,7 @@ export class DualSubtitleComponent {
           });
           this.handleWordClick(word.text, event);
         });
-        
+
         // Add keyboard support for accessibility
         wordSpan.addEventListener('keydown', (event) => {
           if (event.key === 'Enter' || event.key === ' ') {
@@ -1202,11 +1389,11 @@ export class DualSubtitleComponent {
             this.handleWordClick(word.text, event as any);
           }
         });
-        
+
         this.targetLine?.appendChild(wordSpan);
         lastEnd = wordStart + word.text.length;
       });
-      
+
       // Add any remaining text in this line
       if (lastEnd < line.length) {
         const remainingText = line.substring(lastEnd);
@@ -1277,18 +1464,16 @@ export class DualSubtitleComponent {
       const currentTrack = this.playerService.getCurrentSubtitleTrack();
       const language = (currentTrack?.language || 'auto') as LanguageCode;
       // Fire-and-forget to avoid blocking UI
-      void ttsService
-        .speak(cleanedWord, language)
-        .catch((err) => {
-          this.logger?.warn('TTS playback failed', {
-            component: ComponentType.SUBTITLE_MANAGER,
-            metadata: {
-              word: cleanedWord,
-              language,
-              error: err instanceof Error ? err.message : String(err),
-            },
-          });
+      void ttsService.speak(cleanedWord, language).catch((err) => {
+        this.logger?.warn('TTS playback failed', {
+          component: ComponentType.SUBTITLE_MANAGER,
+          metadata: {
+            word: cleanedWord,
+            language,
+            error: err instanceof Error ? err.message : String(err),
+          },
         });
+      });
     } catch (err) {
       this.logger?.warn('TTS invocation error', {
         component: ComponentType.SUBTITLE_MANAGER,
@@ -1527,7 +1712,7 @@ export class DualSubtitleComponent {
         this.handleVocabularyChange.bind(this),
       ),
     );
-    
+
     this.logger?.debug('Vocabulary event listeners set up', {
       component: ComponentType.SUBTITLE_MANAGER,
       metadata: { listenersCount: this.vocabularyEventUnsubscribers.length },
@@ -1537,26 +1722,26 @@ export class DualSubtitleComponent {
   private handleVocabularyChange(): void {
     this.logger?.debug('Vocabulary change detected - debouncing highlights refresh', {
       component: ComponentType.SUBTITLE_MANAGER,
-      metadata: { 
+      metadata: {
         isVisible: this.isVisible,
         currentCuesCount: this.currentCues.length,
-        cacheSize: this.vocabularyCache.size
+        cacheSize: this.vocabularyCache.size,
       },
     });
 
     // Clear any existing timeout
-      if (this.vocabularyUpdateTimeout !== null) {
-        window.clearTimeout(this.vocabularyUpdateTimeout);
-      }
+    if (this.vocabularyUpdateTimeout !== null) {
+      window.clearTimeout(this.vocabularyUpdateTimeout);
+    }
 
     // Debounce vocabulary updates to prevent excessive re-rendering
     this.vocabularyUpdateTimeout = window.setTimeout(() => {
       this.logger?.debug('Executing debounced vocabulary update', {
         component: ComponentType.SUBTITLE_MANAGER,
-        metadata: { 
+        metadata: {
           isVisible: this.isVisible,
           currentCuesCount: this.currentCues.length,
-          cacheSize: this.vocabularyCache.size
+          cacheSize: this.vocabularyCache.size,
         },
       });
 
@@ -1712,14 +1897,14 @@ export class DualSubtitleComponent {
   public setVocabularyMode(enabled: boolean): void {
     if (this.vocabularyModeEnabled !== enabled) {
       this.vocabularyModeEnabled = enabled;
-      
+
       this.logger?.debug('Vocabulary mode state changed', {
         component: ComponentType.SUBTITLE_MANAGER,
-        metadata: { 
+        metadata: {
           enabled: this.vocabularyModeEnabled,
           isVisible: this.isVisible,
           currentCuesCount: this.currentCues.length,
-          cacheSize: this.vocabularyCache.size
+          cacheSize: this.vocabularyCache.size,
         },
       });
 
@@ -1800,7 +1985,7 @@ export class DualSubtitleComponent {
 
       // Always attempt a small set of fallback languages to tolerate mismatches
       const candidateLanguages = Array.from(
-        new Set([sourceLanguage, 'auto', 'th', 'en', 'es', 'fr', 'de', 'pl'])
+        new Set([sourceLanguage, 'auto', 'th', 'en', 'es', 'fr', 'de', 'pl']),
       );
 
       let isVocabularyWord = false;
@@ -1814,7 +1999,7 @@ export class DualSubtitleComponent {
 
       // Cache the result and manage cache size
       this.vocabularyCache.set(cleanWord, isVocabularyWord);
-      
+
       // Prevent cache from growing indefinitely
       if (this.vocabularyCache.size > this.MAX_CACHE_SIZE) {
         const firstKey = this.vocabularyCache.keys().next().value;
@@ -1822,7 +2007,7 @@ export class DualSubtitleComponent {
           this.vocabularyCache.delete(firstKey);
         }
       }
-      
+
       return isVocabularyWord;
     } catch (error) {
       this.logger?.warn('Error checking vocabulary word', {
