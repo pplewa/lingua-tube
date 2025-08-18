@@ -243,6 +243,7 @@ export interface SubtitleCue {
   readonly position?: SubtitlePosition; // Display position
   readonly styling?: SubtitleStyling; // Text styling
   readonly segments?: Array<{ utf8: string; tOffsetMs?: number }>; // Optional per-segment timing (YouTube JSON3)
+  readonly nativeSegments?: Array<{ utf8: string; tOffsetMs?: number }>;
 }
 
 /**

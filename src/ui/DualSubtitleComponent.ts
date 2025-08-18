@@ -244,7 +244,6 @@ const SUBTITLE_CONTAINER_STYLES = `
     color: #ffffff;
     text-shadow: none;
     box-shadow: 0 0 6px rgba(25, 60, 184, 0.8);
-    font-weight: 700;
     transition: all 0.12s linear;
     border-radius: 3px;
     outline: none;
@@ -515,6 +514,12 @@ export class DualSubtitleComponent {
   // Timed highlighting bookkeeping
   private lastRenderedCueKey: string = '';
   private currentSegmentSpans: Array<{
+    span: HTMLElement;
+    startMs: number;
+    endMs: number;
+    text: string;
+  }> = [];
+  private currentNativeSegmentSpans: Array<{
     span: HTMLElement;
     startMs: number;
     endMs: number;
@@ -969,7 +974,7 @@ export class DualSubtitleComponent {
       }
     }
 
-    // Re-render spans from native segments if cue set changed
+    // Re-render spans from segments if cue set changed
     try {
       const cueKey = activeCues
         .map((c) => `${c.id}:${(c as any).segments?.length || 0}:${(c as any).startTime}`)
@@ -1052,12 +1057,19 @@ export class DualSubtitleComponent {
     if (!this.targetLine) return;
     this.targetLine.innerHTML = '';
     this.currentSegmentSpans = [];
+    if (this.nativeLine) {
+      this.nativeLine.innerHTML = '';
+      this.currentNativeSegmentSpans = [];
+    }
 
     // Iterate cues in order; render segments faithfully
     for (let ci = 0; ci < activeCues.length; ci++) {
       const cue = activeCues[ci] as any;
       const segments: Array<{ utf8: string; tOffsetMs?: number }> = Array.isArray(cue.segments)
         ? cue.segments
+        : [];
+      const nativeSegments: Array<{ utf8: string; tOffsetMs?: number }> = Array.isArray(cue.nativeSegments)
+        ? cue.nativeSegments
         : [];
       const baseMs = cue.startTime * 1000;
       for (let i = 0; i < segments.length; i++) {
@@ -1110,6 +1122,34 @@ export class DualSubtitleComponent {
           if (p < parts.length - 1) this.targetLine.appendChild(document.createElement('br'));
         }
       }
+      // Render native subtitle words with the same timing if we have a native line
+      if (this.nativeLine && nativeSegments.length > 0) {
+        for (let i = 0; i < nativeSegments.length; i++) {
+          const seg = nativeSegments[i];
+          const text = String(seg?.utf8 || '');
+          const parts = text.split('\n');
+          for (let p = 0; p < parts.length; p++) {
+            const part = parts[p];
+            if (part.length === 0) {
+              if (p < parts.length - 1) this.nativeLine.appendChild(document.createElement('br'));
+              continue;
+            }
+            const isWhitespaceOnly = /^\s+$/.test(part);
+            const segStart = baseMs + (typeof seg.tOffsetMs === 'number' ? seg.tOffsetMs : 0);
+            const nextSeg = nativeSegments[i + 1];
+            const nextStart = nextSeg && typeof nextSeg.tOffsetMs === 'number' ? baseMs + nextSeg.tOffsetMs : cue.endTime * 1000;
+            if (isWhitespaceOnly) {
+              this.nativeLine.appendChild(document.createTextNode(part));
+            } else {
+              const span = document.createElement('span');
+              span.textContent = part;
+              this.nativeLine.appendChild(span);
+              this.currentNativeSegmentSpans.push({ span, startMs: segStart, endMs: nextStart, text: part });
+            }
+            if (p < parts.length - 1) this.nativeLine.appendChild(document.createElement('br'));
+          }
+        }
+      }
       if (ci < activeCues.length - 1) {
         // Space between cues to avoid sticking
         this.targetLine.appendChild(document.createTextNode(' '));
@@ -1127,6 +1167,18 @@ export class DualSubtitleComponent {
       if (nowMs >= entry.startMs && nowMs < entry.endMs) {
         entry.span.classList.add('highlighted');
         break;
+      }
+    }
+    // Native line highlight
+    if (this.nativeLine && this.currentNativeSegmentSpans.length > 0) {
+      const spans = this.nativeLine.querySelectorAll('.highlighted');
+      spans.forEach((s) => s.classList.remove('highlighted'));
+      for (let i = this.currentNativeSegmentSpans.length - 1; i >= 0; i--) {
+        const entry = this.currentNativeSegmentSpans[i];
+        if (nowMs >= entry.startMs && nowMs < entry.endMs) {
+          entry.span.classList.add('highlighted');
+          break;
+        }
       }
     }
   }

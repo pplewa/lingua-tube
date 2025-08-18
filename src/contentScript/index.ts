@@ -683,6 +683,10 @@ class LinguaTubeContentScript {
                   utf8: s?.utf8 || '',
                   tOffsetMs: typeof s?.tOffsetMs === 'number' ? s.tOffsetMs : undefined,
                 })),
+                nativeSegments: nativeSegments.map((s: any) => ({
+                  utf8: s?.utf8 || '',
+                  tOffsetMs: typeof s?.tOffsetMs === 'number' ? s.tOffsetMs : undefined,
+                })),
               });
               groups.push({
                 startTime: start / 1000,
