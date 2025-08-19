@@ -991,65 +991,8 @@ export class DualSubtitleComponent {
 
   private clearAllWordHighlights(): void {
     if (!this.targetLine) return;
-    const spans = this.targetLine.querySelectorAll('.clickable-word.highlighted');
+    const spans = this.targetLine.querySelectorAll('.highlighted');
     spans.forEach((s) => s.classList.remove('highlighted'));
-  }
-
-  private highlightFromSegmentText(segmentText: string): void {
-    if (!this.targetLine) return;
-    const normalize = (s: string) =>
-      (s || '')
-        .normalize('NFC')
-        .replace(/[\u200B-\u200D\uFE00-\uFE0F]/g, '')
-        .trim();
-
-    const segNorm = normalize(segmentText);
-    const spans = Array.from(this.targetLine.querySelectorAll('.clickable-word')) as HTMLElement[];
-    if (spans.length === 0) return;
-
-    // Clear previous highlights
-    spans.forEach((s) => s.classList.remove('highlighted'));
-
-    // 1) Exact match
-    let best: HTMLElement | null = null;
-    for (const span of spans) {
-      if (normalize(span.textContent || '') === segNorm) {
-        best = span;
-        break;
-      }
-    }
-
-    // 2) Overlap-based fallback (max common substring length)
-    if (!best) {
-      const score = (a: string, b: string) => {
-        const minLen = Math.min(a.length, b.length);
-        let max = 0;
-        for (let len = minLen; len >= 1 && max === 0; len--) {
-          for (let i = 0; i + len <= a.length; i++) {
-            const sub = a.slice(i, i + len);
-            if (b.includes(sub)) {
-              max = len;
-              break;
-            }
-          }
-        }
-        return max;
-      };
-      let bestScore = 0;
-      for (const span of spans) {
-        const spanNorm = normalize(span.textContent || '');
-        if (!spanNorm) continue;
-        const s = score(spanNorm, segNorm);
-        if (s > bestScore) {
-          bestScore = s;
-          best = span;
-        }
-      }
-    }
-
-    if (best) {
-      best.classList.add('highlighted');
-    }
   }
 
   // Build exact word spans from YouTube JSON3 segments with timing
@@ -1169,18 +1112,18 @@ export class DualSubtitleComponent {
         break;
       }
     }
-    // Native line highlight
-    if (this.nativeLine && this.currentNativeSegmentSpans.length > 0) {
-      const spans = this.nativeLine.querySelectorAll('.highlighted');
-      spans.forEach((s) => s.classList.remove('highlighted'));
-      for (let i = this.currentNativeSegmentSpans.length - 1; i >= 0; i--) {
-        const entry = this.currentNativeSegmentSpans[i];
-        if (nowMs >= entry.startMs && nowMs < entry.endMs) {
-          entry.span.classList.add('highlighted');
-          break;
-        }
-      }
-    }
+    // Native line highlight - temporarily disabled
+    // if (this.nativeLine && this.currentNativeSegmentSpans.length > 0) {
+    //   const spans = this.nativeLine.querySelectorAll('.highlighted');
+    //   spans.forEach((s) => s.classList.remove('highlighted'));
+    //   for (let i = this.currentNativeSegmentSpans.length - 1; i >= 0; i--) {
+    //     const entry = this.currentNativeSegmentSpans[i];
+    //     if (nowMs >= entry.startMs && nowMs < entry.endMs) {
+    //       entry.span.classList.add('highlighted');
+    //       break;
+    //     }
+    //   }
+    // }
   }
 
   /**
