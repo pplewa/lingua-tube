@@ -1501,6 +1501,8 @@ export class WordLookupPopup {
   private currentWord: string = '';
   private currentContext: string = '';
   private currentContextTranslation: string = '';
+  private leftNeighborHint: string | null = null;
+  private rightNeighborHint: string | null = null;
   private translation: string = '';
   private currentSourceLanguage: string = 'en'; // Default fallback
   private currentTargetLanguage: string = 'es'; // Default fallback
@@ -1728,6 +1730,10 @@ export class WordLookupPopup {
         sourceLanguage = wordOrData.sourceLanguage || this.currentSourceLanguage;
         targetLanguage = wordOrData.targetLanguage || this.currentTargetLanguage;
         context = wordOrData.context || '';
+        // @ts-ignore optional hints
+        this.leftNeighborHint = wordOrData.leftNeighbor || null;
+        // @ts-ignore
+        this.rightNeighborHint = wordOrData.rightNeighbor || null;
       }
 
       // Enhanced word validation with language-specific handling
@@ -1759,6 +1765,8 @@ export class WordLookupPopup {
       this.currentWord = processedWord;
       this.currentContext = context;
       this.currentContextTranslation = '';
+      if (!this.leftNeighborHint) this.leftNeighborHint = null;
+      if (!this.rightNeighborHint) this.rightNeighborHint = null;
       this.lastPosition = pos;
 
       // Show popup immediately with loading state
@@ -2229,13 +2237,15 @@ export class WordLookupPopup {
 
     this.popupContainer.classList.remove('loading');
     const { left, right } = this.getAdjacentTokens(word, this.currentContext || '');
+    const hasLeft = !!this.leftNeighborHint || !!left;
+    const hasRight = !!this.rightNeighborHint || !!right;
     this.popupContainer.innerHTML = `
       <div class="popup-content">
         <div class="popup-header">
           <div class="word-combine">
-            <button class="combine-button" type="button" data-action="combine-left" aria-label="Combine with previous word" ${left ? '' : 'disabled'}>⟵</button>
+            <button class="combine-button" type="button" data-action="combine-left" aria-label="Combine with previous word" ${hasLeft ? '' : 'disabled'}>⟵</button>
             <h3 class="word-title">${this.escapeHtml(word)}</h3>
-            <button class="combine-button" type="button" data-action="combine-right" aria-label="Combine with next word" ${right ? '' : 'disabled'}>⟶</button>
+            <button class="combine-button" type="button" data-action="combine-right" aria-label="Combine with next word" ${hasRight ? '' : 'disabled'}>⟶</button>
           </div>
           <button class="close-button" type="button" aria-label="Close">×</button>
         </div>
@@ -2302,13 +2312,15 @@ export class WordLookupPopup {
 
   private renderContent(content: PopupContent): string {
     const { left, right } = this.getAdjacentTokens(content.word, this.currentContext || '');
+    const hasLeft = !!this.leftNeighborHint || !!left;
+    const hasRight = !!this.rightNeighborHint || !!right;
     return `
       <div class="popup-content">
         <div class="popup-header">
           <div class="word-combine">
-            <button class="combine-button" type="button" data-action="combine-left" aria-label="Combine with previous word" ${left ? '' : 'disabled'}>⬅️</button>
+            <button class="combine-button" type="button" data-action="combine-left" aria-label="Combine with previous word" ${hasLeft ? '' : 'disabled'}>⬅️</button>
             <h3 class="word-title" id="popup-title">${this.escapeHtml(content.word)}</h3>
-            <button class="combine-button" type="button" data-action="combine-right" aria-label="Combine with next word" ${right ? '' : 'disabled'}>➡️</button>
+            <button class="combine-button" type="button" data-action="combine-right" aria-label="Combine with next word" ${hasRight ? '' : 'disabled'}>➡️</button>
             ${
               content.phonetic && this.config.showPhonetics
                 ? `<span class="phonetic" aria-label="Pronunciation: ${this.escapeHtml(content.phonetic)}">/${this.escapeHtml(content.phonetic)}/</span>`
@@ -2706,9 +2718,15 @@ export class WordLookupPopup {
     if (this.combineLock || !this.currentWord) return;
     const { left, right } = this.getAdjacentTokens(this.currentWord, this.currentContext || '');
     let newWord = this.currentWord;
-    if (direction === 'left' && left) newWord = left + newWord;
-    else if (direction === 'right' && right) newWord = newWord + right;
-    else return;
+    if (direction === 'left') {
+      const neighbor = this.leftNeighborHint || left;
+      if (neighbor) newWord = neighbor + newWord;
+      else return;
+    } else {
+      const neighbor = this.rightNeighborHint || right;
+      if (neighbor) newWord = newWord + neighbor;
+      else return;
+    }
 
     this.combineLock = true;
     try {

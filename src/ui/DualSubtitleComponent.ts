@@ -525,6 +525,14 @@ export class DualSubtitleComponent {
     endMs: number;
     text: string;
   }> = [];
+  // Mapping container text -> span ranges for overlap-based highlighting
+  private containerTextCache: string = '';
+  private containerSpanRanges: Array<{ span: HTMLElement; start: number; end: number }> = [];
+  private lastContainerVersionKey: string = '';
+  private lastHighlightCharPos: number = 0;
+  private lastHighlightIndex: number = -1;
+  private lastNativeHighlightIndex: number = -1;
+  private lastTickTimeMs: number = 0;
 
   constructor(
     playerService: PlayerInteractionService,
@@ -974,17 +982,26 @@ export class DualSubtitleComponent {
       }
     }
 
-    // Re-render spans from segments if cue set changed
+    // Rebuild mapping from JSON3 segments to rendered spans when cues change,
+    // then highlight based on current time using that mapping
     try {
-      const cueKey = activeCues
-        .map((c) => `${c.id}:${(c as any).segments?.length || 0}:${(c as any).startTime}`)
+      const newKey = activeCues
+        .map((c) => `${c.id}:${Math.round(c.startTime * 1000)}-${Math.round(c.endTime * 1000)}`)
         .join('|');
-      if (cueKey !== this.lastRenderedCueKey) {
-        this.renderTargetLineFromSegments(activeCues);
-        this.lastRenderedCueKey = cueKey;
+      if (newKey !== this.lastRenderedCueKey) {
+        this.lastRenderedCueKey = newKey;
+        this.rebuildSpanTimingFromSegments(activeCues);
+        // Reset monotonic indices on cue changes
+        this.lastHighlightIndex = -1;
+        this.lastNativeHighlightIndex = -1;
       }
-      // Update timed highlight each tick using absolute times
       const nowMs = this.playerService.getCurrentTime() * 1000;
+      // Detect backward seek (or large jump backward) and allow reset
+      if (nowMs + 120 < this.lastTickTimeMs) {
+        this.lastHighlightIndex = -1;
+        this.lastNativeHighlightIndex = -1;
+      }
+      this.lastTickTimeMs = nowMs;
       this.updateTimedHighlight(nowMs);
     } catch {}
   }
@@ -993,6 +1010,146 @@ export class DualSubtitleComponent {
     if (!this.targetLine) return;
     const spans = this.targetLine.querySelectorAll('.highlighted');
     spans.forEach((s) => s.classList.remove('highlighted'));
+  }
+
+  // Build or refresh mapping from concatenated span text to char ranges
+  private indexContainerIfChanged(): void {
+    if (!this.targetLine) return;
+    const versionKey = `${this.targetLine.childNodes.length}:${this.lastRenderedCueKey}`;
+    if (versionKey === this.lastContainerVersionKey) return;
+    this.lastContainerVersionKey = versionKey;
+    const normalize = (s: string) =>
+      (s || '')
+        .normalize('NFC')
+        .replace(/[\u200B-\u200D\uFE00-\uFE0F]/g, '')
+        .replace(/\n/g, '');
+    this.containerTextCache = '';
+    this.containerSpanRanges = [];
+    const spans = Array.from(this.targetLine.querySelectorAll('.clickable-word')) as HTMLElement[];
+    for (const span of spans) {
+      const start = this.containerTextCache.length;
+      const text = normalize(span.textContent || '');
+      this.containerTextCache += text + ' ';
+      const end = this.containerTextCache.length;
+      this.containerSpanRanges.push({ span, start, end });
+    }
+  }
+
+  private findSpanByCharIndex(idx: number): HTMLElement | null {
+    for (const r of this.containerSpanRanges) {
+      if (idx >= r.start && idx < r.end) return r.span;
+    }
+    return null;
+  }
+
+  // Align rendered spans to JSON3 segment timings by distributing segment time
+  // windows across contiguous rendered spans using cumulative normalized length
+  private rebuildSpanTimingFromSegments(activeCues: ActiveSubtitleCue[]): void {
+    if (!this.targetLine) return;
+    this.currentSegmentSpans = [];
+    this.currentNativeSegmentSpans = [];
+    const normalize = (s: string) => (s || '').normalize('NFC').replace(/[\u200B-\u200D\uFE00-\uFE0F]/g, '');
+
+    const clickableSpans = Array.from(
+      this.targetLine.querySelectorAll('.clickable-word'),
+    ) as HTMLElement[];
+    const spanTexts = clickableSpans.map((el) => normalize(el.textContent || ''));
+
+    // Build a flat list of JSON3 segments from all active cues
+    const flatSegments: Array<{ text: string; startMs: number; endMs: number }> = [];
+    for (const cueAny of activeCues as any[]) {
+      const cue = cueAny as any;
+      const baseMs = cue.startTime * 1000;
+      const segments: Array<{ utf8: string; tOffsetMs?: number }> = Array.isArray(cue.segments)
+        ? cue.segments
+        : [];
+      for (let i = 0; i < segments.length; i++) {
+        const seg = segments[i];
+        const start = baseMs + (typeof seg.tOffsetMs === 'number' ? seg.tOffsetMs : 0);
+        const next = segments[i + 1];
+        const end =
+          next && typeof next.tOffsetMs === 'number' ? baseMs + next.tOffsetMs : cue.endTime * 1000;
+        flatSegments.push({ text: normalize(String(seg?.utf8 || '')), startMs: start, endMs: end });
+      }
+    }
+
+    // Robust alignment:
+    // 1) Build concatenated normalized segment text for the active cues
+    // 2) Map each rendered span (normalized text) to a segment window by proportional length within cumulative text
+    const concatSegText = flatSegments.map((s) => s.text).join('');
+    const totalLen = concatSegText.length || 1;
+    const segWindows: Array<{ startMs: number; endMs: number; startPos: number; endPos: number }> = [];
+    // Compute cumulative char positions for segments (with spaces considered)
+    let pos = 0;
+    for (const s of flatSegments) {
+      const startPos = pos;
+      pos += s.text.length;
+      const endPos = pos;
+      segWindows.push({ startMs: s.startMs, endMs: s.endMs, startPos, endPos });
+    }
+
+    // Function to get time window for a substring range by overlap-weighted averaging across segment windows
+    const timeForRange = (start: number, end: number): { startMs: number; endMs: number } => {
+      let accumStart = 0;
+      let accumEnd = 0;
+      let weightSum = 0;
+      for (const w of segWindows) {
+        const ovStart = Math.max(start, w.startPos);
+        const ovEnd = Math.min(end, w.endPos);
+        const overlap = Math.max(0, ovEnd - ovStart);
+        if (overlap > 0) {
+          const mid = (ovStart + ovEnd) / 2;
+          const frac = (mid - w.startPos) / Math.max(1, w.endPos - w.startPos);
+          const midTime = w.startMs + frac * (w.endMs - w.startMs);
+          accumStart += overlap * w.startMs;
+          accumEnd += overlap * w.endMs;
+          weightSum += overlap;
+        }
+      }
+      if (weightSum === 0) {
+        const first = segWindows[0];
+        const last = segWindows[segWindows.length - 1];
+        return { startMs: first?.startMs ?? 0, endMs: last?.endMs ?? 0 };
+      }
+      return { startMs: accumStart / weightSum, endMs: accumEnd / weightSum };
+    };
+
+    // Map each clickable span to a char range in concatSegText by progressive scanning
+    let scanPos = 0;
+    for (let i = 0; i < clickableSpans.length; i++) {
+      const el = clickableSpans[i];
+      const word = spanTexts[i];
+      if (!word) continue;
+      // Allow dictionary-combined phrases: try greedy forward match (up to next few spans)
+      let idx = concatSegText.indexOf(word, scanPos);
+      if (idx === -1 && i + 1 < clickableSpans.length) {
+        let combined = word;
+        for (let j = i + 1; j < Math.min(i + 6, clickableSpans.length); j++) {
+          combined += spanTexts[j] || '';
+          idx = concatSegText.indexOf(combined, scanPos);
+          if (idx !== -1) {
+            // Assign the combined time window proportionally to the first span only;
+            // downstream spans will be matched in subsequent iterations by scanPos advance
+            const start = idx;
+            const end = idx + combined.length;
+            const t = timeForRange(start, end);
+            this.currentSegmentSpans.push({ span: el, startMs: t.startMs, endMs: t.endMs, text: combined });
+            scanPos = end;
+            // Skip ahead to j (all merged into the first span visually)
+            i = j;
+            idx = -2; // flag that we handled this iteration
+            break;
+          }
+        }
+        if (idx === -2) continue;
+      }
+      if (idx === -1) continue;
+      const start = idx;
+      const end = idx + word.length;
+      const t = timeForRange(start, end);
+      this.currentSegmentSpans.push({ span: el, startMs: t.startMs, endMs: t.endMs, text: word });
+      scanPos = end; // advance to end of matched span
+    }
   }
 
   // Build exact word spans from YouTube JSON3 segments with timing
@@ -1005,7 +1162,7 @@ export class DualSubtitleComponent {
       this.currentNativeSegmentSpans = [];
     }
 
-    // Iterate cues in order; render segments faithfully
+    // Iterate cues in order; render target/native words faithfully from JSON3 segments
     for (let ci = 0; ci < activeCues.length; ci++) {
       const cue = activeCues[ci] as any;
       const segments: Array<{ utf8: string; tOffsetMs?: number }> = Array.isArray(cue.segments)
@@ -1017,7 +1174,9 @@ export class DualSubtitleComponent {
       const baseMs = cue.startTime * 1000;
       for (let i = 0; i < segments.length; i++) {
         const seg = segments[i];
-        const text = String(seg?.utf8 || '');
+        let text = String(seg?.utf8 || '');
+        // Normalize Thai nuisances (zero-width/variation selectors)
+        text = text.normalize('NFC').replace(/[\u200B-\u200D\uFE00-\uFE0F]/g, '');
         // Handle hard line breaks inside segments
         const parts = text.split('\n');
         for (let p = 0; p < parts.length; p++) {
@@ -1105,25 +1264,42 @@ export class DualSubtitleComponent {
     // Clear previous
     this.clearAllWordHighlights();
     // Find active span
+    let chosenIndex = -1;
     for (let i = this.currentSegmentSpans.length - 1; i >= 0; i--) {
       const entry = this.currentSegmentSpans[i];
       if (nowMs >= entry.startMs && nowMs < entry.endMs) {
-        entry.span.classList.add('highlighted');
+        chosenIndex = i;
         break;
       }
     }
-    // Native line highlight - temporarily disabled
-    // if (this.nativeLine && this.currentNativeSegmentSpans.length > 0) {
-    //   const spans = this.nativeLine.querySelectorAll('.highlighted');
-    //   spans.forEach((s) => s.classList.remove('highlighted'));
-    //   for (let i = this.currentNativeSegmentSpans.length - 1; i >= 0; i--) {
-    //     const entry = this.currentNativeSegmentSpans[i];
-    //     if (nowMs >= entry.startMs && nowMs < entry.endMs) {
-    //       entry.span.classList.add('highlighted');
-    //       break;
-    //     }
-    //   }
-    // }
+    if (chosenIndex !== -1) {
+      // Enforce monotonic forward movement unless backward seek detected earlier
+      if (this.lastHighlightIndex !== -1 && chosenIndex < this.lastHighlightIndex) {
+        chosenIndex = this.lastHighlightIndex; // clamp to last
+      }
+      this.currentSegmentSpans[chosenIndex].span.classList.add('highlighted');
+      this.lastHighlightIndex = chosenIndex;
+    }
+    // Native line highlight
+    if (this.nativeLine && this.currentNativeSegmentSpans.length > 0) {
+      const spans = this.nativeLine.querySelectorAll('.highlighted');
+      spans.forEach((s) => s.classList.remove('highlighted'));
+      let nativeIndex = -1;
+      for (let i = this.currentNativeSegmentSpans.length - 1; i >= 0; i--) {
+        const entry = this.currentNativeSegmentSpans[i];
+        if (nowMs >= entry.startMs && nowMs < entry.endMs) {
+          nativeIndex = i;
+          break;
+        }
+      }
+      if (nativeIndex !== -1) {
+        if (this.lastNativeHighlightIndex !== -1 && nativeIndex < this.lastNativeHighlightIndex) {
+          nativeIndex = this.lastNativeHighlightIndex;
+        }
+        this.currentNativeSegmentSpans[nativeIndex].span.classList.add('highlighted');
+        this.lastNativeHighlightIndex = nativeIndex;
+      }
+    }
   }
 
   /**
